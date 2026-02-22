@@ -6,6 +6,8 @@
  * Please read and understand latest version of Licence.
  */
 
+#define ___HTTP_IMPLEMENTATION
+
 #include <network/http.h>
 #include <logging.h>
 #include <strings.h>

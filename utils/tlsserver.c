@@ -936,6 +936,24 @@ static int32_t send_all(int64_t sockfd, const uint8_t* buffer, int32_t length, i
     return total_sent;
 }
 
+static int8_t index_handler(http_request_t* request, http_response_t* response) {
+    UNUSED(request);
+    const char* body = "<html><body><h1>Welcome to the TLS 1.3 Test Server</h1><p>This is a simple page served over HTTPS.</p></body></html>";
+    http_response_set_status_code(response, HTTP_STATUS_CODE_OK);
+    http_response_set_content_type(response, HTTP_CONTENT_TYPE_TEXT_HTML);
+    http_response_write_string(response, body);
+    return 0;
+}
+
+static int8_t hello_world_handler(http_request_t* request, http_response_t* response) {
+    UNUSED(request);
+    const char* body = "<html><body><h1>Hello, World!</h1><p>This page is served over HTTPS with TLS 1.3.</p></body></html>";
+    http_response_set_status_code(response, HTTP_STATUS_CODE_OK);
+    http_response_set_content_type(response, HTTP_CONTENT_TYPE_TEXT_HTML);
+    http_response_write_string(response, body);
+    return 0;
+}
+
 int32_t main(int32_t argc, char_t** argv) {
     signal(SIGPIPE, SIG_IGN);
 
@@ -1012,6 +1030,9 @@ int32_t main(int32_t argc, char_t** argv) {
         x509_certificate_free(ca_certificate);
         return 1;
     }
+
+    http_add_handler(http_application_ctx, HTTP_METHOD_GET, "/", index_handler);
+    http_add_handler(http_application_ctx, HTTP_METHOD_GET, "/hello", hello_world_handler);
 
     tls13_config_t* tls13_config = tls13_create_config(tls13_load_server_certificate_and_key,
                                                        tls13_client_certificate_verify,

@@ -1253,7 +1253,7 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t*
         return -1;
     }
 
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "PSK Identity Count: %d, Binder Count: %d", identity_count, binder_count);
+    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "PSK Identity Count: %d, Binder Count: %d", identity_count, binder_count);
 
     int32_t hash_len = tls13_session->connection_state.handshake_hash_len;
 
@@ -3951,9 +3951,9 @@ int8_t tls13_handle_handshake(tls13_session_t* tls13_session) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send NewSessionTicket");
             return -1;
         }
-        PRINTLOG(CRYPTOLIB, LOG_INFO, "Sent NewSessionTicket to client for session resumption");
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Sent NewSessionTicket to client for session resumption");
     } else {
-        PRINTLOG(CRYPTOLIB, LOG_INFO, "Not sending NewSessionTicket since PSK key exchange mode is not DHE_PSK");
+        PRINTLOG(CRYPTOLIB, LOG_TRACE, "Not sending NewSessionTicket since PSK key exchange mode is not DHE_PSK");
     }
 
     return 0;

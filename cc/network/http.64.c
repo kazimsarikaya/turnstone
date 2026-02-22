@@ -14,10 +14,161 @@
 
 MODULE("turnstone.lib.network.http");
 
+typedef struct http_handler_entry_t {
+    http_method_t  method;
+    char_t*        path;
+    http_handler_f handler;
+} http_handler_entry_t;
+
+static const char_t*const http_content_type_strings[] = {
+    [HTTP_CONTENT_TYPE_TEXT_PLAIN] = "text/plain; charset=UTF-8",
+    [HTTP_CONTENT_TYPE_TEXT_HTML]  = "text/html; charset=UTF-8",
+    [HTTP_CONTENT_TYPE_APPLICATION_JSON] = "application/json; charset=UTF-8",
+    [HTTP_CONTENT_TYPE_APPLICATION_OCTET_STREAM] = "application/octet-stream",
+};
+
+int8_t http_response_set_content_type(http_response_t* response, http_content_type_t content_type) {
+    if(!response) {
+        return -1;
+    }
+
+    response->content_type = content_type;
+    return 0;
+}
+
+int8_t http_response_set_status_code(http_response_t* response, http_status_code_t status_code) {
+    if(!response) {
+        return -1;
+    }
+
+    response->status_code = status_code;
+    return 0;
+}
+
+int8_t http_response_write_string(http_response_t* response, const char_t* str) {
+    if(!response || !str) {
+        return -1;
+    }
+
+    if(!response->body) {
+        response->body = buffer_new();
+        if(!response->body) {
+            PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for response body");
+            return -1;
+        }
+    }
+
+    return buffer_append_bytes(response->body, (uint8_t*)str, strlen(str)) != NULL ? 0 : -1;
+}
+
+static http_handler_f http_find_handler(http_application_context_t* app_ctx, http_method_t method, const char_t* path) {
+    if(!app_ctx || !path) {
+        return NULL;
+    }
+
+    if(!app_ctx->http_handlers) {
+        return NULL;
+    }
+
+    for(size_t i = 0; i < list_size(app_ctx->http_handlers); i++) {
+        http_handler_entry_t* entry = (http_handler_entry_t*)list_get_data_at_position(app_ctx->http_handlers, i);
+        if(entry && entry->method == method && strcmp(entry->path, path) == 0) {
+            return entry->handler;
+        }
+    }
+
+    return NULL;
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+
+int8_t http_add_handler(http_application_context_t* app_ctx, http_method_t method, const char_t* path, http_handler_f handler) {
+    if(!app_ctx || !path || !handler) {
+        return -1;
+    }
+
+    http_handler_entry_t* entry = (http_handler_entry_t*)memory_malloc(sizeof(http_handler_entry_t));
+    if(!entry) {
+        PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP handler entry");
+        return -1;
+    }
+
+    entry->method = method;
+    entry->path = strdup(path);
+    entry->handler = handler;
+
+    if(!entry->path) {
+        PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP handler path");
+        memory_free(entry);
+        return -1;
+    }
+
+    if(!app_ctx->http_handlers) {
+        app_ctx->http_handlers = list_create_list();
+        if(!app_ctx->http_handlers) {
+            PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP handlers list");
+            memory_free(entry->path);
+            memory_free(entry);
+            return -1;
+        }
+    }
+
+    if(list_list_insert(app_ctx->http_handlers, entry) == -1ULL) {
+        PRINTLOG(HTTP, LOG_ERROR, "Failed to insert HTTP handler into application context handlers list");
+        memory_free(entry->path);
+        memory_free(entry);
+        return -1;
+    }
+
+    return 0;
+}
+
+int8_t http_response_add_header(http_response_t* response, const char_t* name, const char_t* value) {
+    if(!response || !name || !value) {
+        return -1;
+    }
+
+    if(strcmp(name, "content-type") == 0 || strcmp(name, "Content-Type") == 0) {
+        return -1; // content-type should be set using http_response_set_content_type
+    }
+
+    if(strcmp(name, "content-length") == 0 || strcmp(name, "Content-Length") == 0) {
+        return -1; // content-length should be set automatically based on response body length
+    }
+
+    http_header_t* header = (http_header_t*)memory_malloc(sizeof(http_header_t));
+    if(!header) {
+        PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP header");
+        return -1;
+    }
+
+    header->name  = strdup(name);
+    header->value = strdup(value);
+    if(!header->name || !header->value) {
+        PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP header strings");
+        memory_free(header->name);
+        memory_free(header->value);
+        memory_free(header);
+        return -1;
+    }
+
+    if(list_list_insert(response->headers, header) == -1ULL) {
+        PRINTLOG(HTTP, LOG_ERROR, "Failed to insert header into response headers list");
+        memory_free(header->name);
+        memory_free(header->value);
+        memory_free(header);
+        return -1;
+    }
+
+    return 0;
+}
+
 int8_t http_handle(http_application_context_t* app_ctx, http_request_t* request, http_response_t* response) {
-    UNUSED(app_ctx); // TODO: use for muxer etc.
+    if(!app_ctx || !request || !response) {
+        PRINTLOG(HTTP, LOG_ERROR, "Invalid arguments to http_handle");
+        return -1;
+    }
 
     // Simple handler: respond with 200 OK and a hello message
     response->status_code = 200;
@@ -28,32 +179,24 @@ int8_t http_handle(http_application_context_t* app_ctx, http_request_t* request,
         return -1;
     }
 
-    PRINTLOG(HTTP, LOG_INFO, "Handling HTTP request for path: %s", request->path);
-    for (size_t i = 0; i < list_size(request->headers); i++) {
-        http_header_t* header = (http_header_t*)list_get_data_at_position(request->headers, i);
-        PRINTLOG(HTTP, LOG_INFO, "Request Header: %s: %s", header->name, header->value);
-    }
-    for (size_t i = 0; i < list_size(request->query_params); i++) {
-        http_query_param_t* param = (http_query_param_t*)list_get_data_at_position(request->query_params, i);
-        PRINTLOG(HTTP, LOG_INFO, "Query Param: %s=%s", param->name, param->value);
-    }
-
-    if(strcmp(request->path, "/") == 0 || strcmp(request->path, "/index.html") == 0) {
-        const char_t* message = "<html><body><h1>Welcome to the Home Page!</h1></body></html>\n";
-        buffer_append_bytes(response->body, (uint8_t*)message, strlen(message));
-    } else if(strcmp(request->path, "/hello") == 0) {
-        const char_t* message = "<html><body><h1>Hello, World!</h1></body></html>\n";
-        buffer_append_bytes(response->body, (uint8_t*)message, strlen(message));
-    } else {
-        response->status_code = 404;
-        const char_t* message = "<html><body><h1>404 Not Found</h1></body></html>\n";
-        buffer_append_bytes(response->body, (uint8_t*)message, strlen(message));
-    }
-
     response->headers = list_create_list();
     if(!response->headers) {
         PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for response headers list");
         return -1;
+    }
+
+    http_handler_f handler = http_find_handler(app_ctx, request->method, request->path);
+
+    if(handler) {
+        if(handler(request, response) != 0) {
+            PRINTLOG(HTTP, LOG_ERROR, "HTTP handler for path '%s' returned error", request->path);
+            return -1;
+        }
+    } else {
+        response->status_code  = 404;
+        response->content_type = HTTP_CONTENT_TYPE_TEXT_HTML;
+        const char_t* message = "<html><body><h1>404 Not Found</h1></body></html>\n";
+        buffer_append_bytes(response->body, (uint8_t*)message, strlen(message));
     }
 
     // Add Content-Type header
@@ -62,8 +205,13 @@ int8_t http_handle(http_application_context_t* app_ctx, http_request_t* request,
         PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for Content-Type header");
         return -1;
     }
-    content_type_header->name  = strdup("content-type");
-    content_type_header->value = strdup("text/html; charset=UTF-8");
+    content_type_header->name = strdup("content-type");
+
+    if(response->content_type >= HTTP_CONTENT_TYPE_COUNT) {
+        response->content_type = HTTP_CONTENT_TYPE_TEXT_PLAIN; // default to text/plain if invalid content type
+    }
+
+    content_type_header->value = strdup(http_content_type_strings[response->content_type]);
     if(!content_type_header->name || !content_type_header->value) {
         PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for Content-Type header strings");
         memory_free(content_type_header);
@@ -184,9 +332,23 @@ tls13_application_context_t* http_get_tls13_application_context(http_application
 }
 
 void http_destroy_application_context(http_application_context_t* app_ctx) {
-    if(app_ctx) {
-        memory_free(app_ctx);
+    if(!app_ctx) {
+        return;
     }
+
+    if(app_ctx->http_handlers) {
+        size_t handler_count = list_size(app_ctx->http_handlers);
+        for(size_t i = 0; i < handler_count; i++) {
+            http_handler_entry_t* entry = (http_handler_entry_t*)list_get_data_at_position(app_ctx->http_handlers, i);
+            if(entry) {
+                memory_free(entry->path);
+                memory_free(entry);
+            }
+        }
+        list_destroy(app_ctx->http_handlers);
+    }
+
+    memory_free(app_ctx);
 }
 
 int8_t http_plaintext_redirect_handler(tls13_application_context_t* app_ctx,

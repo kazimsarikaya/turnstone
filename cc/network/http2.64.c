@@ -410,7 +410,7 @@ static int8_t http2_send_response(http_application_context_t* ctx,
         stream->remote_window_size -= body_len;
     }
 
-    PRINTLOG(HTTP, LOG_INFO, "Response sent on stream %u", stream_id);
+    PRINTLOG(HTTP, LOG_DEBUG, "Response sent on stream %u", stream_id);
     return 0;
 }
 

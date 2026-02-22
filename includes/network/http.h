@@ -34,12 +34,43 @@ typedef enum http_method_t {
     HTTP_METHOD_PATCH,
 } http_method_t;
 
-typedef enum content_type_t {
-    CONTENT_TYPE_TEXT_HTML,
-    CONTENT_TYPE_APPLICATION_JSON,
-    CONTENT_TYPE_TEXT_PLAIN,
-    CONTENT_TYPE_APPLICATION_OCTET_STREAM,
-} content_type_t;
+typedef enum http_content_type_t {
+    HTTP_CONTENT_TYPE_TEXT_PLAIN,
+    HTTP_CONTENT_TYPE_TEXT_HTML,
+    HTTP_CONTENT_TYPE_APPLICATION_JSON,
+    HTTP_CONTENT_TYPE_APPLICATION_OCTET_STREAM,
+    HTTP_CONTENT_TYPE_COUNT,
+} http_content_type_t;
+
+typedef enum http_status_code_t {
+    HTTP_STATUS_CODE_OK               = 200,
+    HTTP_STATUS_NO_CONTENT            = 204,
+    HTTP_STATUS_PARTIAL_CONTENT       = 206,
+    HTTP_STATUS_MULTIPLE_CHOICES      = 300,
+    HTTP_STATUS_MOVED_PERMANENTLY     = 301,
+    HTTP_STATUS_FOUND                 = 302,
+    HTTP_STATUS_SEE_OTHER             = 303,
+    HTTP_STATUS_NOT_MODIFIED          = 304,
+    HTTP_STATUS_BAD_REQUEST           = 400,
+    HTTP_STATUS_UNAUTHORIZED          = 401,
+    HTTP_STATUS_FORBIDDEN             = 403,
+    HTTP_STATUS_NOT_FOUND             = 404,
+    HTTP_STATUS_INTERNAL_SERVER_ERROR = 500,
+    HTTP_STATUS_NOT_IMPLEMENTED       = 501,
+    HTTP_STATUS_BAD_GATEWAY           = 502,
+    HTTP_STATUS_SERVICE_UNAVAILABLE   = 503,
+} http_status_code_t;
+
+typedef struct http_application_context_t http_application_context_t;
+
+typedef struct http_request_t     http_request_t;
+typedef struct http_response_t    http_response_t;
+typedef struct http_header_t      http_header_t;
+typedef struct http_query_param_t http_query_param_t;
+
+typedef int8_t (*http_handler_f)(http_request_t* request, http_response_t* response);
+
+#ifdef ___HTTP_IMPLEMENTATION
 
 typedef struct http_request_t {
     http_version_t version;
@@ -62,10 +93,11 @@ typedef struct http_query_param_t {
 } http_query_param_t;
 
 typedef struct http_response_t {
-    http_version_t version;
-    int32_t        status_code;
-    list_t*        headers; // list of http_header_t
-    buffer_t*      body; // for storing response body
+    http_version_t      version;
+    http_status_code_t  status_code;
+    http_content_type_t content_type;
+    list_t*             headers; // list of http_header_t
+    buffer_t*           body; // for storing response body
 } http_response_t;
 
 
@@ -160,14 +192,11 @@ typedef struct http2_context_t {
     size_t           remote_headers_table_size;
 } http2_context_t;
 
-typedef struct http_application_context_t http_application_context_t;
-
-#ifdef ___HTTP_IMPLEMENTATION
 typedef struct http_application_context_t {
     const char_t*    server_host_port; // e.g., "example.com:443", used for generating redirect URLs in plaintext redirect handler
     tls13_session_t* tls13_session; // Store TLS session for use in application handler
+    list_t*          http_handlers; // List of http_handler_f for handling different routes or methods
 } http_application_context_t;
-#endif /* ___HTTP_IMPLEMENTATION */
 
 int8_t http_handle(http_application_context_t* app_ctx, http_request_t* request, http_response_t* response);
 
@@ -176,6 +205,8 @@ void http_free_response(http_response_t* response);
 
 int8_t http11_handle_connection(http_application_context_t* app_ctx);
 int8_t http2_handle_connection(http_application_context_t* app_ctx);
+
+#endif /* ___HTTP_IMPLEMENTATION */
 
 http_application_context_t* http_create_application_context(const char_t* server_host_port);
 
@@ -192,6 +223,13 @@ int8_t http_plaintext_redirect_handler(tls13_application_context_t* app_ctx,
                                        size_t*                      out_response_buf_len);
 
 int8_t http_application_handler(tls13_application_context_t* app_ctx, tls13_session_t* tls13_session);
+
+int8_t http_add_handler(http_application_context_t* app_ctx, http_method_t method, const char_t* path, http_handler_f handler);
+
+int8_t http_response_write_string(http_response_t* response, const char_t* str);
+int8_t http_response_set_status_code(http_response_t* response, http_status_code_t status_code);
+int8_t http_response_add_header(http_response_t* response, const char_t* name, const char_t* value);
+int8_t http_response_set_content_type(http_response_t* response, http_content_type_t content_type);
 
 #ifdef __cplusplus
 }
