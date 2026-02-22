@@ -452,6 +452,7 @@ static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, elli
 
 static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_session,
                                                     x509_algorithm_t*    supported_algorithms,
+                                                    const char_t*        sni_data,
                                                     x509_certificate_t** out_ca_cert,
                                                     x509_certificate_t** out_server_cert,
                                                     uint8_t**            out_private_key,
@@ -604,6 +605,14 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject alternative name");
         x509_certificate_free(cert);
         return -1;
+    }
+
+    if(strcmp(sni_data, "localhost") == 0) {
+        if (x509_certificate_add_subject_alternative_name(cert, X509_SUBJECT_ALTERNATIVE_NAME_TYPE_DNS, sni_data) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject alternative name from SNI");
+            x509_certificate_free(cert);
+            return -1;
+        }
     }
 
     if(x509_certificate_add_subject_alternative_name(cert, X509_SUBJECT_ALTERNATIVE_NAME_TYPE_IP, "127.0.0.1") != 0) {
@@ -994,18 +1003,53 @@ int32_t main(int32_t argc, char_t** argv) {
         return 1;
     }
 
-    tls13_config_t* tls13_config = tls13_create_config(
-        "localhost:10443",
-        tls13_load_server_certificate_and_key,
-        tls13_client_certificate_verify,
-        tls13_client_certificates_ca_dn_list,
-        tls13_get_psk_encryption_keys,
-        http_plaintext_redirect_handler,
-        http_application_handler,
-        send_all,
-        recv_all,
-        require_client_certificate
-        );
+    http_application_context_t* http_application_ctx = NULL;
+    http_application_ctx = http_create_application_context("localhost:10443");
+
+    if(http_application_ctx == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to create HTTP application context");
+        close(server_fd);
+        x509_certificate_free(ca_certificate);
+        return 1;
+    }
+
+    tls13_config_t* tls13_config = tls13_create_config(tls13_load_server_certificate_and_key,
+                                                       tls13_client_certificate_verify,
+                                                       tls13_client_certificates_ca_dn_list,
+                                                       tls13_get_psk_encryption_keys,
+                                                       require_client_certificate
+                                                       );
+
+    if(tls13_config == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to create TLS 1.3 configuration");
+        close(server_fd);
+        x509_certificate_free(ca_certificate);
+        http_destroy_application_context(http_application_ctx);
+        return 1;
+    }
+
+    if(tls13_config_set_network_callbacks(tls13_config, send_all, recv_all) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set TLS 1.3 network callbacks");
+        tls13_destroy_config(tls13_config);
+        close(server_fd);
+        x509_certificate_free(ca_certificate);
+        http_destroy_application_context(http_application_ctx);
+        return 1;
+    }
+
+    tls13_application_context_t* tls13_app_ctx = http_get_tls13_application_context(http_application_ctx);
+
+    if(tls13_config_set_application_callbacks(tls13_config,
+                                              tls13_app_ctx,
+                                              http_plaintext_redirect_handler,
+                                              http_application_handler) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set TLS 1.3 application data callback");
+        tls13_destroy_config(tls13_config);
+        close(server_fd);
+        x509_certificate_free(ca_certificate);
+        http_destroy_application_context(http_application_ctx);
+        return 1;
+    }
 
     PRINTLOG(CRYPTOLIB, LOG_INFO, "Server listening on port %d (SO_REUSEADDR enabled)", PORT);
     PRINTLOG(CRYPTOLIB, LOG_INFO, "Waiting for connections...");
@@ -1037,6 +1081,7 @@ int32_t main(int32_t argc, char_t** argv) {
     }
 
     tls13_destroy_config(tls13_config);
+    http_destroy_application_context(http_application_ctx);
 
     close(server_fd);
     x509_certificate_free(ca_certificate);

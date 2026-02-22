@@ -160,16 +160,38 @@ typedef struct http2_context_t {
     size_t           remote_headers_table_size;
 } http2_context_t;
 
-int8_t http_handle(http_request_t* request, http_response_t* response);
-void   http_free_request(http_request_t* request);
-void   http_free_response(http_response_t* response);
+typedef struct http_application_context_t http_application_context_t;
 
-int8_t http11_handle_connection(tls13_session_t* tls13_session);
-int8_t http2_handle_connection(tls13_session_t* tls13_session);
+#ifdef ___HTTP_IMPLEMENTATION
+typedef struct http_application_context_t {
+    const char_t*    server_host_port; // e.g., "example.com:443", used for generating redirect URLs in plaintext redirect handler
+    tls13_session_t* tls13_session; // Store TLS session for use in application handler
+} http_application_context_t;
+#endif /* ___HTTP_IMPLEMENTATION */
 
-int8_t http_plaintext_redirect_handler(tls13_session_t* tls13_session, const uint8_t* data, size_t data_len, uint8_t* response_buf, size_t* response_buf_len);
+int8_t http_handle(http_application_context_t* app_ctx, http_request_t* request, http_response_t* response);
 
-int8_t http_application_handler(tls13_session_t* tls13_session);
+void http_free_request(http_request_t* request);
+void http_free_response(http_response_t* response);
+
+int8_t http11_handle_connection(http_application_context_t* app_ctx);
+int8_t http2_handle_connection(http_application_context_t* app_ctx);
+
+http_application_context_t* http_create_application_context(const char_t* server_host_port);
+
+tls13_application_context_t* http_get_tls13_application_context(http_application_context_t* app_ctx);
+
+void http_destroy_application_context(http_application_context_t* app_ctx);
+
+int8_t http_plaintext_redirect_handler(tls13_application_context_t* app_ctx,
+                                       tls13_session_t*             tls13_session,
+                                       const uint8_t*               data,
+                                       size_t                       data_len,
+                                       uint8_t*                     response_buf,
+                                       size_t                       response_buf_len,
+                                       size_t*                      out_response_buf_len);
+
+int8_t http_application_handler(tls13_application_context_t* app_ctx, tls13_session_t* tls13_session);
 
 #ifdef __cplusplus
 }

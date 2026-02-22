@@ -165,16 +165,20 @@ typedef enum tls13_handshake_type_t : uint8_t {
 } tls13_handshake_type_t;
 
 struct tls13_config_t {
-    const char_t*                                   default_host_port;
     tls13_load_server_certificate_and_key_f         load_server_certificate_and_key;
     tls13_client_certificate_verify_callback_f      client_certificate_verify_callback;
     tls13_client_certificates_ca_dn_list_callback_f client_certificates_ca_dn_list_callback;
     tls13_get_psk_encryption_keys_callback_f        get_psk_encryption_keys_callback;
+    boolean_t                                       require_client_certificate;
+
+    // network callbacks
+    tls13_network_send_f network_send;
+    tls13_network_recv_f network_recv;
+
+    // application callbacks
+    tls13_application_context_t*                    application_context;
     tls13_application_plaintext_redirect_callback_f application_plaintext_redirect_callback;
     tls13_application_handler_callback_f            application_handler_callback;
-    tls13_network_send_f                            network_send;
-    tls13_network_recv_f                            network_recv;
-    boolean_t                                       require_client_certificate;
 };
 
 typedef struct tls13_connection_state_t {
@@ -366,37 +370,49 @@ static void tls13_destroy_session(tls13_session_t* tls13_session) {
     memory_free(tls13_session);
 }
 
-tls13_config_t* tls13_create_config(const char_t*                                   host_port,
-                                    tls13_load_server_certificate_and_key_f         load_server_certificate_and_key,
+tls13_config_t* tls13_create_config(tls13_load_server_certificate_and_key_f         load_server_certificate_and_key,
                                     tls13_client_certificate_verify_callback_f      client_certificate_verify_callback,
                                     tls13_client_certificates_ca_dn_list_callback_f client_certificates_ca_dn_list_callback,
                                     tls13_get_psk_encryption_keys_callback_f        get_psk_encryption_keys_callback,
-                                    tls13_application_plaintext_redirect_callback_f application_plaintext_redirect_callback,
-                                    tls13_application_handler_callback_f            application_handler_callback,
-                                    tls13_network_send_f                            network_send,
-                                    tls13_network_recv_f                            network_recv,
                                     boolean_t                                       require_client_certificate) {
-    if (!host_port || !network_send || !network_recv) {
-        return NULL;
-    }
-
     tls13_config_t* cfg = (tls13_config_t*)memory_malloc(sizeof(tls13_config_t));
     if (!cfg) {
         return NULL;
     }
 
-    cfg->default_host_port = host_port;
     cfg->load_server_certificate_and_key = load_server_certificate_and_key;
     cfg->client_certificate_verify_callback = client_certificate_verify_callback;
     cfg->client_certificates_ca_dn_list_callback = client_certificates_ca_dn_list_callback;
     cfg->get_psk_encryption_keys_callback = get_psk_encryption_keys_callback;
-    cfg->application_plaintext_redirect_callback = application_plaintext_redirect_callback;
-    cfg->application_handler_callback = application_handler_callback;
-    cfg->network_send = network_send;
-    cfg->network_recv = network_recv;
     cfg->require_client_certificate = require_client_certificate;
 
     return cfg;
+}
+
+int8_t tls13_config_set_network_callbacks(tls13_config_t*      tls13_config,
+                                          tls13_network_send_f network_send,
+                                          tls13_network_recv_f network_recv) {
+    if (!tls13_config || !network_send || !network_recv) {
+        return -1;
+    }
+
+    tls13_config->network_send = network_send;
+    tls13_config->network_recv = network_recv;
+    return 0;
+}
+
+int8_t tls13_config_set_application_callbacks(tls13_config_t*                                 tls13_config,
+                                              tls13_application_context_t*                    app_ctx,
+                                              tls13_application_plaintext_redirect_callback_f application_plaintext_redirect_callback,
+                                              tls13_application_handler_callback_f            application_handler_callback) {
+    if (!tls13_config || !application_plaintext_redirect_callback || !application_handler_callback) {
+        return -1;
+    }
+
+    tls13_config->application_context = app_ctx;
+    tls13_config->application_plaintext_redirect_callback = application_plaintext_redirect_callback;
+    tls13_config->application_handler_callback = application_handler_callback;
+    return 0;
 }
 
 void tls13_destroy_config(tls13_config_t* tls13_config) {
@@ -656,13 +672,6 @@ static int32_t hkdf_extract(tls13_session_t* tls13_session,
     return 0;
 }
 
-char_t* tls13_get_host_port(tls13_session_t* session) {
-    if (!session || !session->config || !session->config->default_host_port) {
-        return NULL;
-    }
-    return strdup(session->config->default_host_port);
-}
-
 static int8_t tls13_check_plain_text_protcol(tls13_session_t* tls13_session, uint8_t* header) {
     if(header[0] != TLS13_CONTENT_TYPE_HANDSHAKE || header[1] != 0x03 || (header[2] < 0x01 || header[2] > 0x04)) {
 
@@ -673,7 +682,7 @@ static int8_t tls13_check_plain_text_protcol(tls13_session_t* tls13_session, uin
 
         uint8_t buffer[512];
         uint8_t response[512];
-        int32_t response_len = 0;
+        size_t response_len = 0;
         memory_memclean(buffer, sizeof(buffer));
         memory_memcopy(header, &buffer[0], 5);
         int32_t received = tls13_session->config->network_recv(tls13_session->connection_state.network_client_identifier, &buffer[5], 506, 0 | 0x80000000); // try once.
@@ -685,7 +694,16 @@ static int8_t tls13_check_plain_text_protcol(tls13_session_t* tls13_session, uin
 
         received += 5; // include header in received data count
 
-
+        if(tls13_session->config->application_plaintext_redirect_callback(tls13_session->config->application_context,
+                                                                          tls13_session,
+                                                                          buffer,
+                                                                          received,
+                                                                          response,
+                                                                          sizeof(response),
+                                                                          &response_len) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Plaintext redirect callback failed");
+            return -1;
+        }
 
         tls13_session->config->network_send(tls13_session->connection_state.network_client_identifier, response, response_len, 0);
 
@@ -2232,6 +2250,7 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* tls13_session) 
 
     if(tls13_session->config->load_server_certificate_and_key(tls13_session,
                                                               tls13_session->client_state.client_supported_signature_algorithms_x509,
+                                                              tls13_session->connection_state.sni_hostname,
                                                               &ca_certificate,
                                                               &server_certificate,
                                                               &server_private_key,
@@ -3966,7 +3985,7 @@ int8_t tls13_handle_connection(tls13_config_t* config, int64_t network_client_id
     int8_t res = 0;
 
     if(config->application_handler_callback) {
-        if(config->application_handler_callback(tls13_session) != 0) {
+        if(config->application_handler_callback(config->application_context, tls13_session) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Application data callback returned error");
             res = -1;
         }

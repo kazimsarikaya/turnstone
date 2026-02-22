@@ -6,6 +6,8 @@
  * Please read and understand latest version of Licence.
  */
 
+#define ___HTTP_IMPLEMENTATION
+
 #include <network/http.h>
 #include <logging.h>
 #include <strings.h>
@@ -14,7 +16,9 @@ MODULE("turnstone.lib.network.http");
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t http_handle(http_request_t* request, http_response_t* response) {
+int8_t http_handle(http_application_context_t* app_ctx, http_request_t* request, http_response_t* response) {
+    UNUSED(app_ctx); // TODO: use for muxer etc.
+
     // Simple handler: respond with 200 OK and a hello message
     response->status_code = 200;
     response->version = request->version;
@@ -165,11 +169,38 @@ void http_free_response(http_response_t* response) {
     memory_free(response);
 }
 
+http_application_context_t* http_create_application_context(const char_t* server_host_port) {
+    http_application_context_t* app_ctx = (http_application_context_t*)memory_malloc(sizeof(http_application_context_t));
+    if(!app_ctx) {
+        PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP application context");
+        return NULL;
+    }
+    app_ctx->server_host_port = server_host_port;
+    return app_ctx;
+}
 
-int8_t http_plaintext_redirect_handler(tls13_session_t* tls13_session, const uint8_t* data, size_t data_len, uint8_t* response_buf, size_t* response_buf_len) {
+tls13_application_context_t* http_get_tls13_application_context(http_application_context_t* app_ctx) {
+    return (tls13_application_context_t*)app_ctx;
+}
+
+void http_destroy_application_context(http_application_context_t* app_ctx) {
+    if(app_ctx) {
+        memory_free(app_ctx);
+    }
+}
+
+int8_t http_plaintext_redirect_handler(tls13_application_context_t* app_ctx,
+                                       tls13_session_t*             tls13_session,
+                                       const uint8_t*               data,
+                                       size_t                       data_len,
+                                       uint8_t*                     response_buf,
+                                       size_t                       response_buf_len,
+                                       size_t*                      out_response_buf_len) {
     if(!tls13_session || !data || data_len == 0 || !response_buf || !response_buf_len) {
         return -1;
     }
+
+    http_application_context_t* http_app_ctx = (http_application_context_t*)app_ctx;
 
     // check for GET request (HTTP)
     if(memory_memcompare(data, "GET ", 4) == 0 // GET
@@ -182,9 +213,8 @@ int8_t http_plaintext_redirect_handler(tls13_session_t* tls13_session, const uin
         char_t default_host[256];
         memory_memclean(default_host, sizeof(default_host));
 
-        char_t* default_host_port = tls13_get_host_port(tls13_session);
+        const char_t* default_host_port = http_app_ctx->server_host_port;
         memory_memcopy(default_host_port, default_host, strlen(default_host_port));
-        memory_free(default_host_port);
 
         char_t* host_header = strstr((char_t*)data, "Host: ");
         if(host_header) {
@@ -207,8 +237,19 @@ int8_t http_plaintext_redirect_handler(tls13_session_t* tls13_session, const uin
             default_host
             );
 
+        if(!redirect_str) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for redirect string");
+            return -1;
+        }
+
+        if(strlen(redirect_str) > response_buf_len) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Redirect string length exceeds response buffer size");
+            memory_free(redirect_str);
+            return -1;
+        }
+
         memory_memcopy(redirect_str, response_buf, strlen(redirect_str));
-        *response_buf_len = strlen(redirect_str);
+        *out_response_buf_len = strlen(redirect_str);
         PRINTLOG(HTTP, LOG_INFO, "Sent 308 redirect to https://%s/", default_host);
 
         memory_free(redirect_str);
@@ -221,18 +262,22 @@ int8_t http_plaintext_redirect_handler(tls13_session_t* tls13_session, const uin
     return -1;
 }
 
-int8_t http_application_handler(tls13_session_t* tls13_session) {
-    if(!tls13_session) {
+int8_t http_application_handler(tls13_application_context_t* app_ctx, tls13_session_t* tls13_session) {
+    if(!app_ctx || !tls13_session) {
         return -1;
     }
 
+    http_application_context_t* http_app_ctx = (http_application_context_t*)app_ctx;
+
+    http_app_ctx->tls13_session = tls13_session;
+
     if(tls13_has_alpn_h2(tls13_session)) {
-        if(http2_handle_connection(tls13_session) != 0) {
+        if(http2_handle_connection(http_app_ctx) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/2 connection handling failed");
             return -1;
         }
     } else {
-        if(http11_handle_connection(tls13_session) != 0) {
+        if(http11_handle_connection(http_app_ctx) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/1.1 connection handling failed");
             return -1;
         }

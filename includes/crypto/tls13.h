@@ -45,6 +45,13 @@ typedef struct tls13_config_t tls13_config_t;
 typedef struct tls13_session_t tls13_session_t;
 
 /**
+ * @brief Opaque structure representing the application context for TLS 1.3.
+ *
+ * This structure can be used to store application-specific data for application handler callbacks. It is opaque to the TLS library and can be defined by the application as needed.
+ */
+typedef struct tls13_application_context_t tls13_application_context_t;
+
+/**
  * @brief Function pointer type for loading server certificates and private keys.
  *
  * This callback function is responsible for loading the server's X.509 certificate chain
@@ -53,6 +60,7 @@ typedef struct tls13_session_t tls13_session_t;
  *
  * @param tls13_session Pointer to the TLS 1.3 context.
  * @param supported_algorithms Pointer to an array of `x509_algorithm_t` values representing the signature algorithms supported by the client. The implementation can use this information to select an appropriate certificate and key.
+ * @param sni_data Pointer to the Server Name Indication (SNI) data provided by the client, if any. This can be used to select different certificates based on the requested hostname.
  * @param out_ca_cert Pointer to a pointer that will be set to the loaded CA certificate.
  * @param out_server_cert Pointer to a pointer that will be set to the loaded server certificate(s).
  * @param out_private_key Pointer to a pointer that will be set to the loaded server's private key data.
@@ -61,6 +69,7 @@ typedef struct tls13_session_t tls13_session_t;
  */
 typedef int8_t (*tls13_load_server_certificate_and_key_f)(tls13_session_t*     tls13_session,
                                                           x509_algorithm_t*    supported_algorithms,
+                                                          const char_t*        sni_data,
                                                           x509_certificate_t** out_ca_cert,
                                                           x509_certificate_t** out_server_cert,
                                                           uint8_t**            out_private_key,
@@ -118,9 +127,38 @@ typedef int8_t (*tls13_get_psk_encryption_keys_callback_f)(tls13_session_t* tls1
                                                            uint8_t**        out_psk_encryption_iv,
                                                            uint8_t**        out_psk_aed_key);
 
-typedef int8_t (*tls13_application_plaintext_redirect_callback_f)(tls13_session_t* tls13_session, const uint8_t* data, size_t data_len, uint8_t* response_buf, size_t* response_buf_len);
+/**
+ * @brief Function pointer type for application plaintext redirect callback.
+ *
+ * This callback function is invoked when the TLS library receives application data that should be redirected to a plaintext handler. The implementation should process the incoming data and optionally generate a response to be sent back to the client.
+ *
+ * @param app_ctx Pointer to the application context provided by the caller. This can be used to store application-specific state or data.
+ * @param tls13_session Pointer to the TLS 1.3 context.
+ * @param data Pointer to the received application data.
+ * @param data_len The length of the received application data.
+ * @param response_buf Pointer to a buffer where the response data can be stored, if needed.
+ * @param response_buf_len The length of the response buffer.
+ * @param out_response_buf_len Pointer to a size_t that will be set to the length of the response data written to the response buffer.
+ * @return 0 on success, a negative value on failure.
+ */
+typedef int8_t (*tls13_application_plaintext_redirect_callback_f)(tls13_application_context_t* app_ctx,
+                                                                  tls13_session_t*             tls13_session,
+                                                                  const uint8_t*               data,
+                                                                  size_t                       data_len,
+                                                                  uint8_t*                     response_buf,
+                                                                  size_t                       response_buf_len,
+                                                                  size_t*                      out_response_buf_len);
 
-typedef int8_t (*tls13_application_handler_callback_f)(tls13_session_t* tls13_session);
+/**
+ * @brief Function pointer type for application handler callback.
+ *
+ * This callback function is called after the TLS handshake is complete and the connection is ready to handle application data. The implementation should process the application data as needed and return an appropriate status code.
+ *
+ * @param app_ctx Pointer to the application context provided by the caller. This can be used to store application-specific state or data.
+ * @param tls13_session Pointer to the TLS 1.3 context for the current connection.
+ * @return 0 on success, a negative value on failure.
+ */
+typedef int8_t (*tls13_application_handler_callback_f)(tls13_application_context_t* app_ctx, tls13_session_t* tls13_session);
 
 /**
  * @brief Function pointer type for sending data over the network.
@@ -166,15 +204,10 @@ typedef int32_t (*tls13_network_recv_f)(int64_t network_client_identifier, uint8
  * @param require_client_certificate If true, the server will request a client certificate during the handshake.
  * @return A pointer to the initialized TLS 1.3 configuration structure, or NULL if initialization fails. The caller is responsible for freeing the returned pointer using `tls13_destroy_config`.
  */
-tls13_config_t* tls13_create_config(const char_t*                                   host_port,
-                                    tls13_load_server_certificate_and_key_f         load_server_certificate_and_key,
+tls13_config_t* tls13_create_config(tls13_load_server_certificate_and_key_f         load_server_certificate_and_key,
                                     tls13_client_certificate_verify_callback_f      client_certificate_verify_callback,
                                     tls13_client_certificates_ca_dn_list_callback_f client_certificates_ca_dn_list_callback,
                                     tls13_get_psk_encryption_keys_callback_f        get_psk_encryption_keys_callback,
-                                    tls13_application_plaintext_redirect_callback_f application_plaintext_redirect_callback,
-                                    tls13_application_handler_callback_f            application_handler_callback,
-                                    tls13_network_send_f                            network_send,
-                                    tls13_network_recv_f                            network_recv,
                                     boolean_t                                       require_client_certificate);
 /**
  * @brief Destroys a TLS 1.3 config and frees associated resources.
@@ -187,14 +220,33 @@ tls13_config_t* tls13_create_config(const char_t*                               
 void tls13_destroy_config(tls13_config_t* tls13_config);
 
 /**
- * @brief Retrieves the host and port information from the TLS 1.3 configuration.
+ * @brief Sets the network callbacks for a TLS 1.3 config.
  *
- * This function returns a string containing the host and port information that the server is configured to listen on. This information is typically used for logging, SNI processing, or other purposes where the server's identity is relevant.
+ * This function allows the caller to specify custom network send and receive functions
+ * that the TLS library will use for communication with clients. The provided callbacks
+ * will be used for all connections handled by this TLS configuration.
  *
- * @param session Pointer to the TLS 1.3 session structure from which to retrieve the host and port information.
- * @return A copy of the host and port string (e.g., "example.com:443"). The caller is responsible for freeing the returned string using `free()`. Returns NULL if the information is not available or on error.
+ * @param tls13_config Pointer to the TLS 1.3 configuration structure.
+ * @param network_send A function pointer for sending data over the network.
+ * @param network_recv A function pointer for receiving data from the network.
+ * @return 0 on success, a negative value on failure (e.g., if tls13_config is NULL).
  */
-char_t* tls13_get_host_port(tls13_session_t* session);
+int8_t tls13_config_set_network_callbacks(tls13_config_t* tls13_config, tls13_network_send_f network_send, tls13_network_recv_f network_recv);
+
+/**
+ * @brief Sets the application callbacks for a TLS 1.3 config.
+ *
+ * This function allows the caller to specify custom application handler and plaintext redirect callbacks
+ * that the TLS library will use for processing application data after the handshake is complete. The provided callbacks
+ * will be used for all connections handled by this TLS configuration.
+ *
+ * @param tls13_config Pointer to the TLS 1.3 configuration structure.
+ * @param app_ctx Pointer to an application context that will be passed to the application handler callback.
+ * @param application_plaintext_redirect_callback A function pointer for handling plaintext redirects (e.g., HTTP requests on a TLS port).
+ * @param application_handler_callback A function pointer for handling application data after the handshake is complete.
+ * @return 0 on success, a negative value on failure (e.g., if tls13_config is NULL).
+ */
+int8_t tls13_config_set_application_callbacks(tls13_config_t* tls13_config, tls13_application_context_t* app_ctx, tls13_application_plaintext_redirect_callback_f application_plaintext_redirect_callback, tls13_application_handler_callback_f application_handler_callback);
 
 /**
  * @brief Handles an incoming TLS connection.

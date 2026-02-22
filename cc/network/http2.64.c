@@ -6,6 +6,8 @@
  * Please read and understand latest version of Licence.
  */
 
+#define ___HTTP_IMPLEMENTATION
+
 #include <network/http.h>
 #include <logging.h>
 #include <strings.h>
@@ -13,9 +15,9 @@
 
 MODULE("turnstone.lib.network.http");
 
-static int8_t http2_send_reset_stream(tls13_session_t*   ctx,
-                                      uint32_t           stream_id,
-                                      http2_error_code_t error_code) {
+static int8_t http2_send_reset_stream(http_application_context_t* ctx,
+                                      uint32_t                    stream_id,
+                                      http2_error_code_t          error_code) {
     uint8_t payload[4] = {
         (error_code >> 24) & 0xFF,
         (error_code >> 16) & 0xFF,
@@ -33,8 +35,8 @@ static int8_t http2_send_reset_stream(tls13_session_t*   ctx,
         stream_id & 0xFF
     };
 
-    if(tls13_write(ctx, frame_header, sizeof(frame_header)) < 0 ||
-       tls13_write(ctx, payload, sizeof(payload)) < 0) {
+    if(tls13_write(ctx->tls13_session, frame_header, sizeof(frame_header)) < 0 ||
+       tls13_write(ctx->tls13_session, payload, sizeof(payload)) < 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to send HTTP/2 RST_STREAM frame");
         return -1;
     }
@@ -42,9 +44,9 @@ static int8_t http2_send_reset_stream(tls13_session_t*   ctx,
     return 0;
 }
 
-static int8_t http2_send_goaway(tls13_session_t*   ctx,
-                                uint32_t           last_stream_id,
-                                http2_error_code_t error_code) {
+static int8_t http2_send_goaway(http_application_context_t* ctx,
+                                uint32_t                    last_stream_id,
+                                http2_error_code_t          error_code) {
     uint8_t payload[8] = {
         (last_stream_id >> 24) & 0x7F,
         (last_stream_id >> 16) & 0xFF,
@@ -63,8 +65,8 @@ static int8_t http2_send_goaway(tls13_session_t*   ctx,
         0x00, 0x00, 0x00, 0x00 // Stream Identifier: 0
     };
 
-    if(tls13_write(ctx, frame_header, sizeof(frame_header)) < 0 ||
-       tls13_write(ctx, payload, sizeof(payload)) < 0) {
+    if(tls13_write(ctx->tls13_session, frame_header, sizeof(frame_header)) < 0 ||
+       tls13_write(ctx->tls13_session, payload, sizeof(payload)) < 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to send HTTP/2 GOAWAY frame");
         return -1;
     }
@@ -72,7 +74,7 @@ static int8_t http2_send_goaway(tls13_session_t*   ctx,
     return 0;
 }
 
-static int8_t http2_send_settings_ack(tls13_session_t* ctx) {
+static int8_t http2_send_settings_ack(http_application_context_t* ctx) {
     uint8_t settings_ack_frame[9] = {
         0x00, 0x00, 0x00, // Length: 0
         HTTP2_FRAME_TYPE_SETTINGS, // Type: SETTINGS
@@ -80,7 +82,7 @@ static int8_t http2_send_settings_ack(tls13_session_t* ctx) {
         0x00, 0x00, 0x00, 0x00 // Stream Identifier: 0
     };
 
-    if(tls13_write(ctx, settings_ack_frame, sizeof(settings_ack_frame)) < 0) {
+    if(tls13_write(ctx->tls13_session, settings_ack_frame, sizeof(settings_ack_frame)) < 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to send HTTP/2 SETTINGS ACK frame");
         return -1;
     }
@@ -88,7 +90,7 @@ static int8_t http2_send_settings_ack(tls13_session_t* ctx) {
     return 0;
 }
 
-static int8_t http2_send_ping_ack(tls13_session_t * ctx, http2_frame_t * rx_frame) {
+static int8_t http2_send_ping_ack(http_application_context_t* ctx, http2_frame_t * rx_frame) {
     uint8_t ack_header[9] = {
         0x00, 0x00, 0x08, // Length 8
         0x06, // Type PING
@@ -96,12 +98,12 @@ static int8_t http2_send_ping_ack(tls13_session_t * ctx, http2_frame_t * rx_fram
         0x00, 0x00, 0x00, 0x00 // Stream 0
     };
 
-    if(tls13_write(ctx, ack_header, 9) < 0) {
+    if(tls13_write(ctx->tls13_session, ack_header, 9) < 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to send PING ACK frame header");
         return -1;
     }
 
-    if(tls13_write(ctx, rx_frame->payload, 8) < 0) {
+    if(tls13_write(ctx->tls13_session, rx_frame->payload, 8) < 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to send PING ACK frame payload");
         return -1;
     }
@@ -160,7 +162,7 @@ static int8_t http2_parse_settings(http2_context_t* ctx, http2_frame_t* frame) {
 }
 
 
-static int8_t http2_send_settings(tls13_session_t* ctx, http2_context_t* http2_ctx) {
+static int8_t http2_send_settings(http_application_context_t* ctx, http2_context_t* http2_ctx) {
     uint8_t settings_payload[128]; // Sufficiently large buffer
     uint32_t offset = 0;
 
@@ -230,8 +232,8 @@ static int8_t http2_send_settings(tls13_session_t* ctx, http2_context_t* http2_c
         0x00, 0x00, 0x00, 0x00 // Stream Identifier: 0
     };
 
-    if(tls13_write(ctx, frame_header, sizeof(frame_header)) < 0 ||
-       tls13_write(ctx, settings_payload, frame_length) < 0) {
+    if(tls13_write(ctx->tls13_session, frame_header, sizeof(frame_header)) < 0 ||
+       tls13_write(ctx->tls13_session, settings_payload, frame_length) < 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to send HTTP/2 SETTINGS frame");
         return -1;
     }
@@ -263,7 +265,7 @@ static int8_t http2_parse_window_update(http2_context_t* ctx, http2_frame_t* fra
     return 0;
 }
 
-static int8_t http2_send_window_update(tls13_session_t* ctx,
+static int8_t http2_send_window_update(http_application_context_t* ctx,
                                        http2_context_t* http2_ctx,
                                        uint32_t stream_id, uint32_t window_size_increment) {
     uint8_t payload[4] = {
@@ -289,8 +291,8 @@ static int8_t http2_send_window_update(tls13_session_t* ctx,
         http2_ctx->streams[stream_id].local_window_size += window_size_increment;
     }
 
-    if(tls13_write(ctx, frame_header, sizeof(frame_header)) < 0 ||
-       tls13_write(ctx, payload, sizeof(payload)) < 0) {
+    if(tls13_write(ctx->tls13_session, frame_header, sizeof(frame_header)) < 0 ||
+       tls13_write(ctx->tls13_session, payload, sizeof(payload)) < 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to send HTTP/2 WINDOW_UPDATE frame");
         return -1;
     }
@@ -301,8 +303,8 @@ static int8_t http2_send_window_update(tls13_session_t* ctx,
 int8_t http2_hpack_encode_int(buffer_t* buffer, uint32_t value, uint8_t prefix_bits, uint8_t type_bits);
 int8_t http2_hpack_encode_literal(http2_context_t* ctx, buffer_t* buffer, const char_t* name, const char_t* value,
                                   bool add_to_dynamic_table);
-static int8_t http2_send_response(tls13_session_t* tls_ctx,
-                                  http2_context_t* ctx, http2_stream_t* stream) {
+static int8_t http2_send_response(http_application_context_t* ctx,
+                                  http2_context_t* http2_ctx, http2_stream_t* stream) {
     http_response_t* res = stream->response;
     uint32_t stream_id = stream->stream_id;
 
@@ -322,7 +324,7 @@ static int8_t http2_send_response(tls13_session_t* tls_ctx,
         // For simplicity, encode as Literal Header Field with New Name
         char status_str[4];
         itoa_with_buffer(status_str, res->status_code);
-        if(http2_hpack_encode_literal(ctx, hpack_buf, ":status", status_str, false) != 0) {
+        if(http2_hpack_encode_literal(http2_ctx, hpack_buf, ":status", status_str, false) != 0) {
             PRINTLOG(HTTP, LOG_ERROR, "Failed to encode :status header for HTTP/2 response");
             buffer_destroy(hpack_buf);
             return -1;
@@ -331,7 +333,7 @@ static int8_t http2_send_response(tls13_session_t* tls_ctx,
     }
 
     // add x-powered-by: Turnstone OS header as an example of a custom header
-    if(http2_hpack_encode_literal(ctx, hpack_buf, "x-powered-by", "Turnstone OS", true) != 0) {
+    if(http2_hpack_encode_literal(http2_ctx, hpack_buf, "x-powered-by", "Turnstone OS", true) != 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to encode x-powered-by header for HTTP/2 response");
         buffer_destroy(hpack_buf);
         return -1;
@@ -347,7 +349,7 @@ static int8_t http2_send_response(tls13_session_t* tls_ctx,
                     add_to_dynamic_table = false; // Content-Length can vary widely, so we might choose not to add it to the dynamic table
                 }
 
-                if(http2_hpack_encode_literal(ctx, hpack_buf, header->name, header->value, add_to_dynamic_table) != 0) {
+                if(http2_hpack_encode_literal(http2_ctx, hpack_buf, header->name, header->value, add_to_dynamic_table) != 0) {
                     PRINTLOG(HTTP, LOG_ERROR, "Failed to encode header '%s: %s' for HTTP/2 response",
                              header->name, header->value);
                     buffer_destroy(hpack_buf);
@@ -370,9 +372,9 @@ static int8_t http2_send_response(tls13_session_t* tls_ctx,
     h_frame[7] = (stream_id >> 8) & 0xFF;
     h_frame[8] = stream_id & 0xFF;
 
-    tls13_write(tls_ctx, h_frame, 9);
+    tls13_write(ctx->tls13_session, h_frame, 9);
     uint8_t* hpack_data = buffer_get_all_bytes_and_destroy(hpack_buf, &hpack_len);
-    tls13_write(tls_ctx, hpack_data, hpack_len);
+    tls13_write(ctx->tls13_session, hpack_data, hpack_len);
     memory_free(hpack_data);
 
     // --- 3. SEND DATA FRAME ---
@@ -380,7 +382,7 @@ static int8_t http2_send_response(tls13_session_t* tls_ctx,
     size_t body_len = res->body ? buffer_get_length(res->body) : 0;
 
     // Safety check for Flow Control Windows
-    if (body_len > (size_t)ctx->streams[0].remote_window_size ||
+    if (body_len > (size_t)http2_ctx->streams[0].remote_window_size ||
         body_len > (size_t)stream->remote_window_size) {
         // In a real world, we'd chunk this. For now, we trust the 64KB default.
         PRINTLOG(HTTP, LOG_WARNING, "Body exceeds window, might stall.");
@@ -397,14 +399,14 @@ static int8_t http2_send_response(tls13_session_t* tls_ctx,
     d_frame[7] = (stream_id >> 8) & 0xFF;
     d_frame[8] = stream_id & 0xFF;
 
-    tls13_write(tls_ctx, d_frame, 9);
+    tls13_write(ctx->tls13_session, d_frame, 9);
     if (body_len > 0) {
         uint8_t* body_data = buffer_get_all_bytes(res->body, NULL);
-        tls13_write(tls_ctx, body_data, body_len);
+        tls13_write(ctx->tls13_session, body_data, body_len);
         memory_free(body_data);
 
         // Scientific Rule: Subtract from windows after sending
-        ctx->streams[0].remote_window_size -= body_len;
+        http2_ctx->streams[0].remote_window_size -= body_len;
         stream->remote_window_size -= body_len;
     }
 
@@ -416,15 +418,15 @@ int8_t http2_hpack_handle_indexed(http2_context_t* ctx, http2_stream_t* stream, 
 int8_t http2_hpack_decode_int(const uint8_t* data, uint8_t prefix_bits, uint32_t * result, size_t * consumed);
 int8_t http2_hpack_decode_literal(http2_context_t* ctx, http2_stream_t* stream,
                                   uint8_t* data, bool add_to_dynamic_table, size_t* consumed_bytes);
-static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
-                                  http2_context_t* ctx, http2_frame_t* frame) {
+static int8_t http2_parse_headers(http_application_context_t* ctx,
+                                  http2_context_t* http2_ctx, http2_frame_t* frame) {
     PRINTLOG(HTTP, LOG_DEBUG, "Received %s frame on stream %u",
              (frame->type == HTTP2_FRAME_TYPE_HEADERS) ? "HEADERS" : "CONTINUATION",
              frame->stream_id);
 
     if(frame->stream_id == 0) {
         PRINTLOG(HTTP, LOG_ERROR, "HEADERS frame with stream ID 0 is invalid");
-        http2_send_goaway(tls_ctx, 0, HTTP2_ERROR_PROTOCOL_ERROR);
+        http2_send_goaway(ctx, 0, HTTP2_ERROR_PROTOCOL_ERROR);
         return -1;
     }
 
@@ -446,32 +448,32 @@ static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
     boolean_t is_payload_from_buffer = false;
 
     // 1. Get or create the stream object
-    http2_stream_t* stream = &ctx->streams[frame->stream_id];
+    http2_stream_t* stream = &http2_ctx->streams[frame->stream_id];
 
     if(frame->type == HTTP2_FRAME_TYPE_HEADERS) {
         if(stream->active) {
             PRINTLOG(HTTP, LOG_ERROR, "Received HEADERS frame for already active stream %u", frame->stream_id);
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_STREAM_CLOSED);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_STREAM_CLOSED);
             return -1;
         }
 
         if(frame->length == 0 || !frame->payload) {
             PRINTLOG(HTTP, LOG_ERROR, "HEADERS frame payload is NULL");
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
             return -1;
         }
 
         if(frame->flags & HTTP2_FLAG_PADDED) {
             if(payload_len < 1) {
                 PRINTLOG(HTTP, LOG_ERROR, "Invalid PADDED HEADERS frame: insufficient payload for Pad Length");
-                http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+                http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
                 return -1;
             }
             size_t pad_length = payload[0]; // Pad Length is the first byte of the payload
 
             if (pad_length + 1 > payload_len) {
                 PRINTLOG(HTTP, LOG_ERROR, "Invalid PADDED HEADERS frame: Pad Length exceeds payload");
-                http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+                http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
                 return -1;
             }
 
@@ -483,7 +485,7 @@ static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
         if(frame->flags & HTTP2_FLAG_PRIORITY) {
             if (payload_len < 5) {
                 PRINTLOG(HTTP, LOG_ERROR, "Invalid PRIORITY HEADERS frame: insufficient space for priority fields");
-                http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+                http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
                 return -1;
             }
             // Skip 5 bytes of priority fields
@@ -494,20 +496,20 @@ static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
         if(!is_end_headers) {
             if(stream->header_block_buffer) {
                 PRINTLOG(HTTP, LOG_ERROR, "Received fragmented HEADERS frame but header block buffer already exists for stream %u", frame->stream_id);
-                http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+                http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
                 return -1;
             }
 
             stream->header_block_buffer = buffer_new();
             if (!stream->header_block_buffer) {
                 PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for header block buffer on stream %u", frame->stream_id);
-                http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+                http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
                 return -1;
             }
             // put the initial fragment of the header block into the buffer
             if(!buffer_append_bytes(stream->header_block_buffer, payload, payload_len)) {
                 PRINTLOG(HTTP, LOG_ERROR, "Failed to append initial HEADERS fragment to buffer for stream %u", frame->stream_id);
-                http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+                http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
                 return -1;
             }
 
@@ -522,26 +524,26 @@ static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
     } else if(frame->type == HTTP2_FRAME_TYPE_CONTINUATION) {
         if(!stream->active) {
             PRINTLOG(HTTP, LOG_ERROR, "Received CONTINUATION frame for inactive stream %u", frame->stream_id);
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_STREAM_CLOSED);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_STREAM_CLOSED);
             return -1;
         }
 
         if(!stream->header_block_buffer) {
             PRINTLOG(HTTP, LOG_ERROR, "Received CONTINUATION frame but no header block buffer exists for stream %u", frame->stream_id);
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
             return -1;
         }
 
         size_t current_buffer_len = buffer_get_length(stream->header_block_buffer);
-        if(current_buffer_len + payload_len > ctx->local_settings.max_header_list_size) {
+        if(current_buffer_len + payload_len > http2_ctx->local_settings.max_header_list_size) {
             PRINTLOG(HTTP, LOG_ERROR, "Header block size exceeds max header list size for stream %u", frame->stream_id);
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
             return -1;
         }
 
         if(!buffer_append_bytes(stream->header_block_buffer, payload, payload_len)) {
             PRINTLOG(HTTP, LOG_ERROR, "Failed to append CONTINUATION fragment to buffer for stream %u", frame->stream_id);
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
             return -1;
         }
 
@@ -558,39 +560,39 @@ static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
 
     } else {
         PRINTLOG(HTTP, LOG_ERROR, "Invalid frame type %u for headers parsing on stream %u", frame->type, frame->stream_id);
-        http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_PROTOCOL_ERROR);
+        http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_PROTOCOL_ERROR);
         return -1;
     }
 
     // sanity check
     if(!is_end_headers) {
         PRINTLOG(HTTP, LOG_ERROR, "HEADERS frame without END_HEADERS flag should have been handled as fragmented, but got unfragmented frame on stream %u", frame->stream_id);
-        http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+        http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
         return -1;
     }
 
     if(payload_len == 0 || !payload) {
         PRINTLOG(HTTP, LOG_ERROR, "HEADERS frame has no payload after processing fragments for stream %u", frame->stream_id);
-        http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+        http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
         return -1;
     }
 
     if(!stream->active) {
         PRINTLOG(HTTP, LOG_ERROR, "Stream %u is not active after processing HEADERS frame", frame->stream_id);
-        http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_STREAM_CLOSED);
+        http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_STREAM_CLOSED);
         return -1;
     }
 
     if(stream->request) {
         PRINTLOG(HTTP, LOG_ERROR, "Stream %u already has a request object when processing HEADERS frame", frame->stream_id);
-        http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_STREAM_CLOSED);
+        http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_STREAM_CLOSED);
         return -1;
     }
 
     stream->request = (http_request_t*)memory_malloc(sizeof(http_request_t));
     if (!stream->request) {
         PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP/2 stream request");
-        http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+        http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
         return -1;
     }
 
@@ -599,14 +601,14 @@ static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
     stream->request->headers = list_create_list();
     if (!stream->request->headers) {
         PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP/2 request headers list");
-        http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+        http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
         return -1;
     }
 
     stream->error_code = HTTP2_ERROR_NO_ERROR;
     stream->stream_id  = frame->stream_id;
-    stream->local_window_size  = ctx->local_settings.initial_window_size;
-    stream->remote_window_size = ctx->remote_settings.initial_window_size;
+    stream->local_window_size  = http2_ctx->local_settings.initial_window_size;
+    stream->remote_window_size = http2_ctx->remote_settings.initial_window_size;
 
     uint8_t* data = payload;
     size_t data_len = payload_len;
@@ -623,27 +625,27 @@ static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
             // TYPE 1: Indexed Header Field (1xxxxxxx)
             // The index is the remaining 7 bits.
             uint32_t index = first_byte & 0x7F;
-            if(http2_hpack_handle_indexed(ctx, stream, index) != 0) {
+            if(http2_hpack_handle_indexed(http2_ctx, stream, index) != 0) {
                 PRINTLOG(HTTP, LOG_ERROR, "Failed to handle HPACK indexed header");
-                http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+                http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
                 return -1;
             }
             offset += 1;
         }else if ((first_byte & 0xC0) == 0x40) {
             // TYPE 2: Literal Header Field with Incremental Indexing (01xxxxxx)
             // This adds a new entry to the Dynamic Table.
-            if(http2_hpack_decode_literal(ctx, stream, &data[offset], true, &consumed_bytes) != 0) {
+            if(http2_hpack_decode_literal(http2_ctx, stream, &data[offset], true, &consumed_bytes) != 0) {
                 PRINTLOG(HTTP, LOG_ERROR, "Failed to decode HPACK literal header with indexing");
-                http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+                http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
                 return -1;
             }
             offset += consumed_bytes;
         }else if ((first_byte & 0xF0) == 0x00 || (first_byte & 0xF0) == 0x10) {
             // TYPE 3: Literal Header Field without Indexing (0000xxxx or 0001xxxx)
             // Does NOT add to the Dynamic Table.
-            if(http2_hpack_decode_literal(ctx, stream, &data[offset], false, &consumed_bytes) != 0) {
+            if(http2_hpack_decode_literal(http2_ctx, stream, &data[offset], false, &consumed_bytes) != 0) {
                 PRINTLOG(HTTP, LOG_ERROR, "Failed to decode HPACK literal header without indexing");
-                http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+                http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
                 return -1;
             }
             offset += consumed_bytes;
@@ -654,14 +656,14 @@ static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
             size_t consumed;
             if(http2_hpack_decode_int(&data[offset], 5, &new_size, &consumed) != 0) {
                 PRINTLOG(HTTP, LOG_ERROR, "Failed to decode HPACK dynamic table size update");
-                http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+                http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
                 return -1;
             }
-            ctx->local_settings.header_table_size = new_size;
+            http2_ctx->local_settings.header_table_size = new_size;
             offset += consumed;
         } else {
             PRINTLOG(HTTP, LOG_ERROR, "Unknown HPACK header representation in HEADERS frame. First byte: 0x%02x", first_byte);
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
             return -1;
         }
     }
@@ -675,21 +677,21 @@ static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
         http_response_t* response = (http_response_t*)memory_malloc(sizeof(http_response_t));
         if (!response) {
             PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP response");
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
             return -1;
         }
 
         stream->response = response;
 
-        if(http_handle(stream->request, response) != 0) {
+        if(http_handle(ctx, stream->request, response) != 0) {
             PRINTLOG(HTTP, LOG_ERROR, "Failed to handle HTTP/2 request");
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
             return -1;
         }
 
-        if(http2_send_response(tls_ctx, ctx, stream) != 0) {
+        if(http2_send_response(ctx, http2_ctx, stream) != 0) {
             PRINTLOG(HTTP, LOG_ERROR, "Failed to send HTTP/2 response");
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
             return -1;
 
         }
@@ -706,14 +708,14 @@ static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
     return 0;
 }
 
-static int8_t http2_parse_data_frame(tls13_session_t* tls_ctx,
-                                     http2_context_t* ctx, http2_frame_t* frame) {
+static int8_t http2_parse_data_frame(http_application_context_t* ctx,
+                                     http2_context_t* http2_ctx, http2_frame_t* frame) {
     PRINTLOG(HTTP, LOG_DEBUG, "Received DATA frame on stream %u with length %u", frame->stream_id, frame->length);
 
-    http2_stream_t* stream = &ctx->streams[frame->stream_id];
+    http2_stream_t* stream = &http2_ctx->streams[frame->stream_id];
     if (!stream->active || !stream->request) {
         PRINTLOG(HTTP, LOG_ERROR, "DATA frame received for inactive or non-existent stream %u", frame->stream_id);
-        http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_STREAM_CLOSED);
+        http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_STREAM_CLOSED);
         return -1;
     }
 
@@ -724,14 +726,14 @@ static int8_t http2_parse_data_frame(tls13_session_t* tls_ctx,
 
     if(!frame->payload) {
         PRINTLOG(HTTP, LOG_ERROR, "DATA frame payload is NULL");
-        http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+        http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
         return -1;
     }
 
     if(frame->length > (uint32_t)stream->local_window_size ||
-       frame->length > (uint32_t)ctx->streams[0].local_window_size) {
+       frame->length > (uint32_t)http2_ctx->streams[0].local_window_size) {
         PRINTLOG(HTTP, LOG_ERROR, "DATA frame exceeds flow control window for stream %u", frame->stream_id);
-        http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_FLOW_CONTROL_ERROR);
+        http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_FLOW_CONTROL_ERROR);
         return -1;
     }
 
@@ -740,26 +742,26 @@ static int8_t http2_parse_data_frame(tls13_session_t* tls_ctx,
         stream->request->body = buffer_new();
         if(!stream->request->body) {
             PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP request body buffer");
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
             return -1;
         }
     }
 
     if(!buffer_append_bytes(stream->request->body, frame->payload, frame->length)) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to append data to HTTP request body buffer");
-        http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+        http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
         return -1;
     }
 
     // Update flow control windows
-    ctx->streams[0].local_window_size -= frame->length;
+    http2_ctx->streams[0].local_window_size -= frame->length;
     stream->local_window_size -= frame->length;
 
-    if(stream->local_window_size < (ctx->local_settings.initial_window_size / 2)) {
-        uint32_t increment = ctx->local_settings.initial_window_size - stream->local_window_size;
-        if(http2_send_window_update(tls_ctx, ctx, frame->stream_id, increment) != 0) {
+    if(stream->local_window_size < (http2_ctx->local_settings.initial_window_size / 2)) {
+        uint32_t increment = http2_ctx->local_settings.initial_window_size - stream->local_window_size;
+        if(http2_send_window_update(ctx, http2_ctx, frame->stream_id, increment) != 0) {
             PRINTLOG(HTTP, LOG_ERROR, "Failed to send WINDOW_UPDATE for stream %u", frame->stream_id);
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
             return -1;
         }
     }
@@ -769,20 +771,20 @@ static int8_t http2_parse_data_frame(tls13_session_t* tls_ctx,
         http_response_t* response = (http_response_t*)memory_malloc(sizeof(http_response_t));
         if (!response) {
             PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP response");
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
             return -1;
         }
 
         stream->response = response;
 
-        if(http_handle(stream->request, response) != 0) {
+        if(http_handle(ctx, stream->request, response) != 0) {
             PRINTLOG(HTTP, LOG_ERROR, "Failed to handle HTTP/2 request");
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
             return -1;
         }
-        if(http2_send_response(tls_ctx, ctx, stream) != 0) {
+        if(http2_send_response(ctx, http2_ctx, stream) != 0) {
             PRINTLOG(HTTP, LOG_ERROR, "Failed to send HTTP/2 response");
-            http2_send_reset_stream(tls_ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
+            http2_send_reset_stream(ctx, frame->stream_id, HTTP2_ERROR_INTERNAL_ERROR);
             return -1;
         }
         http_free_request(stream->request);
@@ -947,11 +949,11 @@ int8_t http2_apply_header(http_request_t* request, const char_t* name, const cha
 #pragma GCC diagnostic pop
 
 void http2_hpack_free_dynamic_table(http2_context_t* ctx);
-int8_t http2_handle_connection(tls13_session_t* ctx) {
+int8_t http2_handle_connection(http_application_context_t* ctx) {
 
 
     uint8_t preface[HTTP2_PREFACE_LEN] = {0};
-    if(tls13_read(ctx, preface, sizeof(preface)) < 0) {
+    if(tls13_read(ctx->tls13_session, preface, sizeof(preface)) < 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to read HTTP/2 preface");
         return -1;
     }
@@ -1009,7 +1011,7 @@ int8_t http2_handle_connection(tls13_session_t* ctx) {
     while(true && error_code == 0) {
         uint8_t header[9];
 
-        int32_t bytes_read = tls13_read(ctx, header, sizeof(header));
+        int32_t bytes_read = tls13_read(ctx->tls13_session, header, sizeof(header));
         if(bytes_read == 0) {
             PRINTLOG(HTTP, LOG_DEBUG, "Connection closed by client");
             break;
@@ -1044,7 +1046,7 @@ int8_t http2_handle_connection(tls13_session_t* ctx) {
                 break;
             }
 
-            if(tls13_read(ctx, payload, length) <= 0) {
+            if(tls13_read(ctx->tls13_session, payload, length) <= 0) {
                 PRINTLOG(HTTP, LOG_ERROR, "Failed to read HTTP/2 frame payload");
                 memory_free(payload);
                 error_code = -1;

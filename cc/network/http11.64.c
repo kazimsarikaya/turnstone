@@ -6,6 +6,8 @@
  * Please read and understand latest version of Licence.
  */
 
+#define ___HTTP_IMPLEMENTATION
+
 #include <network/http.h>
 #include <logging.h>
 #include <strings.h>
@@ -15,7 +17,12 @@ MODULE("turnstone.lib.network.http");
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t http11_handle_connection(tls13_session_t* ctx) {
+int8_t http11_handle_connection(http_application_context_t* app_ctx) {
+    if(!app_ctx || !app_ctx->tls13_session) {
+        PRINTLOG(HTTP, LOG_ERROR, "Invalid application context or TLS session");
+        return -1;
+    }
+
     int8_t ret = -1;
     http_request_t* request = NULL;
     http_response_t* response = NULL;
@@ -24,7 +31,7 @@ int8_t http11_handle_connection(tls13_session_t* ctx) {
     uint8_t buffer[16384];
     memory_memclean(buffer, sizeof(buffer));
     int32_t bytes_received = 0;
-    bytes_received = tls13_read(ctx, buffer, sizeof(buffer) - 1);
+    bytes_received = tls13_read(app_ctx->tls13_session, buffer, sizeof(buffer) - 1);
     if (bytes_received < 0) {
         PRINTLOG(HTTP, LOG_ERROR, "TLS application data read failed");
         return -1;
@@ -286,7 +293,7 @@ int8_t http11_handle_connection(tls13_session_t* ctx) {
         while(body_bytes_read < content_length) {
             uint8_t temp_buffer[4096];
             int32_t to_read = (content_length - body_bytes_read > sizeof(temp_buffer)) ? sizeof(temp_buffer) : (content_length - body_bytes_read);
-            int32_t br = tls13_read(ctx, temp_buffer, to_read);
+            int32_t br = tls13_read(app_ctx->tls13_session, temp_buffer, to_read);
             if(br <= 0) {
                 PRINTLOG(HTTP, LOG_ERROR, "Failed to read HTTP request body");
                 goto error_cleanup;
@@ -302,7 +309,7 @@ int8_t http11_handle_connection(tls13_session_t* ctx) {
         goto error_cleanup;
     }
 
-    if(http_handle(request, response) != 0) {
+    if(http_handle(app_ctx, request, response) != 0) {
         PRINTLOG(HTTP, LOG_ERROR, "HTTP handler failed");
         goto error_cleanup;
     }
@@ -326,7 +333,7 @@ int8_t http11_handle_connection(tls13_session_t* ctx) {
 
     size_t header_data_len = 0;
     uint8_t* header_data = buffer_get_all_bytes_and_destroy(header_buffer, &header_data_len);
-    if(tls13_write(ctx, header_data, header_data_len) <= 0) {
+    if(tls13_write(app_ctx->tls13_session, header_data, header_data_len) <= 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to send HTTP response headers");
         memory_free(header_data);
         goto error_cleanup;
@@ -341,7 +348,7 @@ int8_t http11_handle_connection(tls13_session_t* ctx) {
 
         while(body_data_len > 0) {
             int32_t to_write = (body_data_len > 4096) ? 4096 : body_data_len;
-            int32_t written  = tls13_write(ctx, body_data, to_write);
+            int32_t written  = tls13_write(app_ctx->tls13_session, body_data, to_write);
             if(written <= 0) {
                 PRINTLOG(HTTP, LOG_ERROR, "Failed to send HTTP response body");
                 memory_free(body_data);
