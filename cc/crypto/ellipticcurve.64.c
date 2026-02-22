@@ -19,21 +19,22 @@
 MODULE("turnstone.lib.crypto");
 
 typedef struct ellipticcurve_private_key_t {
-    bigint_t* d; // The 256-bit private scalar
+    bigint_t* d;
 } ellipticcurve_private_key_t;
 
 typedef struct ellipticcurve_point_t {
-    bigint_t* x; // The 256-bit X coordinate
-    bigint_t* y; // The 256-bit Y coordinate
+    bigint_t* x;
+    bigint_t* y;
 } ellipticcurve_point_t;
 
 typedef struct ellipticcurve_jacobian_point_t {
-    bigint_t* x; // The 256-bit X coordinate
-    bigint_t* y; // The 256-bit Y coordinate
-    bigint_t* z; // The 256-bit Z coordinate (for Jacobian representation)
+    bigint_t* x;
+    bigint_t* y;
+    bigint_t* z;
 } ellipticcurve_jacobian_point_t;
 
 typedef struct ellipticcurve_curve_t {
+    ellipticcurve_curve_type_t      curve_type; // Type of the curve (e.g., secp256r1)
     bigint_t*                       p; // prime modulus
     bigint_t*                       p_minus_2; // p - 2, used for modular inverse
     bigint_t*                       a; // curve coefficient a
@@ -43,8 +44,30 @@ typedef struct ellipticcurve_curve_t {
     bigint_t*                       n_half; // n / 2, used for signature verification
 } ellipticcurve_curve_t;
 
+typedef struct ellipticcurve_curve_constants_t {
+    int32_t bit_len;
+    size_t  private_key_raw_len;
+    size_t  public_key_raw_len;
+    size_t  signature_raw_len;
+    size_t  shared_secret_len;
+} ellipticcurve_curve_constants_t;
 
-static ellipticcurve_jacobian_point_t* ellipticcurve_jacobian_point_create(void) {
+static const ellipticcurve_curve_constants_t ellipticcurve_curve_constants[ELLIPTICCURVE_CURVE_TYPE_MAX] = {
+    {0, 0, 0, 0, 0}, // ELLIPTICCURVE_CURVE_TYPE_NONE
+    {ELLIPTICCURVE_SECP256R1_BIT_LEN,
+     ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN,
+     ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN,
+     ELLIPTICCURVE_SECP256R1_SIGNATURE_RAW_LEN,
+     ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN}, // ELLIPTICCURVE_CURVE_TYPE_SECP256R1
+    {ELLIPTICCURVE_SECP384R1_BIT_LEN,
+     ELLIPTICCURVE_SECP384R1_PRIVATE_KEY_RAW_LEN,
+     ELLIPTICCURVE_SECP384R1_PUBLIC_KEY_RAW_LEN,
+     ELLIPTICCURVE_SECP384R1_SIGNATURE_RAW_LEN,
+     ELLIPTICCURVE_SECP384R1_SHARED_SECRET_LEN}, // ELLIPTICCURVE_CURVE_TYPE_SECP384R1
+};
+
+
+static ellipticcurve_jacobian_point_t* ellipticcurve_jacobian_point_create (void) {
     ellipticcurve_jacobian_point_t* point = memory_malloc(sizeof(ellipticcurve_jacobian_point_t));
     if (!point) {
         return NULL;
@@ -71,7 +94,7 @@ static ellipticcurve_jacobian_point_t* ellipticcurve_jacobian_point_create(void)
     return point;
 }
 
-static void ellipticcurve_jacobian_point_destroy(ellipticcurve_jacobian_point_t* point) {
+static void ellipticcurve_jacobian_point_destroy (ellipticcurve_jacobian_point_t * point) {
     if (!point) {
         return;
     }
@@ -89,7 +112,7 @@ static void ellipticcurve_jacobian_point_destroy(ellipticcurve_jacobian_point_t*
     memory_free(point);
 }
 
-static ellipticcurve_point_t* ellipticcurve_point_create(void) {
+static ellipticcurve_point_t* ellipticcurve_point_create (void) {
     ellipticcurve_point_t* point = memory_malloc(sizeof(ellipticcurve_point_t));
     if (!point) {
         return NULL;
@@ -112,7 +135,7 @@ static ellipticcurve_point_t* ellipticcurve_point_create(void) {
     return point;
 }
 
-static void ellipticcurve_point_destroy(ellipticcurve_point_t* point) {
+static void ellipticcurve_point_destroy (ellipticcurve_point_t * point) {
     if (!point) {
         return;
     }
@@ -127,7 +150,7 @@ static void ellipticcurve_point_destroy(ellipticcurve_point_t* point) {
     memory_free(point);
 }
 
-static ellipticcurve_jacobian_point_t* ellipticcurve_create_jacobian_point_at_infinity() {
+static ellipticcurve_jacobian_point_t* ellipticcurve_create_jacobian_point_at_infinity () {
     ellipticcurve_jacobian_point_t* point = ellipticcurve_jacobian_point_create();
     if (!point) {
         return NULL;
@@ -142,7 +165,8 @@ static ellipticcurve_jacobian_point_t* ellipticcurve_create_jacobian_point_at_in
     return point;
 }
 
-static ellipticcurve_jacobian_point_t* ellipticcurve_jacobian_point_create_from_bytes(const uint8_t* x_bytes, const uint8_t* y_bytes) {
+static ellipticcurve_jacobian_point_t* ellipticcurve_jacobian_point_create_from_bytes (ellipticcurve_curve_type_t curve_type,
+                                                                                       const uint8_t * x_bytes, const uint8_t* y_bytes) {
     if (!x_bytes || !y_bytes) {
         return NULL;
     }
@@ -152,8 +176,10 @@ static ellipticcurve_jacobian_point_t* ellipticcurve_jacobian_point_create_from_
         return NULL;
     }
 
-    if (bigint_from_bytes(point->x, x_bytes, 32) != 0 ||
-        bigint_from_bytes(point->y, y_bytes, 32) != 0 ||
+    size_t expected_len = ellipticcurve_curve_constants[curve_type].bit_len / 8;
+
+    if (bigint_from_bytes(point->x, x_bytes, expected_len) != 0 ||
+        bigint_from_bytes(point->y, y_bytes, expected_len) != 0 ||
         bigint_set_int64(point->z, 1) != 0) {
         ellipticcurve_jacobian_point_destroy(point);
         return NULL;
@@ -162,7 +188,7 @@ static ellipticcurve_jacobian_point_t* ellipticcurve_jacobian_point_create_from_
     return point;
 }
 
-static boolean_t ellipticcurve_jacobian_point_is_at_infinity(const ellipticcurve_jacobian_point_t* point) {
+static boolean_t ellipticcurve_jacobian_point_is_at_infinity (const ellipticcurve_jacobian_point_t * point) {
     if (!point || !point->z) {
         return false;
     }
@@ -171,29 +197,63 @@ static boolean_t ellipticcurve_jacobian_point_is_at_infinity(const ellipticcurve
     return bigint_is_zero(point->z);
 }
 
-static ellipticcurve_jacobian_point_t* ellipticcurve_secp256r1_create_g() {
+static uint8_t ellipticcurve_secp256r1_gx_bytes[32] = {
+    0x6b, 0x17, 0xd1, 0xf2, 0xe1, 0x2c, 0x42, 0x47,
+    0xf8, 0xbc, 0xe6, 0xe5, 0x63, 0xa4, 0x40, 0xf2,
+    0x77, 0x03, 0x7d, 0x81, 0x2d, 0xeb, 0x33, 0xa0,
+    0xf4, 0xa1, 0x39, 0x45, 0xd8, 0x98, 0xc2, 0x96,
+};
+
+static uint8_t ellipticcurve_secp256r1_gy_bytes[32] = {
+    0x4f, 0xe3, 0x42, 0xe2, 0xfe, 0x1a, 0x7f, 0x9b,
+    0x8e, 0xe7, 0xeb, 0x4a, 0x7c, 0x0f, 0x9e, 0x16,
+    0x2b, 0xce, 0x33, 0x57, 0x6b, 0x31, 0x5e, 0xce,
+    0xcb, 0xb6, 0x40, 0x68, 0x37, 0xbf, 0x51, 0xf5,
+};
+
+static uint8_t ellipticcurve_secp384r1_gx_bytes[48] = {
+    0xaa, 0x87, 0xca, 0x22, 0xbe, 0x8b, 0x05, 0x37,
+    0x8e, 0xb1, 0xc7, 0x1e, 0xf3, 0x20, 0xad, 0x74,
+    0x6e, 0x1d, 0x3b, 0x62, 0x8b, 0xa7, 0x9b, 0x98,
+    0x59, 0xf7, 0x41, 0xe0, 0x82, 0x54, 0x2a, 0x38,
+    0x55, 0x02, 0xf2, 0x5d, 0xbf, 0x55, 0x29, 0x6c,
+    0x3a, 0x54, 0x5e, 0x38, 0x72, 0x76, 0x0a, 0xb7,
+};
+
+static uint8_t ellipticcurve_secp384r1_gy_bytes[48] = {
+    0x36, 0x17, 0xde, 0x4a, 0x96, 0x26, 0x2c, 0x6f,
+    0x5d, 0x9e, 0x98, 0xbf, 0x92, 0x92, 0xdc, 0x29,
+    0xf8, 0xf4, 0x1d, 0xbd, 0x28, 0x9a, 0x14, 0x7c,
+    0xe9, 0xda, 0x31, 0x13, 0xb5, 0xf0, 0xb8, 0xc0,
+    0x0a, 0x60, 0xb1, 0xce, 0x1d, 0x7e, 0x81, 0x9d,
+    0x7a, 0x43, 0x1d, 0x7c, 0x90, 0xea, 0x0e, 0x5f,
+};
+
+static ellipticcurve_jacobian_point_t* ellipticcurve_create_g (ellipticcurve_curve_type_t curve_type) {
     ellipticcurve_jacobian_point_t* g = ellipticcurve_jacobian_point_create();
     if (!g) {
         return NULL;
     }
 
-    // Set G.x and G.y to the standard base point coordinates for secp256r1
-    uint8_t gx_bytes[32] = {
-        0x6b, 0x17, 0xd1, 0xf2, 0xe1, 0x2c, 0x42, 0x47,
-        0xf8, 0xbc, 0xe6, 0xe5, 0x63, 0xa4, 0x40, 0xf2,
-        0x77, 0x03, 0x7d, 0x81, 0x2d, 0xeb, 0x33, 0xa0,
-        0xf4, 0xa1, 0x39, 0x45, 0xd8, 0x98, 0xc2, 0x96
-    };
+    size_t curve_array_sizes = ellipticcurve_curve_constants[curve_type].bit_len / 8;
 
-    uint8_t gy_bytes[32] = {
-        0x4f, 0xe3, 0x42, 0xe2, 0xfe, 0x1a, 0x7f, 0x9b,
-        0x8e, 0xe7, 0xeb, 0x4a, 0x7c, 0x0f, 0x9e, 0x16,
-        0x2b, 0xce, 0x33, 0x57, 0x6b, 0x31, 0x5e, 0xce,
-        0xcb, 0xb6, 0x40, 0x68, 0x37, 0xbf, 0x51, 0xf5
-    };
+    uint8_t* gx_bytes;
+    uint8_t* gy_bytes;
 
-    if (bigint_from_bytes(g->x, gx_bytes, sizeof(gx_bytes)) != -1 &&
-        bigint_from_bytes(g->y, gy_bytes, sizeof(gy_bytes)) != -1 &&
+    if(curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP256R1) {
+        // Set G.x and G.y to the standard base point coordinates for secp256r1
+        gx_bytes = ellipticcurve_secp256r1_gx_bytes;
+        gy_bytes = ellipticcurve_secp256r1_gy_bytes;
+    } else if(curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP384R1) {
+        gx_bytes = ellipticcurve_secp384r1_gx_bytes;
+        gy_bytes = ellipticcurve_secp384r1_gy_bytes;
+    } else {
+        ellipticcurve_jacobian_point_destroy(g);
+        return NULL; // Unsupported curve type
+    }
+
+    if (bigint_from_bytes(g->x, gx_bytes, curve_array_sizes) != -1 &&
+        bigint_from_bytes(g->y, gy_bytes, curve_array_sizes) != -1 &&
         bigint_set_int64(g->z, 1) != -1) {
         return g;
     }
@@ -202,8 +262,8 @@ static ellipticcurve_jacobian_point_t* ellipticcurve_secp256r1_create_g() {
     return NULL;
 }
 
-static ellipticcurve_point_t* ellipticcurve_convert_jacobian_to_affine(const ellipticcurve_jacobian_point_t* jacobian_point,
-                                                                       const ellipticcurve_curve_t*          curve) {
+static ellipticcurve_point_t* ellipticcurve_convert_jacobian_to_affine (const ellipticcurve_jacobian_point_t * jacobian_point,
+                                                                        const ellipticcurve_curve_t*           curve) {
     if (!jacobian_point || !curve) {
         return NULL;
     }
@@ -267,7 +327,7 @@ cleanup:
     return affine_point;
 }
 
-static void ellipticcurve_curve_destroy(ellipticcurve_curve_t* curve) {
+static void ellipticcurve_curve_destroy(ellipticcurve_curve_t * curve) {
     if (!curve) {
         return;
     }
@@ -297,74 +357,157 @@ static void ellipticcurve_curve_destroy(ellipticcurve_curve_t* curve) {
     memory_free(curve);
 }
 
-static ellipticcurve_curve_t* ellipticcurve_secp256r1_create_curve() {
+static uint8_t ellipticcurve_secp256r1_p_bytes[32] = {
+    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+};
+
+static uint8_t ellipticcurve_secp256r1_p_minus_2_bytes[32] = {
+    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd,
+};
+
+static uint8_t ellipticcurve_secp256r1_a_bytes[32] = {
+    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc,
+};
+
+static uint8_t ellipticcurve_secp256r1_b_bytes[32] = {
+    0x5a, 0xc6, 0x35, 0xd8, 0xaa, 0x3a, 0x93, 0xe7,
+    0xb3, 0xeb, 0xbd, 0x55, 0x76, 0x98, 0x86, 0xbc,
+    0x65, 0x1d, 0x06, 0xb0, 0xcc, 0x53, 0xb0, 0xf6,
+    0x3b, 0xce, 0x3c, 0x3e, 0x27, 0xd2, 0x60, 0x4b,
+};
+
+static uint8_t ellipticcurve_secp256r1_n_bytes[32] = {
+    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xbc, 0xe6, 0xfa, 0xad, 0xa7, 0x17, 0x9e, 0x84,
+    0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51,
+};
+
+static uint8_t ellipticcurve_secp256r1_n_half_bytes[32] = {
+    0x7f, 0xff, 0xff, 0xff, 0x80, 0x00, 0x00, 0x00,
+    0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xde, 0x73, 0x7d, 0x56, 0xd3, 0x8b, 0xcf, 0x42,
+    0x79, 0xdc, 0xe5, 0x61, 0x7e, 0x31, 0x92, 0xa8,
+};
+
+static uint8_t ellipticcurve_secp384r1_p_bytes[48] = {
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
+    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
+};
+
+static uint8_t ellipticcurve_secp384r1_p_minus_2_bytes[48] = {
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
+    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xfd,
+};
+
+static uint8_t ellipticcurve_secp384r1_a_bytes[48] = {
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
+    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xfc,
+};
+
+static uint8_t ellipticcurve_secp384r1_b_bytes[48] = {
+    0xb3, 0x31, 0x2f, 0xa7, 0xe2, 0x3e, 0xe7, 0xe4,
+    0x98, 0x8e, 0x05, 0x6b, 0xe3, 0xf8, 0x2d, 0x19,
+    0x18, 0x1d, 0x9c, 0x6e, 0xfe, 0x81, 0x41, 0x12,
+    0x03, 0x14, 0x08, 0x8f, 0x50, 0x13, 0x87, 0x5a,
+    0xc6, 0x56, 0x39, 0x8d, 0x8a, 0x2e, 0xd1, 0x9d,
+    0x2a, 0x85, 0xc8, 0xed, 0xd3, 0xec, 0x2a, 0xef,
+};
+
+static uint8_t ellipticcurve_secp384r1_n_bytes[48] = {
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xc7, 0x63, 0x4d, 0x81, 0xf4, 0x37, 0x2d, 0xdf,
+    0x58, 0x1a, 0x0d, 0xb2, 0x48, 0xb0, 0xa7, 0x7a,
+    0xec, 0xec, 0x19, 0x6a, 0xcc, 0xc5, 0x29, 0x73,
+};
+
+static uint8_t ellipticcurve_secp384r1_n_half_bytes[48] = {
+    0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xe3, 0xb1, 0xa6, 0xc0, 0xfa, 0x1b, 0x96, 0xef,
+    0xac, 0x0d, 0x06, 0xd9, 0x24, 0x58, 0x53, 0xbd,
+    0x76, 0x76, 0x0c, 0xb5, 0x66, 0x62, 0x94, 0xba,
+};
+
+static ellipticcurve_curve_t* ellipticcurve_create_curve (ellipticcurve_curve_type_t curve_type) {
     ellipticcurve_curve_t* curve = memory_malloc(sizeof(ellipticcurve_curve_t));
     if (!curve) {
         return NULL;
     }
 
-    // Initialize curve parameters for secp256r1
-    uint8_t p_bytes[32] = {
-        0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-    };
+    size_t curve_array_sizes = ellipticcurve_curve_constants[curve_type].bit_len / 8;
 
-    uint8_t p_minus_2_bytes[32] = {
-        0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd
-    };
+    uint8_t* p_bytes;
+    uint8_t* p_minus_2_bytes;
+    uint8_t* a_bytes;
+    uint8_t* b_bytes;
+    uint8_t* n_bytes;
+    uint8_t* n_half_bytes;
 
-    uint8_t a_bytes[32] = {
-        0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc
-    };
+    if(curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP256R1) {
+        // Initialize curve parameters for secp256r1
+        p_bytes = ellipticcurve_secp256r1_p_bytes;
+        p_minus_2_bytes = ellipticcurve_secp256r1_p_minus_2_bytes;
+        a_bytes = ellipticcurve_secp256r1_a_bytes;
+        b_bytes = ellipticcurve_secp256r1_b_bytes;
+        n_bytes = ellipticcurve_secp256r1_n_bytes;
+        n_half_bytes = ellipticcurve_secp256r1_n_half_bytes;
+    } else if(curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP384R1) {
+        p_bytes = ellipticcurve_secp384r1_p_bytes;
+        p_minus_2_bytes = ellipticcurve_secp384r1_p_minus_2_bytes;
+        a_bytes = ellipticcurve_secp384r1_a_bytes;
+        b_bytes = ellipticcurve_secp384r1_b_bytes;
+        n_bytes = ellipticcurve_secp384r1_n_bytes;
+        n_half_bytes = ellipticcurve_secp384r1_n_half_bytes;
+    } else {
+        memory_free(curve);
+        return NULL;
+    }
 
-    uint8_t b_bytes[32] = {
-        0x5a, 0xc6, 0x35, 0xd8, 0xaa, 0x3a, 0x93, 0xe7,
-        0xb3, 0xeb, 0xbd, 0x55, 0x76, 0x98, 0x86, 0xbc,
-        0x65, 0x1d, 0x06, 0xb0, 0xcc, 0x53, 0xb0, 0xf6,
-        0x3b, 0xce, 0x3c, 0x3e, 0x27, 0xd2, 0x60, 0x4b
-    };
-
-    uint8_t n_bytes[32] = {
-        0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xbc, 0xe6, 0xfa, 0xad, 0xa7, 0x17, 0x9e, 0x84,
-        0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51
-    };
-
-    uint8_t n_half_bytes[32] = {
-        0x7f, 0xff, 0xff, 0xff, 0x80, 0x00, 0x00, 0x00,
-        0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xde, 0x73, 0x7d, 0x56, 0xd3, 0x8b, 0xcf, 0x42,
-        0x79, 0xdc, 0xe5, 0x61, 0x7e, 0x31, 0x92, 0xa8
-    };
-
+    curve->curve_type = curve_type;
     curve->p = bigint_create();
     curve->p_minus_2 = bigint_create();
     curve->a = bigint_create();
     curve->b = bigint_create();
     curve->n = bigint_create();
     curve->n_half = bigint_create();
-    curve->g = ellipticcurve_secp256r1_create_g();
+    curve->g = ellipticcurve_create_g(curve_type);
 
     if (!curve->p || !curve->p_minus_2 || !curve->a || !curve->b || !curve->n || !curve->n_half || !curve->g) {
         ellipticcurve_curve_destroy(curve);
         return NULL;
     }
 
-    if (bigint_from_bytes(curve->p, p_bytes, sizeof(p_bytes)) != -1 &&
-        bigint_from_bytes(curve->p_minus_2, p_minus_2_bytes, sizeof(p_minus_2_bytes)) != -1 &&
-        bigint_from_bytes(curve->a, a_bytes, sizeof(a_bytes)) != -1 &&
-        bigint_from_bytes(curve->b, b_bytes, sizeof(b_bytes)) != -1 &&
-        bigint_from_bytes(curve->n, n_bytes, sizeof(n_bytes)) != -1 &&
-        bigint_from_bytes(curve->n_half, n_half_bytes, sizeof(n_half_bytes)) != -1) {
+    if (bigint_from_bytes(curve->p, p_bytes, curve_array_sizes) != -1 &&
+        bigint_from_bytes(curve->p_minus_2, p_minus_2_bytes, curve_array_sizes) != -1 &&
+        bigint_from_bytes(curve->a, a_bytes, curve_array_sizes) != -1 &&
+        bigint_from_bytes(curve->b, b_bytes, curve_array_sizes) != -1 &&
+        bigint_from_bytes(curve->n, n_bytes, curve_array_sizes) != -1 &&
+        bigint_from_bytes(curve->n_half, n_half_bytes, curve_array_sizes) != -1) {
         return curve;
     }
 
@@ -372,7 +515,7 @@ static ellipticcurve_curve_t* ellipticcurve_secp256r1_create_curve() {
     return NULL;
 }
 
-static int8_t ellipticcurve_jacobian_point_set_to_infinity(ellipticcurve_jacobian_point_t* point) {
+static int8_t ellipticcurve_jacobian_point_set_to_infinity(ellipticcurve_jacobian_point_t * point) {
     if (!point) {
         return -1;
     }
@@ -381,7 +524,7 @@ static int8_t ellipticcurve_jacobian_point_set_to_infinity(ellipticcurve_jacobia
     return bigint_set_zero(point->z);
 }
 
-static int8_t ellipticcurve_jacobian_point_copy(ellipticcurve_jacobian_point_t*       dest,
+static int8_t ellipticcurve_jacobian_point_copy(ellipticcurve_jacobian_point_t *      dest,
                                                 const ellipticcurve_jacobian_point_t* src) {
     if (!dest || !src) {
         return -1;
@@ -400,9 +543,9 @@ static int8_t ellipticcurve_jacobian_point_copy(ellipticcurve_jacobian_point_t* 
     return 0;
 }
 
-static int8_t ellipticcurve_secp256r1_point_double(ellipticcurve_jacobian_point_t*       result,
-                                                   const ellipticcurve_jacobian_point_t* point,
-                                                   const ellipticcurve_curve_t*          curve) {
+static int8_t ellipticcurve_point_double(ellipticcurve_jacobian_point_t *      result,
+                                         const ellipticcurve_jacobian_point_t* point,
+                                         const ellipticcurve_curve_t*          curve) {
     if (!result || !point || !curve) {
         return -1;
     }
@@ -542,10 +685,10 @@ cleanup:
     return ret;
 }
 
-static int8_t ellipticcurve_secp256r1_point_add(ellipticcurve_jacobian_point_t*       result,
-                                                const ellipticcurve_jacobian_point_t* p1,
-                                                const ellipticcurve_jacobian_point_t* p2,
-                                                const ellipticcurve_curve_t*          curve) {
+static int8_t ellipticcurve_point_add (ellipticcurve_jacobian_point_t *      result,
+                                       const ellipticcurve_jacobian_point_t* p1,
+                                       const ellipticcurve_jacobian_point_t* p2,
+                                       const ellipticcurve_curve_t*          curve) {
     if (!result || !p1 || !p2 || !curve) {
         return -1;
     }
@@ -604,7 +747,7 @@ static int8_t ellipticcurve_secp256r1_point_add(ellipticcurve_jacobian_point_t* 
     if (bigint_cmp(u1, u2) == 0) {
         if (bigint_cmp(s1, s2) == 0) {
             // Points are equal: P1 + P1 = 2P1
-            ret = ellipticcurve_secp256r1_point_double(result, p1, curve);
+            ret = ellipticcurve_point_double(result, p1, curve);
             goto cleanup;
         } else {
             // Points are opposites: P1 + (-P1) = Infinity
@@ -696,10 +839,10 @@ cleanup:
     return ret;
 }
 
-static int8_t ellipticcurve_secp256r1_scalar_mult(ellipticcurve_jacobian_point_t*       result,
-                                                  const bigint_t*                       scalar,
-                                                  const ellipticcurve_jacobian_point_t* point,
-                                                  const ellipticcurve_curve_t*          curve) {
+static int8_t ellipticcurve_scalar_mult (ellipticcurve_jacobian_point_t *      result,
+                                         const bigint_t*                       scalar,
+                                         const ellipticcurve_jacobian_point_t* point,
+                                         const ellipticcurve_curve_t*          curve) {
     if (!result || !scalar || !point || !curve) {
         return -1;
     }
@@ -721,7 +864,7 @@ static int8_t ellipticcurve_secp256r1_scalar_mult(ellipticcurve_jacobian_point_t
         goto cleanup;
     }
 
-    for (int32_t i = 0; i < 256; i++) {
+    for (int32_t i = 0; i < ellipticcurve_curve_constants[curve->curve_type].bit_len; i++) {
         boolean_t bit;
 
         if (bigint_get_bit(scalar, i, &bit) != 0) {
@@ -729,12 +872,12 @@ static int8_t ellipticcurve_secp256r1_scalar_mult(ellipticcurve_jacobian_point_t
         }
 
         if (bit) {
-            if (ellipticcurve_secp256r1_point_add(result, result, temp, curve) != 0) {
+            if (ellipticcurve_point_add(result, result, temp, curve) != 0) {
                 goto cleanup;
             }
         }
 
-        if (ellipticcurve_secp256r1_point_double(temp, temp, curve) != 0) {
+        if (ellipticcurve_point_double(temp, temp, curve) != 0) {
             goto cleanup;
         }
     }
@@ -746,22 +889,23 @@ cleanup:
     return err;
 }
 
-static int8_t ellipticcurve_secp256r1_scalar_mult_g(ellipticcurve_jacobian_point_t* result,
-                                                    const bigint_t*                 scalar,
-                                                    const ellipticcurve_curve_t*    curve) {
+static int8_t ellipticcurve_scalar_mult_g (ellipticcurve_jacobian_point_t * result,
+                                           const bigint_t*                  scalar,
+                                           const ellipticcurve_curve_t*     curve) {
     if (!result || !scalar || !curve) {
         return -1;
     }
 
-    if(ellipticcurve_secp256r1_scalar_mult(result, scalar, curve->g, curve) != 0) {
+    if(ellipticcurve_scalar_mult(result, scalar, curve->g, curve) != 0) {
         return -1;
     }
     return 0;
 }
 
 
-int8_t ellipticcurve_secp256r1_derive_pubkey(uint8_t       out_pub[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN],
-                                             const uint8_t priv[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN]) {
+int8_t ellipticcurve_derive_pubkey (ellipticcurve_curve_type_t curve_type,
+                                    uint8_t*                   out_pub,
+                                    const uint8_t*             priv) {
 
     bigint_t* private_scalar = NULL;
     ellipticcurve_jacobian_point_t* temp = NULL;
@@ -769,13 +913,18 @@ int8_t ellipticcurve_secp256r1_derive_pubkey(uint8_t       out_pub[ELLIPTICCURVE
     ellipticcurve_point_t* affine_res = NULL;
     ellipticcurve_curve_t* curve = NULL;
 
+    uint8_t x_bytes[ellipticcurve_curve_constants[curve_type].public_key_raw_len / 2];
+    memory_memclean(x_bytes, sizeof(x_bytes)); // Clear temporary buffer
+    uint8_t y_bytes[ellipticcurve_curve_constants[curve_type].public_key_raw_len / 2];
+    memory_memclean(y_bytes, sizeof(y_bytes)); // Clear temporary buffer
+
     int8_t err = -1;
 
-    if (!priv || !out_pub) {
+    if (!priv || !out_pub || curve_type == ELLIPTICCURVE_CURVE_TYPE_NONE) {
         return -1;
     }
 
-    curve = ellipticcurve_secp256r1_create_curve();
+    curve = ellipticcurve_create_curve(curve_type);
     if (!curve) {
         goto cleanup;
     }
@@ -786,11 +935,11 @@ int8_t ellipticcurve_secp256r1_derive_pubkey(uint8_t       out_pub[ELLIPTICCURVE
         goto cleanup;
     }
 
-    if(bigint_from_bytes(private_scalar, priv, ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN) != 0) {
+    if(bigint_from_bytes(private_scalar, priv, ellipticcurve_curve_constants[curve_type].private_key_raw_len) != 0) {
         goto cleanup;
     }
 
-    temp = ellipticcurve_secp256r1_create_g();
+    temp = ellipticcurve_create_g(curve_type);
     if (!temp) {
         goto cleanup;
     }
@@ -800,7 +949,7 @@ int8_t ellipticcurve_secp256r1_derive_pubkey(uint8_t       out_pub[ELLIPTICCURVE
         goto cleanup;
     }
 
-    for(int32_t i = 0; i < 256; i++) {
+    for(int32_t i = 0; i < ellipticcurve_curve_constants[curve_type].bit_len; i++) {
         boolean_t bit;
 
         if(bigint_get_bit(private_scalar, i, &bit) != 0) {
@@ -808,12 +957,12 @@ int8_t ellipticcurve_secp256r1_derive_pubkey(uint8_t       out_pub[ELLIPTICCURVE
         }
 
         if (bit) {
-            if(ellipticcurve_secp256r1_point_add(res, res, temp, curve) != 0) {
+            if(ellipticcurve_point_add(res, res, temp, curve) != 0) {
                 goto cleanup;
             }
         }
 
-        if(ellipticcurve_secp256r1_point_double(temp, temp, curve) != 0) {
+        if(ellipticcurve_point_double(temp, temp, curve) != 0) {
             goto cleanup;
         }
     }
@@ -823,15 +972,12 @@ int8_t ellipticcurve_secp256r1_derive_pubkey(uint8_t       out_pub[ELLIPTICCURVE
         goto cleanup;
     }
 
-    uint8_t x_bytes[32];
-    uint8_t y_bytes[32];
-
     if (bigint_to_bytes(affine_res->x, x_bytes, sizeof(x_bytes)) != 0 ||
         bigint_to_bytes(affine_res->y, y_bytes, sizeof(y_bytes)) != 0) {
         goto cleanup;
     }
 
-    // Output format: [X (32 bytes) || Y (32 bytes)]
+    // Output format: [X || Y]
     memory_memcopy(x_bytes, out_pub, sizeof(x_bytes));
     memory_memcopy(y_bytes, out_pub + sizeof(x_bytes), sizeof(y_bytes));
 
@@ -845,26 +991,32 @@ cleanup:
     return err;
 }
 
-int8_t ellipticcurve_secp256r1_generate_keypair(uint8_t out_priv[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN],
-                                                uint8_t out_pub[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN]) {
-    uint8_t priv[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN];
-
-    get_random_bytes(priv, ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN);
-
-    if(ellipticcurve_secp256r1_derive_pubkey(out_pub, priv) != 0) {
-        memory_memclean(priv, ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN); // Clear temporary private key buffer
+int8_t ellipticcurve_generate_keypair(ellipticcurve_curve_type_t curve_type,
+                                      uint8_t*                   out_priv,
+                                      uint8_t*                   out_pub) {
+    if (!out_priv || !out_pub || curve_type == ELLIPTICCURVE_CURVE_TYPE_NONE) {
         return -1;
     }
 
-    memory_memcopy(priv, out_priv, ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN);
-    memory_memclean(priv, ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN); // Clear temporary private key buffer
+    uint8_t priv[ellipticcurve_curve_constants[curve_type].private_key_raw_len];
+
+    get_random_bytes(priv, sizeof(priv));
+
+    if(ellipticcurve_derive_pubkey(curve_type, out_pub, priv) != 0) {
+        memory_memclean(priv, sizeof(priv)); // Clear temporary private key buffer
+        return -1;
+    }
+
+    memory_memcopy(priv, out_priv, sizeof(priv));
+    memory_memclean(priv, sizeof(priv)); // Clear temporary private key buffer
     return 0;
 }
 
-int8_t ellipticcurve_secp256r1_sign(uint8_t out_sig[ELLIPTICCURVE_SECP256R1_SIGNATURE_RAW_LEN],
-                                    const uint8_t* msg, size_t msg_len,
-                                    const uint8_t priv[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN]) {
-    if (!priv || !msg || msg_len == 0 || !out_sig) {
+int8_t ellipticcurve_sign(ellipticcurve_curve_type_t curve_type,
+                          uint8_t* out_sig,
+                          const uint8_t* msg, size_t msg_len,
+                          const uint8_t* priv) {
+    if (!priv || !msg || msg_len == 0 || !out_sig || curve_type == ELLIPTICCURVE_CURVE_TYPE_NONE) {
         return -1;
     }
 
@@ -872,15 +1024,26 @@ int8_t ellipticcurve_secp256r1_sign(uint8_t out_sig[ELLIPTICCURVE_SECP256R1_SIGN
     bigint_t * d = NULL, * e = NULL, * k = NULL, * r = NULL, * s = NULL, * k_inv = NULL, * tmp = NULL;
     ellipticcurve_jacobian_point_t* R_jac = NULL;
     ellipticcurve_point_t* R_aff = NULL;
-    uint8_t hash[SHA256_OUTPUT_SIZE];
     ellipticcurve_curve_t* curve = NULL;
 
-    // 1. Hash the message (SHA-256)
-    uint8_t* hash_result = sha256_hash(msg, msg_len);
+    // 1. Hash the message
+    uint8_t* hash_result = NULL;
+    int32_t hash_size = 0;
+
+    if(curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP256R1) {
+        hash_result = sha256_hash(msg, msg_len);
+        hash_size = SHA256_OUTPUT_SIZE;
+    } else if(curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP384R1) {
+        hash_result = sha384_hash(msg, msg_len);
+        hash_size = SHA384_OUTPUT_SIZE;
+    }
+
+    uint8_t hash[hash_size];
+
     if (!hash_result) {
         return -1;
     }
-    memory_memcopy(hash_result, hash, SHA256_OUTPUT_SIZE);
+    memory_memcopy(hash_result, hash, hash_size);
     memory_free(hash_result);
 
     // 2. Create BigInts
@@ -888,7 +1051,7 @@ int8_t ellipticcurve_secp256r1_sign(uint8_t out_sig[ELLIPTICCURVE_SECP256R1_SIGN
     if (!d) {
         goto cleanup;
     }
-    if(bigint_from_bytes(d, priv, SHA256_OUTPUT_SIZE) != 0) {
+    if(bigint_from_bytes(d, priv, hash_size) != 0) {
         goto cleanup;
     }
 
@@ -896,7 +1059,7 @@ int8_t ellipticcurve_secp256r1_sign(uint8_t out_sig[ELLIPTICCURVE_SECP256R1_SIGN
     if (!e) {
         goto cleanup;
     }
-    if(bigint_from_bytes(e, hash, SHA256_OUTPUT_SIZE) != 0) {
+    if(bigint_from_bytes(e, hash, hash_size) != 0) {
         goto cleanup;
     }
 
@@ -910,7 +1073,7 @@ int8_t ellipticcurve_secp256r1_sign(uint8_t out_sig[ELLIPTICCURVE_SECP256R1_SIGN
         goto cleanup;
     }
 
-    curve = ellipticcurve_secp256r1_create_curve();
+    curve = ellipticcurve_create_curve(curve_type);
     if (!curve) {
         goto cleanup;
     }
@@ -924,14 +1087,14 @@ int8_t ellipticcurve_secp256r1_sign(uint8_t out_sig[ELLIPTICCURVE_SECP256R1_SIGN
     do {
         // Step A: Generate random k where 1 <= k < n
         do {
-            get_random_bytes(hash, 32); // Reuse hash buffer for random bits
-            if (bigint_from_bytes(k, hash, 32) != 0) {
+            get_random_bytes(hash, hash_size); // Reuse hash buffer for random bits
+            if (bigint_from_bytes(k, hash, hash_size) != 0) {
                 goto cleanup;
             }
         } while (bigint_is_zero(k) || bigint_cmp(k, curve->n) >= 0);
 
         // Step B: Compute R = k * G
-        if(ellipticcurve_secp256r1_scalar_mult_g(R_jac, k, curve) != 0) {
+        if(ellipticcurve_scalar_mult_g(R_jac, k, curve) != 0) {
             goto cleanup;
         }
 
@@ -972,7 +1135,7 @@ int8_t ellipticcurve_secp256r1_sign(uint8_t out_sig[ELLIPTICCURVE_SECP256R1_SIGN
     } while (bigint_is_zero(s));
 
     // 4. Export r and s to output buffer
-    if(bigint_to_bytes(r, out_sig, 32) != 0) {
+    if(bigint_to_bytes(r, out_sig, ellipticcurve_curve_constants[curve_type].signature_raw_len / 2) != 0) {
         goto cleanup;
     }
 
@@ -983,7 +1146,7 @@ int8_t ellipticcurve_secp256r1_sign(uint8_t out_sig[ELLIPTICCURVE_SECP256R1_SIGN
         }
     }
 
-    if(bigint_to_bytes(s, out_sig + 32, 32) != 0) {
+    if(bigint_to_bytes(s, out_sig + ellipticcurve_curve_constants[curve_type].signature_raw_len / 2, ellipticcurve_curve_constants[curve_type].signature_raw_len / 2) != 0) {
         goto cleanup;
     }
 
@@ -999,10 +1162,11 @@ cleanup:
     return ret;
 }
 
-int8_t ellipticcurve_secp256r1_verify(const uint8_t sig[ELLIPTICCURVE_SECP256R1_SIGNATURE_RAW_LEN],
-                                      const uint8_t* msg, size_t msg_len,
-                                      const uint8_t pub[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN]) {
-    if (!sig || !msg || msg_len == 0 || !pub) {
+int8_t ellipticcurve_verify(ellipticcurve_curve_type_t curve_type,
+                            const uint8_t* sig,
+                            const uint8_t* msg, size_t msg_len,
+                            const uint8_t* pub) {
+    if (!sig || !msg || msg_len == 0 || !pub || curve_type == ELLIPTICCURVE_CURVE_TYPE_NONE) {
         return -1;
     }
 
@@ -1012,7 +1176,7 @@ int8_t ellipticcurve_secp256r1_verify(const uint8_t sig[ELLIPTICCURVE_SECP256R1_
     ellipticcurve_jacobian_point_t * u1G = NULL, * u2Q = NULL, * R_jac = NULL, * Q_jac = NULL;
     ellipticcurve_curve_t* curve = NULL;
 
-    curve = ellipticcurve_secp256r1_create_curve();
+    curve = ellipticcurve_create_curve(curve_type);
     if (!curve) {
         goto cleanup;
     }
@@ -1023,10 +1187,10 @@ int8_t ellipticcurve_secp256r1_verify(const uint8_t sig[ELLIPTICCURVE_SECP256R1_
     if (!r || !s) {
         goto cleanup;
     }
-    if(bigint_from_bytes(r, sig, 32) != 0) {
+    if(bigint_from_bytes(r, sig, ellipticcurve_curve_constants[curve_type].signature_raw_len / 2) != 0) {
         goto cleanup;
     }
-    if(bigint_from_bytes(s, sig + 32, 32) != 0) {
+    if(bigint_from_bytes(s, sig + ellipticcurve_curve_constants[curve_type].signature_raw_len / 2, ellipticcurve_curve_constants[curve_type].signature_raw_len / 2) != 0) {
         goto cleanup;
     }
 
@@ -1036,8 +1200,18 @@ int8_t ellipticcurve_secp256r1_verify(const uint8_t sig[ELLIPTICCURVE_SECP256R1_
         goto cleanup; // Invalid signature values
     }
 
-    // 3. Hash the message (SHA-256)
-    uint8_t* hash_result = sha256_hash(msg, msg_len);
+    // 3. Hash the message
+    uint8_t* hash_result = NULL;
+    int32_t hash_size = 0;
+
+    if(curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP256R1) {
+        hash_result = sha256_hash(msg, msg_len);
+        hash_size = SHA256_OUTPUT_SIZE;
+    } else if(curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP384R1) {
+        hash_result = sha384_hash(msg, msg_len);
+        hash_size = SHA384_OUTPUT_SIZE;
+    }
+
     if (!hash_result) {
         goto cleanup;
     }
@@ -1046,7 +1220,7 @@ int8_t ellipticcurve_secp256r1_verify(const uint8_t sig[ELLIPTICCURVE_SECP256R1_
         memory_free(hash_result);
         goto cleanup;
     }
-    if(bigint_from_bytes(e, hash_result, SHA256_OUTPUT_SIZE) != 0) {
+    if(bigint_from_bytes(e, hash_result, hash_size) != 0) {
         memory_free(hash_result);
         goto cleanup;
     }
@@ -1076,24 +1250,24 @@ int8_t ellipticcurve_secp256r1_verify(const uint8_t sig[ELLIPTICCURVE_SECP256R1_
     }
 
     // 5. Curve Math (Modulo the Prime p)
-    Q_jac = ellipticcurve_jacobian_point_create_from_bytes(pub, pub + 32);
+    Q_jac = ellipticcurve_jacobian_point_create_from_bytes(curve_type, pub, pub + ellipticcurve_curve_constants[curve_type].public_key_raw_len / 2);
     if (!Q_jac) {
         goto cleanup;
     }
 
     // R = u1*G + u2*Q
     u1G = ellipticcurve_create_jacobian_point_at_infinity();
-    if(ellipticcurve_secp256r1_scalar_mult_g(u1G, u1, curve) != 0) { // Point 1
+    if(ellipticcurve_scalar_mult_g(u1G, u1, curve) != 0) { // Point 1
         goto cleanup;
     }
     u2Q = ellipticcurve_create_jacobian_point_at_infinity();
-    if(ellipticcurve_secp256r1_scalar_mult(u2Q, u2, Q_jac, curve) != 0) { // Point 2
+    if(ellipticcurve_scalar_mult(u2Q, u2, Q_jac, curve) != 0) { // Point 2
         goto cleanup;
     }
 
     // R = u1G + u2Q (Point Addition in Jacobian)
     R_jac = ellipticcurve_create_jacobian_point_at_infinity();
-    if(ellipticcurve_secp256r1_point_add(R_jac, u1G, u2Q, curve) != 0) {
+    if(ellipticcurve_point_add(R_jac, u1G, u2Q, curve) != 0) {
         goto cleanup;
     }
     if (ellipticcurve_jacobian_point_is_at_infinity(R_jac)) {
@@ -1133,10 +1307,11 @@ cleanup:
     return ret;
 }
 
-int8_t ellipticcurve_secp256r1_shared_secret(uint8_t       shared_secret[ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN],
-                                             const uint8_t priv[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN],
-                                             const uint8_t pub[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN]) {
-    if (!shared_secret || !priv || !pub) {
+int8_t ellipticcurve_shared_secret (ellipticcurve_curve_type_t curve_type,
+                                    uint8_t*                   shared_secret,
+                                    const uint8_t*             priv,
+                                    const uint8_t*             pub) {
+    if (!shared_secret || !priv || !pub || curve_type == ELLIPTICCURVE_CURVE_TYPE_NONE) {
         return -1;
     }
 
@@ -1147,8 +1322,10 @@ int8_t ellipticcurve_secp256r1_shared_secret(uint8_t       shared_secret[ELLIPTI
     ellipticcurve_point_t* affine_res = NULL;
     ellipticcurve_curve_t* curve = NULL;
 
+    uint8_t x_bytes[ellipticcurve_curve_constants[curve_type].public_key_raw_len / 2];
 
-    curve = ellipticcurve_secp256r1_create_curve();
+
+    curve = ellipticcurve_create_curve(curve_type);
     if (!curve) {
         goto cleanup;
     }
@@ -1158,11 +1335,11 @@ int8_t ellipticcurve_secp256r1_shared_secret(uint8_t       shared_secret[ELLIPTI
         goto cleanup;
     }
 
-    if(bigint_from_bytes(private_scalar, priv, ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN) != 0) {
+    if(bigint_from_bytes(private_scalar, priv, ellipticcurve_curve_constants[curve_type].private_key_raw_len) != 0) {
         goto cleanup;
     }
 
-    temp = ellipticcurve_jacobian_point_create_from_bytes(pub, pub + 32);
+    temp = ellipticcurve_jacobian_point_create_from_bytes(curve_type, pub, pub + ellipticcurve_curve_constants[curve_type].public_key_raw_len / 2);
     if (!temp) {
         goto cleanup;
     }
@@ -1172,7 +1349,7 @@ int8_t ellipticcurve_secp256r1_shared_secret(uint8_t       shared_secret[ELLIPTI
         goto cleanup;
     }
 
-    if(ellipticcurve_secp256r1_scalar_mult(res, private_scalar, temp, curve) != 0) {
+    if(ellipticcurve_scalar_mult(res, private_scalar, temp, curve) != 0) {
         goto cleanup;
     }
 
@@ -1181,7 +1358,6 @@ int8_t ellipticcurve_secp256r1_shared_secret(uint8_t       shared_secret[ELLIPTI
         goto cleanup;
     }
 
-    uint8_t x_bytes[32];
     if (bigint_to_bytes(affine_res->x, x_bytes, sizeof(x_bytes)) != 0) {
         goto cleanup;
     }
@@ -1197,9 +1373,10 @@ cleanup:
     return ret;
 }
 
-int8_t pem_read_secp256r1_private_key(const char_t* pem,
-                                      uint8_t       out_priv[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN]) {
-    if (!pem || !out_priv) {
+int8_t pem_read_ellipticcurve_private_key(ellipticcurve_curve_type_t curve_type,
+                                          const char_t *             pem,
+                                          uint8_t*                   out_priv) {
+    if (!pem || !out_priv || curve_type == ELLIPTICCURVE_CURVE_TYPE_NONE) {
         return -1;
     }
 
@@ -1222,7 +1399,7 @@ int8_t pem_read_secp256r1_private_key(const char_t* pem,
     // SEQ {
     // INTEGER 1 (Version)
     // OCTET STRING (Private Key)
-    // [0] EXPLICIT { OBJECT IDENTIFIER secp256r1 }
+    // [0] EXPLICIT { OBJECT IDENTIFIER (Curve OID) }
     // [1] EXPLICIT { BIT STRING (Public Key) }
     // }
 
@@ -1243,7 +1420,8 @@ int8_t pem_read_secp256r1_private_key(const char_t* pem,
 
     uint8_t* priv_key_data = NULL;
     size_t priv_key_len = 0;
-    if (der_decoder_decode_octet_string(decoder, &priv_key_data, &priv_key_len) != 0 || priv_key_len != ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN) {
+    if (der_decoder_decode_octet_string(decoder, &priv_key_data, &priv_key_len) != 0 ||
+        priv_key_len != ellipticcurve_curve_constants[curve_type].private_key_raw_len) {
         der_decoder_destroy(decoder);
         memory_free(der_data);
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER private key");
@@ -1258,12 +1436,15 @@ int8_t pem_read_secp256r1_private_key(const char_t* pem,
         return -1;
     }
 
+    der_object_identifier_t expected_oid = curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP256R1 ?
+                                           DER_OID_EC_SECP256R1 :
+                                           DER_OID_EC_SECP384R1;
     der_object_identifier_t oid;
-    if (der_decoder_decode_object_identifier(decoder, &oid) != 0 || oid != DER_OID_EC_SECP256R1) {
+    if (der_decoder_decode_object_identifier(decoder, &oid) != 0 || oid != expected_oid) {
         der_decoder_destroy(decoder);
         memory_free(der_data);
         memory_free(priv_key_data);
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER OID for secp256r1");
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER OID for curve");
         return -1;
     }
 
@@ -1293,7 +1474,8 @@ int8_t pem_read_secp256r1_private_key(const char_t* pem,
         return -1;
     }
 
-    if (pub_key_len != 1 + ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN || pub_key_data[0] != 0x04) {
+    if (pub_key_data[0] != 0x04 ||
+        pub_key_len != 1 + ellipticcurve_curve_constants[curve_type].public_key_raw_len) {
         der_decoder_destroy(decoder);
         memory_free(der_data);
         memory_free(priv_key_data);
@@ -1311,8 +1493,8 @@ int8_t pem_read_secp256r1_private_key(const char_t* pem,
         return -1;
     }
 
-    uint8_t derived_pub[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN];
-    if (ellipticcurve_secp256r1_derive_pubkey(derived_pub, priv_key_data) != 0) {
+    uint8_t derived_pub[ellipticcurve_curve_constants[curve_type].public_key_raw_len];
+    if (ellipticcurve_derive_pubkey(curve_type, derived_pub, priv_key_data) != 0) {
         der_decoder_destroy(decoder);
         memory_free(der_data);
         memory_free(priv_key_data);
@@ -1321,7 +1503,7 @@ int8_t pem_read_secp256r1_private_key(const char_t* pem,
         return -1;
     }
 
-    if (memory_memcompare(derived_pub, pub_key_data + 1, ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN) != 0) {
+    if (memory_memcompare(derived_pub, pub_key_data + 1, ellipticcurve_curve_constants[curve_type].public_key_raw_len) != 0) {
         der_decoder_destroy(decoder);
         memory_free(der_data);
         memory_free(priv_key_data);
@@ -1330,7 +1512,7 @@ int8_t pem_read_secp256r1_private_key(const char_t* pem,
         return -1;
     }
 
-    memory_memcopy(priv_key_data, out_priv, ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN);
+    memory_memcopy(priv_key_data, out_priv, ellipticcurve_curve_constants[curve_type].private_key_raw_len);
 
     der_decoder_destroy(decoder);
     memory_free(der_data);
@@ -1339,9 +1521,10 @@ int8_t pem_read_secp256r1_private_key(const char_t* pem,
     return 0;
 }
 
-int8_t pem_read_secp256r1_public_key(const char_t* pem,
-                                     uint8_t       out_pub[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN]) {
-    if (!pem || !out_pub) {
+int8_t pem_read_ellipticcurve_public_key(ellipticcurve_curve_type_t curve_type,
+                                         const char_t *             pem,
+                                         uint8_t*                   out_pub) {
+    if (!pem || !out_pub || curve_type == ELLIPTICCURVE_CURVE_TYPE_NONE) {
         return -1;
     }
 
@@ -1364,7 +1547,7 @@ int8_t pem_read_secp256r1_public_key(const char_t* pem,
     // SEQ {
     // SEQ {
     // OBJECT IDENTIFIER (id-ecPublicKey)
-    // OBJECT IDENTIFIER (secp256r1)
+    // OBJECT IDENTIFIER (Curve OID)
     // }
     // BIT STRING (Public Key)
     // }
@@ -1405,10 +1588,14 @@ int8_t pem_read_secp256r1_public_key(const char_t* pem,
         return -1;
     }
 
-    if(oid != DER_OID_EC_SECP256R1) {
+    der_object_identifier_t expected_oid = curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP256R1 ?
+                                           DER_OID_EC_SECP256R1 :
+                                           DER_OID_EC_SECP384R1;
+
+    if(oid != expected_oid) {
         der_decoder_destroy(decoder);
         memory_free(der_data);
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER OID for curve (expected secp256r1)");
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER OID for curve. Expected OID does not match curve type");
         return -1;
     }
 
@@ -1428,7 +1615,7 @@ int8_t pem_read_secp256r1_public_key(const char_t* pem,
         return -1;
     }
 
-    if (pub_key_len != 1 + ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN || pub_key_data[0] != 0x04) {
+    if (pub_key_data[0] != 0x04 || pub_key_len != 1 + ellipticcurve_curve_constants[curve_type].public_key_raw_len) {
         der_decoder_destroy(decoder);
         memory_free(der_data);
         memory_free(pub_key_data);
@@ -1436,7 +1623,7 @@ int8_t pem_read_secp256r1_public_key(const char_t* pem,
         return -1;
     }
 
-    memory_memcopy(pub_key_data + 1, out_pub, ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN);
+    memory_memcopy(pub_key_data + 1, out_pub, ellipticcurve_curve_constants[curve_type].public_key_raw_len);
 
     der_decoder_destroy(decoder);
     memory_free(der_data);
@@ -1444,14 +1631,15 @@ int8_t pem_read_secp256r1_public_key(const char_t* pem,
     return 0;
 }
 
-int8_t pem_write_secp256r1_private_key(const uint8_t in_priv[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN],
-                                       char_t**      out_pem) {
-    if (!in_priv || !out_pem) {
+int8_t pem_write_ellipticcurve_private_key(ellipticcurve_curve_type_t curve_type,
+                                           const uint8_t*             in_priv,
+                                           char_t**                   out_pem) {
+    if (!in_priv || !out_pem || curve_type == ELLIPTICCURVE_CURVE_TYPE_NONE) {
         return -1;
     }
 
-    uint8_t pub_key[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN];
-    if (ellipticcurve_secp256r1_derive_pubkey(pub_key, in_priv) != 0) {
+    uint8_t pub_key[ellipticcurve_curve_constants[curve_type].public_key_raw_len];
+    if (ellipticcurve_derive_pubkey(curve_type, pub_key, in_priv) != 0) {
         return -1;
     }
 
@@ -1473,17 +1661,20 @@ int8_t pem_write_secp256r1_private_key(const uint8_t in_priv[ELLIPTICCURVE_SECP2
     }
 
     // OCTET STRING (Private Key)
-    if (der_encoder_encode_octet_string(encoder, in_priv, ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN) != 0) {
+    if (der_encoder_encode_octet_string(encoder, in_priv, ellipticcurve_curve_constants[curve_type].private_key_raw_len) != 0) {
         der_encoder_destroy(encoder);
         return -1;
     }
 
-    // [0] EXPLICIT { OBJECT IDENTIFIER secp256r1 }
+    // [0] EXPLICIT { OBJECT IDENTIFIER (Curve OID) }
     if (der_encoder_start_explicit_tag(encoder, DER_TAG_CLASS_CONTEXT_SPECIFIC, 0) != 0) {
         der_encoder_destroy(encoder);
         return -1;
     }
-    if(der_encoder_encode_object_identifier(encoder, DER_OID_EC_SECP256R1) != 0) {
+    der_object_identifier_t curve_oid = curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP256R1 ?
+                                        DER_OID_EC_SECP256R1 :
+                                        DER_OID_EC_SECP384R1;
+    if(der_encoder_encode_object_identifier(encoder, curve_oid) != 0) {
         der_encoder_destroy(encoder);
         return -1;
     }
@@ -1499,9 +1690,9 @@ int8_t pem_write_secp256r1_private_key(const uint8_t in_priv[ELLIPTICCURVE_SECP2
     }
 
     // Uncompressed point prefix 0x04
-    uint8_t uncompressed_pub[1 + ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN];
+    uint8_t uncompressed_pub[1 + ellipticcurve_curve_constants[curve_type].public_key_raw_len];
     uncompressed_pub[0] = 0x04; // Uncompressed point indicator
-    memory_memcopy(pub_key, uncompressed_pub + 1, ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN);
+    memory_memcopy(pub_key, uncompressed_pub + 1, sizeof(uncompressed_pub) - 1);
     if (der_encoder_encode_bit_string(encoder, uncompressed_pub, sizeof(uncompressed_pub)) != 0) {
         der_encoder_destroy(encoder);
         return -1;
@@ -1543,9 +1734,10 @@ int8_t pem_write_secp256r1_private_key(const uint8_t in_priv[ELLIPTICCURVE_SECP2
     return 0;
 }
 
-int8_t pem_write_secp256r1_public_key(const uint8_t in_pub[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN],
-                                      char_t**      out_pem) {
-    if (!in_pub || !out_pem) {
+int8_t pem_write_ellipticcurve_public_key(ellipticcurve_curve_type_t curve_type,
+                                          const uint8_t*             in_pub,
+                                          char_t**                   out_pem) {
+    if (!in_pub || !out_pem || curve_type == ELLIPTICCURVE_CURVE_TYPE_NONE) {
         return -1;
     }
 
@@ -1572,8 +1764,11 @@ int8_t pem_write_secp256r1_public_key(const uint8_t in_pub[ELLIPTICCURVE_SECP256
         return -1;
     }
 
-    // secp256r1 OID
-    if(der_encoder_encode_object_identifier(encoder, DER_OID_EC_SECP256R1) != 0) {
+    // Curve OID
+    der_object_identifier_t curve_oid = curve_type == ELLIPTICCURVE_CURVE_TYPE_SECP256R1 ?
+                                        DER_OID_EC_SECP256R1 :
+                                        DER_OID_EC_SECP384R1;
+    if(der_encoder_encode_object_identifier(encoder, curve_oid) != 0) {
         der_encoder_destroy(encoder);
         return -1;
     }
@@ -1586,9 +1781,9 @@ int8_t pem_write_secp256r1_public_key(const uint8_t in_pub[ELLIPTICCURVE_SECP256
 
     // BIT STRING {
     // Uncompressed point prefix 0x04
-    uint8_t uncompressed_pub[1 + ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN];
+    uint8_t uncompressed_pub[1 + ellipticcurve_curve_constants[curve_type].public_key_raw_len];
     uncompressed_pub[0] = 0x04; // Uncompressed point indicator
-    memory_memcopy(in_pub, uncompressed_pub + 1, ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN);
+    memory_memcopy(in_pub, uncompressed_pub + 1, sizeof(uncompressed_pub) - 1);
     if (der_encoder_encode_bit_string(encoder, uncompressed_pub, sizeof(uncompressed_pub)) != 0) {
         der_encoder_destroy(encoder);
         return -1;
@@ -1626,8 +1821,8 @@ int8_t pem_write_secp256r1_public_key(const uint8_t in_pub[ELLIPTICCURVE_SECP256
     return 0;
 }
 
-uint8_t* ellipticcurve_secp256r1_encode_signature(const uint8_t sig[ELLIPTICCURVE_SECP256R1_SIGNATURE_RAW_LEN], size_t* encoded_length) {
-    if(!sig || !encoded_length) {
+uint8_t* ellipticcurve_encode_signature (ellipticcurve_curve_type_t curve_type, const uint8_t* sig, size_t* encoded_length) {
+    if(!sig || !encoded_length || curve_type == ELLIPTICCURVE_CURVE_TYPE_NONE) {
         return NULL;
     }
 
@@ -1641,12 +1836,12 @@ uint8_t* ellipticcurve_secp256r1_encode_signature(const uint8_t sig[ELLIPTICCURV
         return NULL;
     }
 
-    if(der_encoder_encode_integer_u256(encoder, sig) != 0) {
+    if(der_encoder_encode_integer_with_bit_count(encoder, sig, ellipticcurve_curve_constants[curve_type].bit_len) != 0) {
         der_encoder_destroy(encoder);
         return NULL;
     }
 
-    if(der_encoder_encode_integer_u256(encoder, sig + 32) != 0) {
+    if(der_encoder_encode_integer_with_bit_count(encoder, sig + (ellipticcurve_curve_constants[curve_type].bit_len / 8), ellipticcurve_curve_constants[curve_type].bit_len) != 0) {
         der_encoder_destroy(encoder);
         return NULL;
     }
@@ -1668,8 +1863,8 @@ uint8_t* ellipticcurve_secp256r1_encode_signature(const uint8_t sig[ELLIPTICCURV
     return der_data;
 }
 
-uint8_t* ellipticcurve_secp256r1_decode_signature(const uint8_t* der_sig, size_t der_sig_len) {
-    if(!der_sig || der_sig_len == 0) {
+uint8_t* ellipticcurve_decode_signature(ellipticcurve_curve_type_t curve_type, const uint8_t* der_sig, size_t der_sig_len) {
+    if(!der_sig || der_sig_len == 0 || curve_type == ELLIPTICCURVE_CURVE_TYPE_NONE) {
         return NULL;
     }
 
@@ -1685,15 +1880,15 @@ uint8_t* ellipticcurve_secp256r1_decode_signature(const uint8_t* der_sig, size_t
         return NULL;
     }
 
-    uint8_t r_bytes[32];
-    if(der_decoder_decode_integer_u256(decoder, r_bytes) != 0) {
+    uint8_t r_bytes[ellipticcurve_curve_constants[curve_type].bit_len / 8];
+    if(der_decoder_decode_integer_with_bit_count(decoder, ellipticcurve_curve_constants[curve_type].bit_len, false, r_bytes) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode r component of signature");
         der_decoder_destroy(decoder);
         return NULL;
     }
 
-    uint8_t s_bytes[32];
-    if(der_decoder_decode_integer_u256(decoder, s_bytes) != 0) {
+    uint8_t s_bytes[ellipticcurve_curve_constants[curve_type].bit_len / 8];
+    if(der_decoder_decode_integer_with_bit_count(decoder, ellipticcurve_curve_constants[curve_type].bit_len, false, s_bytes) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode s component of signature");
         der_decoder_destroy(decoder);
         return NULL;
@@ -1707,14 +1902,14 @@ uint8_t* ellipticcurve_secp256r1_decode_signature(const uint8_t* der_sig, size_t
 
     der_decoder_destroy(decoder);
 
-    uint8_t* signature = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP256R1_SIGNATURE_RAW_LEN);
+    uint8_t* signature = (uint8_t*)memory_malloc(ellipticcurve_curve_constants[curve_type].signature_raw_len);
     if (!signature) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for decoded signature");
         return NULL;
     }
 
-    memory_memcopy(r_bytes, signature, 32);
-    memory_memcopy(s_bytes, signature + 32, 32);
+    memory_memcopy(r_bytes, signature, sizeof(r_bytes));
+    memory_memcopy(s_bytes, signature + sizeof(r_bytes), sizeof(s_bytes));
 
     memory_memclean(r_bytes, sizeof(r_bytes));
     memory_memclean(s_bytes, sizeof(s_bytes));

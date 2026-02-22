@@ -121,9 +121,10 @@ typedef enum x509_subject_alternative_name_type_t {
 typedef enum x509_algorithm_t {
     X509_ALGORITHM_UNKNOWN, ///< Unknown signature algorithm.
     X509_ALGORITHM_ED25519, ///< Ed25519 signature algorithm.
-    X509_ALGORITHM_X25519, ///< X25519 key agreement algorithm.
     X509_ALGORITHM_ECDSA_WITH_SHA256, ///< ECDSA with SHA-256 signature algorithm.
+    X509_ALGORITHM_ECDSA_WITH_SHA384, ///< ECDSA with SHA-384 signature algorithm.
     X509_ALGORITHM_ECDSA_SECP256R1_SHA256, ///< ECDSA with secp256r1 curve signature algorithm.
+    X509_ALGORITHM_ECDSA_SECP384R1_SHA384, ///< ECDSA with secp384r1 curve signature algorithm.
 } x509_algorithm_t;
 
 typedef enum x509_issuer_subject_field_t {

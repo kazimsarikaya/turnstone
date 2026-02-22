@@ -80,8 +80,10 @@ typedef enum der_object_identifier_t {
     DER_OID_ED25519, ///< Ed25519 signature algorithm OID
     DER_OID_X25519, ///< X25519 key exchange algorithm OID
     DER_OID_ECDSA_WITH_SHA256, ///< ECDSA with SHA-256 signature algorithm OID
+    DER_OID_ECDSA_WITH_SHA384, ///< ECDSA with SHA-384 signature algorithm OID
     DER_OID_ECDSA_PUBLIC_KEY, ///< ECDSA public key OID
     DER_OID_EC_SECP256R1, ///< secp256r1 curve OID
+    DER_OID_EC_SECP384R1, ///< secp384r1 curve OID
     DER_OID_SERVER_AUTH, ///< Server Authentication EKU
     DER_OID_CLIENT_AUTH, ///< Client Authentication EKU
     DER_OID_CODE_SIGNING, ///< Code Signing EKU
@@ -368,6 +370,19 @@ int8_t der_encoder_encode_context_specific_string(der_encoder_t * encoder, uint8
 int8_t der_encoder_encode_utc_time(der_encoder_t * encoder, time_t time_value);
 
 /**
+ * @brief Encodes and appends a DER integer with a specified bit count.
+ *
+ * Encodes the given integer value into DER format, ensuring that it is represented using the specified number of bits.
+ * This is useful for encoding integers that must fit within a certain bit length, such as those used in cryptographic contexts.
+ *
+ * @param encoder The DER encoder instance.
+ * @param value The integer value to encode (as a 128-bit unsigned integer).
+ * @param bit_count The number of bits to use for encoding the integer (e.g., 256 for a 256-bit integer).
+ * @return 0 on success, -1 on failure (e.g., invalid encoder, buffer error, value exceeds specified bit count).
+ */
+int8_t der_encoder_encode_integer_with_bit_count(der_encoder_t * encoder, const uint8_t* value, size_t bit_count);
+
+/**
  * @brief Encodes and appends a DER integer using a 128-bit unsigned integer.
  *
  * Encodes the given 128-bit unsigned integer into DER format and appends it to the current buffer.
@@ -377,7 +392,8 @@ int8_t der_encoder_encode_utc_time(der_encoder_t * encoder, time_t time_value);
  * @param value The unsigned 128-bit integer value to encode.
  * @return 0 on success, -1 on failure (e.g., invalid encoder, buffer error).
  */
-int8_t der_encoder_encode_integer_u128(der_encoder_t * encoder, uint128_t value);
+#define der_encoder_encode_integer_u128(encoder, value) \
+        der_encoder_encode_integer_with_bit_count(encoder, value, 128)
 
 /**
  * @brief Encodes and appends a DER integer using a 160-bit unsigned integer.
@@ -389,7 +405,8 @@ int8_t der_encoder_encode_integer_u128(der_encoder_t * encoder, uint128_t value)
  * @param value A 20-byte array representing the unsigned 160-bit integer in big-endian format.
  * @return 0 on success, -1 on failure (e.g., invalid encoder, buffer error).
  */
-int8_t der_encoder_encode_integer_u160(der_encoder_t * encoder, const uint8_t value[20]);
+#define der_encoder_encode_integer_u160(encoder, value) \
+        der_encoder_encode_integer_with_bit_count(encoder, (value), 160)
 
 /**
  * @brief Encodes and appends a DER integer using a 256-bit unsigned integer.
@@ -401,7 +418,8 @@ int8_t der_encoder_encode_integer_u160(der_encoder_t * encoder, const uint8_t va
  * @param value A 32-byte array representing the unsigned 256-bit integer in big-endian format.
  * @return 0 on success, -1 on failure (e.g., invalid encoder, buffer error).
  */
-int8_t der_encoder_encode_integer_u256(der_encoder_t * encoder, const uint8_t value[32]);
+#define der_encoder_encode_integer_u256(encoder, value) \
+        der_encoder_encode_integer_with_bit_count(encoder, (value), 256)
 
 /**
  * @brief Appends raw bytes directly to the DER buffer.
@@ -414,7 +432,7 @@ int8_t der_encoder_encode_integer_u256(der_encoder_t * encoder, const uint8_t va
  * @param data_len Length of the raw data.
  * @return 0 on success, -1 on failure (e.g., invalid encoder, buffer error).
  */
-int8_t der_encoder_encode_raw_bytes(der_encoder_t * encoder, const uint8_t * data, size_t data_len);
+int8_t der_encoder_encode_raw_bytes(der_encoder_t * encoder, const uint8_t* data, size_t data_len);
 
 /**
  * @brief Retrieves the final DER encoded data.
@@ -654,6 +672,20 @@ int8_t der_decoder_decode_printable_string(der_decoder_t* decoder, char_t** out_
 int8_t der_decoder_decode_boolean(der_decoder_t* decoder, boolean_t* out_value);
 
 /**
+ * @brief Decodes a DER integer with a specified bit count.
+ *
+ * Attempts to parse the next element as a DER integer and stores the value in `out_value`.
+ * The `bit_count` parameter specifies the expected bit length of the integer, which is useful for decoding integers that must fit within a certain size (e.g., 256 bits).
+ *
+ * @param decoder The DER decoder instance.
+ * @param bit_count The expected number of bits for the integer (e.g., 256 for a 256-bit integer).
+ * @param no_sign Indicates whether the integer should be treated as unsigned (true) or signed (false). If `no_sign` is true, the function will not expect a sign bit and will treat the integer as unsigned.
+ * @param out_value Pointer to a buffer where the decoded integer will be stored in big-endian format. The buffer should be large enough to hold the specified bit count (e.g., 32 bytes for 256 bits).
+ * @return 0 on success, -1 on failure (e.g., not an integer, invalid format, value exceeds specified bit count).
+ */
+int8_t der_decoder_decode_integer_with_bit_count(der_decoder_t* decoder, size_t bit_count, boolean_t no_sign, uint8_t* out_value);
+
+/**
  * @brief Decodes a DER integer using a 128-bit unsigned integer.
  *
  * Attempts to parse the next element as a DER integer and stores the value in `out_value`.
@@ -663,7 +695,8 @@ int8_t der_decoder_decode_boolean(der_decoder_t* decoder, boolean_t* out_value);
  * @param out_value Pointer to a `uint128_t` where the decoded integer will be stored.
  * @return 0 on success, -1 on failure (e.g., not an integer, invalid format, value out of range for `uint128_t`).
  */
-int8_t der_decoder_decode_integer_u128(der_decoder_t* decoder, uint128_t* out_value);
+#define der_decoder_decode_integer_u128(decoder, out_value) \
+        der_decoder_decode_integer_with_bit_count(decoder, 128, true, (uint8_t*)(out_value))
 
 /**
  * @brief Decodes a DER integer using a 160-bit unsigned integer.
@@ -675,7 +708,8 @@ int8_t der_decoder_decode_integer_u128(der_decoder_t* decoder, uint128_t* out_va
  * @param out_value A 20-byte array where the decoded 160-bit integer will be stored in big-endian format.
  * @return 0 on success, -1 on failure (e.g., not an integer, invalid format, value out of range for 160 bits).
  */
-int8_t der_decoder_decode_integer_u160(der_decoder_t* decoder, uint8_t out_value[20]);
+#define der_decoder_decode_integer_u160(decoder, out_value) \
+        der_decoder_decode_integer_with_bit_count(decoder, 160, true, (uint8_t*)(out_value))
 
 /**
  * @brief Decodes a DER integer using a 256-bit unsigned integer.
@@ -687,7 +721,8 @@ int8_t der_decoder_decode_integer_u160(der_decoder_t* decoder, uint8_t out_value
  * @param out_value A 32-byte array where the decoded 256-bit integer will be stored in big-endian format.
  * @return 0 on success, -1 on failure (e.g., not an integer, invalid format, value out of range for 256 bits).
  */
-int8_t der_decoder_decode_integer_u256(der_decoder_t* decoder, uint8_t out_value[32]);
+#define der_decoder_decode_integer_u256(decoder, out_value) \
+        der_decoder_decode_integer_with_bit_count(decoder, 256, true, (uint8_t*)(out_value))
 
 /**
  * @brief Decodes a context-specific string.

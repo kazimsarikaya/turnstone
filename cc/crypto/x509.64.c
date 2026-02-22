@@ -780,14 +780,14 @@ static int8_t x509_encode_algorithm_identifier(der_encoder_t* der_encoder, x509_
         }
         break;
     }
-    case X509_ALGORITHM_X25519: {
-        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_X25519) != 0) {
+    case X509_ALGORITHM_ECDSA_WITH_SHA256: {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_ECDSA_WITH_SHA256) != 0) {
             return -1;
         }
         break;
     }
-    case X509_ALGORITHM_ECDSA_WITH_SHA256: {
-        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_ECDSA_WITH_SHA256) != 0) {
+    case X509_ALGORITHM_ECDSA_WITH_SHA384: {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_ECDSA_WITH_SHA384) != 0) {
             return -1;
         }
         break;
@@ -797,6 +797,15 @@ static int8_t x509_encode_algorithm_identifier(der_encoder_t* der_encoder, x509_
             return -1;
         }
         if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EC_SECP256R1) != 0) {
+            return -1;
+        }
+        break;
+    }
+    case X509_ALGORITHM_ECDSA_SECP384R1_SHA384: {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_ECDSA_PUBLIC_KEY) != 0) {
+            return -1;
+        }
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EC_SECP384R1) != 0) {
             return -1;
         }
         break;
@@ -958,7 +967,7 @@ static int8_t x509_encode_tbs(x509_certificate_t* cert) {
 static int8_t x509_certificate_sign_with_ed25519(x509_certificate_t* cert,
                                                  const uint8_t*      private_key,
                                                  size_t              private_key_length) {
-    if (cert == NULL || private_key == NULL || private_key_length == 0) {
+    if (cert == NULL || private_key == NULL || private_key_length != ED25519_PRIVATE_KEY_RAW_LEN) {
         return -1;
     }
 
@@ -999,7 +1008,7 @@ static int8_t x509_certificate_sign_with_ed25519(x509_certificate_t* cert,
 static int8_t x509_certificate_sign_with_ecdsa_secp256r1(x509_certificate_t* cert,
                                                          const uint8_t*      private_key,
                                                          size_t              private_key_length) {
-    if (cert == NULL || private_key == NULL || private_key_length == 0) {
+    if (cert == NULL || private_key == NULL || private_key_length != ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN) {
         return -1;
     }
 
@@ -1010,13 +1019,13 @@ static int8_t x509_certificate_sign_with_ecdsa_secp256r1(x509_certificate_t* cer
         return -1;
     }
 
-    uint8_t signature[64];
+    uint8_t signature[ELLIPTICCURVE_SECP256R1_SIGNATURE_RAW_LEN];
     if (ellipticcurve_secp256r1_sign(signature, cert->tbs_data, cert->tbs_length, private_key) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to sign TBS data with ECDSA SECP256R1");
         return -1;
     }
 
-    uint8_t public_key[64];
+    uint8_t public_key[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN];
     if (ellipticcurve_secp256r1_derive_pubkey(public_key, private_key) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to derive public key from private key for ECDSA SECP256R1");
         return -1;
@@ -1027,39 +1036,53 @@ static int8_t x509_certificate_sign_with_ecdsa_secp256r1(x509_certificate_t* cer
         return -1;
     }
 
-    // ECDSA signatures are typically encoded as SEQUENCE { r INTEGER, s INTEGER }
-    // We will encode it in that format for the certificate.
-    der_encoder_t* der_encoder = der_encoder_new();
-    if (der_encoder == NULL) {
+    cert->signature = ellipticcurve_secp256r1_encode_signature(signature, &cert->signature_length);
+
+    if (cert->signature == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to encode ECDSA SECP256R1 signature");
         return -1;
     }
 
-    if(der_encoder_start_sequence(der_encoder) != 0) {
-        der_encoder_destroy(der_encoder);
+    return 0;
+}
+
+static int8_t x509_certificate_sign_with_ecdsa_secp384r1(x509_certificate_t* cert,
+                                                         const uint8_t*      private_key,
+                                                         size_t              private_key_length) {
+    if (cert == NULL || private_key == NULL || private_key_length != ELLIPTICCURVE_SECP384R1_PRIVATE_KEY_RAW_LEN) {
         return -1;
     }
 
-    if(der_encoder_encode_integer_u256(der_encoder, signature) != 0) {
-        der_encoder_destroy(der_encoder);
+    cert->signature_algorithm = X509_ALGORITHM_ECDSA_WITH_SHA384;
+
+    if (x509_encode_tbs(cert) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to encode TBS data");
         return -1;
     }
 
-    if(der_encoder_encode_integer_u256(der_encoder, signature + 32) != 0) {
-        der_encoder_destroy(der_encoder);
+    uint8_t signature[ELLIPTICCURVE_SECP384R1_SIGNATURE_RAW_LEN];
+    if (ellipticcurve_secp384r1_sign(signature, cert->tbs_data, cert->tbs_length, private_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to sign TBS data with ECDSA SECP384R1");
         return -1;
     }
 
-    if(der_encoder_end_sequence(der_encoder) != 0) {
-        der_encoder_destroy(der_encoder);
+    uint8_t public_key[ELLIPTICCURVE_SECP384R1_PUBLIC_KEY_RAW_LEN];
+    if (ellipticcurve_secp384r1_derive_pubkey(public_key, private_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to derive public key from private key for ECDSA SECP384R1");
         return -1;
     }
 
-    if(der_encoder_get_der_data(der_encoder, &cert->signature, &cert->signature_length) != 0) {
-        der_encoder_destroy(der_encoder);
+    if(ellipticcurve_secp384r1_verify(signature, cert->tbs_data, cert->tbs_length, public_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "ECDSA SECP384R1 signature verification failed after signing");
         return -1;
     }
 
-    der_encoder_destroy(der_encoder);
+    cert->signature = ellipticcurve_secp384r1_encode_signature(signature, &cert->signature_length);
+
+    if (cert->signature == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to encode ECDSA SECP384R1 signature");
+        return -1;
+    }
 
     return 0;
 }
@@ -1076,12 +1099,9 @@ static int8_t x509_compute_subject_authority_key_identifier(x509_algorithm_t alg
     const uint8_t* data_to_hash = NULL;
     size_t data_length = 0;
 
-    if(algorithm == X509_ALGORITHM_ED25519 || algorithm == X509_ALGORITHM_X25519) {
-        // For Ed25519 and X25519, the public key is used as-is for SKID/AKID computation
-        data_to_hash = public_key;
-        data_length  = public_key_length;
-    } else if (algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
-        // For ECDSA SECP256R1, we should use ASN.1 DER-encoded SubjectPublicKeyInfo for SKID/AKID computation
+    if (algorithm == X509_ALGORITHM_ED25519 ||
+        algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256 ||
+        algorithm == X509_ALGORITHM_ECDSA_SECP384R1_SHA384) {
         der_encoder_t* der_encoder = der_encoder_new();
         if (der_encoder == NULL) {
             return -1;
@@ -1111,7 +1131,7 @@ static int8_t x509_compute_subject_authority_key_identifier(x509_algorithm_t alg
     // Simple SKID computation: SHA-256 hash of the public key
     uint8_t* hash = sha256_hash(data_to_hash, data_length);
     if (hash == NULL) {
-        if(algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
+        if(algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256 || algorithm == X509_ALGORITHM_ECDSA_SECP384R1_SHA384) {
             memory_free((void*)data_to_hash); // Free the DER-encoded data if we allocated it
         }
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to compute SHA-256 hash for SKID");
@@ -1120,7 +1140,7 @@ static int8_t x509_compute_subject_authority_key_identifier(x509_algorithm_t alg
 
     memory_memcopy(hash, out_skid, out_skid_length);
 
-    if(algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
+    if(algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256 || algorithm == X509_ALGORITHM_ECDSA_SECP384R1_SHA384) {
         memory_free((void*)data_to_hash); // Free the DER-encoded data if we allocated it
     }
 
@@ -1195,6 +1215,8 @@ int8_t x509_certificate_sign(x509_certificate_t* cert,
         return x509_certificate_sign_with_ed25519(cert, private_key, private_key_length);
     case X509_ALGORITHM_ECDSA_SECP256R1_SHA256:
         return x509_certificate_sign_with_ecdsa_secp256r1(cert, private_key, private_key_length);
+    case X509_ALGORITHM_ECDSA_SECP384R1_SHA384:
+        return x509_certificate_sign_with_ecdsa_secp384r1(cert, private_key, private_key_length);
     default:
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "unsupported signature algorithm: %d", algorithm);
         return -1;
@@ -1343,49 +1365,6 @@ int8_t x509_certificate_add_public_key(x509_certificate_t* cert,
     return x509_certificate_add_subject_key_identifier(cert);
 }
 
-static int8_t x509_decode_secp256r1_signature(x509_certificate_t* cert, uint8_t* out_signature, size_t* out_signature_length) {
-    if (cert == NULL || cert->signature == NULL || cert->signature_length == 0 ||
-        out_signature == NULL || out_signature_length == NULL) {
-        return -1;
-    }
-
-    der_decoder_t* decoder = der_decoder_new(cert->signature, cert->signature_length);
-    if (decoder == NULL) {
-        return -1;
-    }
-
-    // ECDSA signatures are encoded as SEQUENCE { r INTEGER, s INTEGER }
-    if (der_decoder_start_sequence(decoder) != 0) {
-        der_decoder_destroy(decoder);
-        return -1;
-    }
-
-    uint8_t r[32];
-    if (der_decoder_decode_integer_u256(decoder, r) != 0) {
-        der_decoder_destroy(decoder);
-        return -1;
-    }
-
-    uint8_t s[32];
-    if (der_decoder_decode_integer_u256(decoder, s) != 0) {
-        der_decoder_destroy(decoder);
-        return -1;
-    }
-
-    if (der_decoder_end_sequence(decoder) != 0) {
-        der_decoder_destroy(decoder);
-        return -1;
-    }
-
-    der_decoder_destroy(decoder);
-
-    memory_memcopy(r, out_signature, 32);
-    memory_memcopy(s, out_signature + 32, 32);
-    *out_signature_length = 64;
-
-    return 0;
-}
-
 static int8_t x509_certificate_verify_signature_internal(x509_certificate_t* cert,
                                                          const uint8_t*      public_key,
                                                          size_t              public_key_length) {
@@ -1408,16 +1387,35 @@ static int8_t x509_certificate_verify_signature_internal(x509_certificate_t* cer
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Algorithm Mismatch: Signature algorithm is ECDSA with SHA-256 but public key is not ECDSA SECP256R1");
             return -1;
         }
-        uint8_t signature[64];
-        size_t signature_length = 0;
-        if (x509_decode_secp256r1_signature(cert, signature, &signature_length) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode ECDSA signature from certificate");
+        uint8_t* signature = ellipticcurve_secp256r1_decode_signature(cert->signature, cert->signature_length);
+        if (signature == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode ECDSA SECP256R1 signature");
             return -1;
         }
         if(ellipticcurve_secp256r1_verify(signature, cert->tbs_data, cert->tbs_length, public_key + 1) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "ECDSA Signature verification failed on raw data");
+            memory_free(signature);
             return -1;
         }
+        memory_free(signature);
+        break;
+    }
+    case X509_ALGORITHM_ECDSA_WITH_SHA384: {
+        if(cert->public_key_algorithm != X509_ALGORITHM_ECDSA_SECP384R1_SHA384) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Algorithm Mismatch: Signature algorithm is ECDSA with SHA-384 but public key is not ECDSA SECP384R1");
+            return -1;
+        }
+        uint8_t* signature = ellipticcurve_secp384r1_decode_signature(cert->signature, cert->signature_length);
+        if (signature == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode ECDSA SECP256R1 signature");
+            return -1;
+        }
+        if(ellipticcurve_secp384r1_verify(signature, cert->tbs_data, cert->tbs_length, public_key + 1) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "ECDSA Signature verification failed on raw data");
+            memory_free(signature);
+            return -1;
+        }
+        memory_free(signature);
         break;
     }
     default:
@@ -2209,12 +2207,12 @@ static int8_t x509_decode_algorithm_identifier(der_decoder_t* der_decoder, x509_
         *algorithm = X509_ALGORITHM_ED25519;
         break;
     }
-    case DER_OID_X25519: {
-        *algorithm = X509_ALGORITHM_X25519;
-        break;
-    }
     case DER_OID_ECDSA_WITH_SHA256: {
         *algorithm = X509_ALGORITHM_ECDSA_WITH_SHA256;
+        break;
+    }
+    case DER_OID_ECDSA_WITH_SHA384: {
+        *algorithm = X509_ALGORITHM_ECDSA_WITH_SHA384;
         break;
     }
     case DER_OID_ECDSA_PUBLIC_KEY: {
@@ -2222,11 +2220,14 @@ static int8_t x509_decode_algorithm_identifier(der_decoder_t* der_decoder, x509_
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode EC public key curve OID");
             return -1;
         }
-        if(oid != DER_OID_EC_SECP256R1) {
+        if(oid == DER_OID_EC_SECP256R1) {
+            *algorithm = X509_ALGORITHM_ECDSA_SECP256R1_SHA256;
+        } else if(oid == DER_OID_EC_SECP384R1) {
+            *algorithm = X509_ALGORITHM_ECDSA_SECP384R1_SHA384;
+        } else {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "unsupported EC curve OID: %d", oid);
             return -1;
         }
-        *algorithm = X509_ALGORITHM_ECDSA_SECP256R1_SHA256;
         break;
     }
     default:
@@ -2551,6 +2552,8 @@ static boolean_t x509_is_signature_algorithm_compatible_with_public_key_algorith
         return public_key_algorithm == X509_ALGORITHM_ED25519;
     case X509_ALGORITHM_ECDSA_WITH_SHA256:
         return public_key_algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256;
+    case X509_ALGORITHM_ECDSA_WITH_SHA384:
+        return public_key_algorithm == X509_ALGORITHM_ECDSA_SECP384R1_SHA384;
     default:
         return false; // Unsupported or unknown signature algorithm
     }

@@ -930,6 +930,56 @@ static int8_t tls13_parse_client_hello_extension_key_share_group_secp256r1(tls13
     return 0;
 }
 
+static int8_t tls13_parse_client_hello_extension_key_share_group_secp384r1(tls13_session_t* ctx, uint8_t* key_data, uint16_t key_len) {
+    if(ctx->connection_state.selected_group == TLS_GROUP_X25519 || ctx->connection_state.selected_group == TLS_GROUP_X25519_ML_KEM768) {
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered multiple key share groups, prioritizing x25519 over secp384r1");
+        return 0;
+    }
+
+    if (key_len != (ELLIPTICCURVE_SECP384R1_PUBLIC_KEY_RAW_LEN + 1) || key_data[0] != 0x04) { // Uncompressed point should be 65 bytes and start with 0x04
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Secp384r1 public key format or length: %d", key_len);
+        return -1;
+    }
+
+    key_data++; // Skip the 0x04 prefix
+
+    ctx->server_state.server_key_exchange_public_key_len = ELLIPTICCURVE_SECP384R1_PUBLIC_KEY_RAW_LEN + 1;
+    memory_free(ctx->server_state.server_key_exchange_public_key); // Free previous if any
+    ctx->server_state.server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_state.server_key_exchange_public_key_len);
+    if (!ctx->server_state.server_key_exchange_public_key) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
+        return -1;
+    }
+
+    ctx->server_state.server_key_exchange_public_key[0] = 0x04; // Uncompressed point prefix
+
+    uint8_t server_private_key[ELLIPTICCURVE_SECP384R1_PRIVATE_KEY_RAW_LEN];
+
+    if(ellipticcurve_secp384r1_generate_keypair(server_private_key, ctx->server_state.server_key_exchange_public_key + 1) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate Secp384r1 keypair");
+        return -1;
+    }
+
+    ctx->connection_state.shared_secret = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP384R1_SHARED_SECRET_LEN);
+    if (!ctx->connection_state.shared_secret) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
+        return -1;
+    }
+
+    if(ellipticcurve_secp384r1_shared_secret(ctx->connection_state.shared_secret,
+                                             server_private_key,
+                                             key_data) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
+        return -1;
+    }
+
+    ctx->connection_state.shared_secret_len = ELLIPTICCURVE_SECP384R1_SHARED_SECRET_LEN; // P-384 shared secret is 32 bytes
+    ctx->connection_state.selected_group = TLS_GROUP_SECP384R1;
+    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: secp384r1");
+
+    return 0;
+}
+
 static int8_t tls13_parse_client_hello_extension_key_share_group_x25519_mlkem768(tls13_session_t* ctx, uint8_t* key_data, uint16_t key_len) {
     if(key_len != X25519_PUBLIC_KEY_RAW_LEN + MLKEM768_PUBLICKEYBYTES) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid key length for x25519_mlkem768: %d", key_len);
@@ -1013,6 +1063,10 @@ static int8_t tls13_parse_client_hello_extension_key_share(tls13_session_t* ctx,
             if(tls13_parse_client_hello_extension_key_share_group_secp256r1(ctx, key_data, key_len) != 0) {
                 return -1; // Error already logged in the function
             }
+        } else if (group == TLS_GROUP_SECP384R1) { // Secp384r1 (P-384)
+            if(tls13_parse_client_hello_extension_key_share_group_secp384r1(ctx, key_data, key_len) != 0) {
+                return -1; // Error already logged in the function
+            }
         } else if(group == TLS_GROUP_X25519_ML_KEM768) {
             if(tls13_parse_client_hello_extension_key_share_group_x25519_mlkem768(ctx, key_data, key_len) != 0) {
                 return -1; // Error already logged in the function
@@ -1060,6 +1114,8 @@ static int8_t tls13_parse_client_hello_extension_signature_algorithms(tls13_sess
             ctx->client_state.client_supported_signature_algorithms_x509[x509_alg_index++] = X509_ALGORITHM_ED25519;
         } else if(alg == TLS_SIG_ALG_ECDSA_SECP256R1_SHA256) {
             ctx->client_state.client_supported_signature_algorithms_x509[x509_alg_index++] = X509_ALGORITHM_ECDSA_SECP256R1_SHA256;
+        } else if(alg == TLS_SIG_ALG_ECDSA_SECP384R1_SHA384) {
+            ctx->client_state.client_supported_signature_algorithms_x509[x509_alg_index++] = X509_ALGORITHM_ECDSA_SECP384R1_SHA384;
         } else {
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Unsupported signature algorithm: 0x%04x, skipping", alg);
         }
@@ -1871,6 +1927,8 @@ static int8_t tls13_send_encrypted_extensions(tls13_session_t* ctx) {
     int32_t supported_groups_list_end = reverse_p;
     plaintext[--reverse_p] = TLS_GROUP_SECP256R1 & 0xff;
     plaintext[--reverse_p] = (TLS_GROUP_SECP256R1 >> 8) & 0xff;
+    plaintext[--reverse_p] = TLS_GROUP_SECP384R1 & 0xff;
+    plaintext[--reverse_p] = (TLS_GROUP_SECP384R1 >> 8) & 0xff;
     plaintext[--reverse_p] = TLS_GROUP_X25519 & 0xff;
     plaintext[--reverse_p] = (TLS_GROUP_X25519 >> 8) & 0xff;
 
@@ -2029,6 +2087,8 @@ static int8_t tls13_send_certificate_request(tls13_session_t* ctx) {
     // secp256r1 (0x0403)
     plaintext[--reverse_p] = TLS_SIG_ALG_ECDSA_SECP256R1_SHA256 & 0xff;
     plaintext[--reverse_p] = (TLS_SIG_ALG_ECDSA_SECP256R1_SHA256 >> 8) & 0xff;
+    plaintext[--reverse_p] = TLS_SIG_ALG_ECDSA_SECP384R1_SHA384 & 0xff;
+    plaintext[--reverse_p] = (TLS_SIG_ALG_ECDSA_SECP384R1_SHA384 >> 8) & 0xff;
     // ed25519 (0x0807)
     plaintext[--reverse_p] = TLS_SIG_ALG_ED25519 & 0xff;
     plaintext[--reverse_p] = (TLS_SIG_ALG_ED25519 >> 8) & 0xff;
@@ -2056,6 +2116,8 @@ static int8_t tls13_send_certificate_request(tls13_session_t* ctx) {
     // secp256r1 (0x0403)
     plaintext[--reverse_p] = TLS_SIG_ALG_ECDSA_SECP256R1_SHA256 & 0xff;
     plaintext[--reverse_p] = (TLS_SIG_ALG_ECDSA_SECP256R1_SHA256 >> 8) & 0xff;
+    plaintext[--reverse_p] = TLS_SIG_ALG_ECDSA_SECP384R1_SHA384 & 0xff;
+    plaintext[--reverse_p] = (TLS_SIG_ALG_ECDSA_SECP384R1_SHA384 >> 8) & 0xff;
     // ed25519 (0x0807)
     plaintext[--reverse_p] = TLS_SIG_ALG_ED25519 & 0xff;
     plaintext[--reverse_p] = (TLS_SIG_ALG_ED25519 >> 8) & 0xff;
@@ -2358,6 +2420,37 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
 
         if(!der_signature) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "ECDSA P-256 sign to der sign failed");
+            return -1;
+        }
+
+        signature = der_signature;
+        signature_len = der_signature_len;
+    } else if(cert_alg == X509_ALGORITHM_ECDSA_SECP384R1_SHA384) {
+        sig_alg = TLS_SIG_ALG_ECDSA_SECP384R1_SHA384;
+        signature_len = ELLIPTICCURVE_SECP384R1_SIGNATURE_RAW_LEN;
+        signature = (uint8_t*)memory_malloc(signature_len);
+
+        if (!signature) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for signature");
+            return -1;
+        }
+
+        if(ellipticcurve_secp384r1_sign(signature, sign_buffer, sign_buffer_len,
+                                        server_private_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "ECDSA P-384 signing failed");
+            memory_free(signature);
+            memory_free(server_private_key);
+            return -1;
+        }
+
+        memory_free(server_private_key);
+
+        size_t der_signature_len = 0;
+        uint8_t* der_signature = ellipticcurve_secp384r1_encode_signature(signature, &der_signature_len);
+        memory_free(signature);
+
+        if(!der_signature) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "ECDSA P-384 sign to der sign failed");
             return -1;
         }
 
@@ -3134,6 +3227,16 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
             ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
             return -1;
         }
+    } else if(algorithm == TLS_SIG_ALG_ECDSA_SECP384R1_SHA384) {
+        // ECDSA signatures can vary in length due to DER encoding, but we can set a reasonable max (e.g. 104 bytes)
+        if (sig_len == 0 || sig_len > 104 || (4 + sig_len) != verify_data_len) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid signature length in CertificateVerify for ECDSA");
+            x509_certificate_free(client_certificate);
+            ctx->connection_state.has_alert = true;
+            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+            return -1;
+        }
     } else {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported signature algorithm in CertificateVerify: 0x%04x", algorithm);
         x509_certificate_free(client_certificate);
@@ -3143,7 +3246,8 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
     x509_algorithm_t cert_alg = x509_certificate_get_public_key_algorithm(client_certificate);
 
     if ((algorithm == TLS_SIG_ALG_ED25519 && cert_alg != X509_ALGORITHM_ED25519) ||
-        (algorithm == TLS_SIG_ALG_ECDSA_SECP256R1_SHA256 && cert_alg != X509_ALGORITHM_ECDSA_SECP256R1_SHA256)) {
+        (algorithm == TLS_SIG_ALG_ECDSA_SECP256R1_SHA256 && cert_alg != X509_ALGORITHM_ECDSA_SECP256R1_SHA256) ||
+        (algorithm == TLS_SIG_ALG_ECDSA_SECP384R1_SHA384 && cert_alg != X509_ALGORITHM_ECDSA_SECP384R1_SHA384)) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Signature algorithm in CertificateVerify does not match client certificate public key algorithm: 0x%04x vs cert alg %d", algorithm, cert_alg);
         x509_certificate_free(client_certificate);
         ctx->connection_state.has_alert = true;
@@ -3216,6 +3320,32 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
         }
 
         if (ellipticcurve_secp256r1_verify(raw_signature, verify_buffer, total_len, public_key + 1) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client CertificateVerify ECDSA signature verification failed");
+            memory_free(raw_signature);
+            memory_free(public_key);
+            x509_certificate_free(client_certificate);
+            ctx->connection_state.has_alert = true;
+            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE;
+            return -1;
+        }
+        memory_free(raw_signature);
+    } else if(algorithm == TLS_SIG_ALG_ECDSA_SECP384R1_SHA384) {
+        uint8_t* der_signature = &received_verify_data[4];
+        size_t der_signature_len = sig_len;
+
+        uint8_t* raw_signature = ellipticcurve_secp384r1_decode_signature(der_signature, der_signature_len);
+        if (!raw_signature) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode DER signature in CertificateVerify");
+            memory_free(public_key);
+            x509_certificate_free(client_certificate);
+            ctx->connection_state.has_alert = true;
+            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+            return -1;
+        }
+
+        if (ellipticcurve_secp384r1_verify(raw_signature, verify_buffer, total_len, public_key + 1) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client CertificateVerify ECDSA signature verification failed");
             memory_free(raw_signature);
             memory_free(public_key);
