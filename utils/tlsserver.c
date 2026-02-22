@@ -1000,6 +1000,8 @@ int32_t main(int32_t argc, char_t** argv) {
         tls13_client_certificate_verify,
         tls13_client_certificates_ca_dn_list,
         tls13_get_psk_encryption_keys,
+        http_plaintext_redirect_handler,
+        http_application_handler,
         send_all,
         recv_all,
         require_client_certificate
@@ -1024,39 +1026,11 @@ int32_t main(int32_t argc, char_t** argv) {
 
         PRINTLOG(CRYPTOLIB, LOG_INFO, "New connection from %s:%d", client_ip, ntohs(client_addr.sin_port));
 
-        tls13_session_t* tls13_session = tls13_create_session(
-            tls13_config,
-            client_fd
-            );
-
-        if(!tls13_session) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed");
-            close(client_fd);
-            continue;
-        }
-
-        if(tls13_handle_handshake(tls13_session) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS handshake failed");
-            tls13_destroy_session(tls13_session);
-            close(client_fd);
-            continue;
-        }
-
-        if(tls13_has_alpn_h2(tls13_session)) {
-            if(http2_handle_connection(tls13_session) != 0) {
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/2 connection handling failed");
-            }
+        if(tls13_handle_connection(tls13_config, client_fd) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Error handling TLS connection with %s:%d", client_ip, ntohs(client_addr.sin_port));
         } else {
-            if(http11_handle_connection(tls13_session) != 0) {
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/1.1 connection handling failed");
-            }
+            PRINTLOG(CRYPTOLIB, LOG_INFO, "Connection with %s:%d handled successfully", client_ip, ntohs(client_addr.sin_port));
         }
-
-        if(tls13_send_close_notify(tls13_session) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to send Close Notify");
-        }
-
-        tls13_destroy_session(tls13_session);
 
         close(client_fd);
         PRINTLOG(CRYPTOLIB, LOG_INFO, "Connection closed");

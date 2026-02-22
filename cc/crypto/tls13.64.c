@@ -170,6 +170,8 @@ struct tls13_config_t {
     tls13_client_certificate_verify_callback_f      client_certificate_verify_callback;
     tls13_client_certificates_ca_dn_list_callback_f client_certificates_ca_dn_list_callback;
     tls13_get_psk_encryption_keys_callback_f        get_psk_encryption_keys_callback;
+    tls13_application_plaintext_redirect_callback_f application_plaintext_redirect_callback;
+    tls13_application_handler_callback_f            application_handler_callback;
     tls13_network_send_f                            network_send;
     tls13_network_recv_f                            network_recv;
     boolean_t                                       require_client_certificate;
@@ -290,31 +292,31 @@ static void tls13_print_alert(tls13_alert_level_t level, tls13_alert_description
     PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS Alert: Level=%s, Description=%s", level_str, description_str);
 }
 
-static int8_t tls13_hash_final(tls13_session_t* ctx) {
-    if(!ctx) {
+static int8_t tls13_hash_final(tls13_session_t* tls13_session) {
+    if(!tls13_session) {
         return -1;
     }
 
-    if(ctx->connection_state.handshake_hash_value) {
+    if(tls13_session->connection_state.handshake_hash_value) {
         // Already finalized
         return 0;
     }
 
-    if (ctx->connection_state.selected_hash_algorithm == TLS_HASH_SHA256) {
-        if (ctx->connection_state.handshake_hash_ctx.sha256) {
-            ctx->connection_state.handshake_hash_value = sha256_final(ctx->connection_state.handshake_hash_ctx.sha256);
-            ctx->connection_state.handshake_hash_ctx.sha256 = NULL;
-            if (ctx->connection_state.handshake_hash_value == NULL) {
+    if (tls13_session->connection_state.selected_hash_algorithm == TLS_HASH_SHA256) {
+        if (tls13_session->connection_state.handshake_hash_ctx.sha256) {
+            tls13_session->connection_state.handshake_hash_value = sha256_final(tls13_session->connection_state.handshake_hash_ctx.sha256);
+            tls13_session->connection_state.handshake_hash_ctx.sha256 = NULL;
+            if (tls13_session->connection_state.handshake_hash_value == NULL) {
                 return -1; // Finalization Failed
             }
 
             return 0;
         }
-    } else if (ctx->connection_state.selected_hash_algorithm == TLS_HASH_SHA384) {
-        if (ctx->connection_state.handshake_hash_ctx.sha384) {
-            ctx->connection_state.handshake_hash_value = sha384_final(ctx->connection_state.handshake_hash_ctx.sha384);
-            ctx->connection_state.handshake_hash_ctx.sha384 = NULL;
-            if (ctx->connection_state.handshake_hash_value == NULL) {
+    } else if (tls13_session->connection_state.selected_hash_algorithm == TLS_HASH_SHA384) {
+        if (tls13_session->connection_state.handshake_hash_ctx.sha384) {
+            tls13_session->connection_state.handshake_hash_value = sha384_final(tls13_session->connection_state.handshake_hash_ctx.sha384);
+            tls13_session->connection_state.handshake_hash_ctx.sha384 = NULL;
+            if (tls13_session->connection_state.handshake_hash_value == NULL) {
                 return -1; // Finalization Failed
             }
 
@@ -326,42 +328,42 @@ static int8_t tls13_hash_final(tls13_session_t* ctx) {
     return -1; // Unsupported hash algorithm
 }
 
-void tls13_destroy_session(tls13_session_t* ctx) {
-    if (!ctx) {
+static void tls13_destroy_session(tls13_session_t* tls13_session) {
+    if (!tls13_session) {
         return;
     }
     // Don't forget to free session_id and ctx when done
-    if (ctx->connection_state.session_id) {
-        memory_free(ctx->connection_state.session_id);
+    if (tls13_session->connection_state.session_id) {
+        memory_free(tls13_session->connection_state.session_id);
     }
-    tls13_hash_final(ctx);
-    memory_free(ctx->connection_state.handshake_hash_value);
+    tls13_hash_final(tls13_session); // Finalize hash to free hash context and get hash value if not already done
+    memory_free(tls13_session->connection_state.handshake_hash_value);
 
-    if(ctx->client_state.read_buffer) {
-        pipeline_destroy(ctx->client_state.read_buffer);
-    }
-
-    if(ctx->server_state.server_key_exchange_public_key) {
-        memory_free(ctx->server_state.server_key_exchange_public_key);
+    if(tls13_session->client_state.read_buffer) {
+        pipeline_destroy(tls13_session->client_state.read_buffer);
     }
 
-    if(ctx->client_state.client_supported_groups) {
-        memory_free(ctx->client_state.client_supported_groups);
+    if(tls13_session->server_state.server_key_exchange_public_key) {
+        memory_free(tls13_session->server_state.server_key_exchange_public_key);
     }
 
-    if(ctx->client_state.client_supported_signature_algorithms) {
-        memory_free(ctx->client_state.client_supported_signature_algorithms);
+    if(tls13_session->client_state.client_supported_groups) {
+        memory_free(tls13_session->client_state.client_supported_groups);
     }
 
-    if(ctx->client_state.client_supported_signature_algorithms_x509) {
-        memory_free(ctx->client_state.client_supported_signature_algorithms_x509);
+    if(tls13_session->client_state.client_supported_signature_algorithms) {
+        memory_free(tls13_session->client_state.client_supported_signature_algorithms);
     }
 
-    if(ctx->connection_state.shared_secret) {
-        memory_free(ctx->connection_state.shared_secret);
+    if(tls13_session->client_state.client_supported_signature_algorithms_x509) {
+        memory_free(tls13_session->client_state.client_supported_signature_algorithms_x509);
     }
 
-    memory_free(ctx);
+    if(tls13_session->connection_state.shared_secret) {
+        memory_free(tls13_session->connection_state.shared_secret);
+    }
+
+    memory_free(tls13_session);
 }
 
 tls13_config_t* tls13_create_config(const char_t*                                   host_port,
@@ -369,6 +371,8 @@ tls13_config_t* tls13_create_config(const char_t*                               
                                     tls13_client_certificate_verify_callback_f      client_certificate_verify_callback,
                                     tls13_client_certificates_ca_dn_list_callback_f client_certificates_ca_dn_list_callback,
                                     tls13_get_psk_encryption_keys_callback_f        get_psk_encryption_keys_callback,
+                                    tls13_application_plaintext_redirect_callback_f application_plaintext_redirect_callback,
+                                    tls13_application_handler_callback_f            application_handler_callback,
                                     tls13_network_send_f                            network_send,
                                     tls13_network_recv_f                            network_recv,
                                     boolean_t                                       require_client_certificate) {
@@ -386,6 +390,8 @@ tls13_config_t* tls13_create_config(const char_t*                               
     cfg->client_certificate_verify_callback = client_certificate_verify_callback;
     cfg->client_certificates_ca_dn_list_callback = client_certificates_ca_dn_list_callback;
     cfg->get_psk_encryption_keys_callback = get_psk_encryption_keys_callback;
+    cfg->application_plaintext_redirect_callback = application_plaintext_redirect_callback;
+    cfg->application_handler_callback = application_handler_callback;
     cfg->network_send = network_send;
     cfg->network_recv = network_recv;
     cfg->require_client_certificate = require_client_certificate;
@@ -399,7 +405,7 @@ void tls13_destroy_config(tls13_config_t* tls13_config) {
     }
 }
 
-tls13_session_t* tls13_create_session(tls13_config_t* config, int64_t network_client_identifier) {
+static tls13_session_t* tls13_create_session(tls13_config_t* config, int64_t network_client_identifier) {
     if (!config) {
         return NULL;
     }
@@ -416,15 +422,15 @@ tls13_session_t* tls13_create_session(tls13_config_t* config, int64_t network_cl
     return session;
 }
 
-boolean_t tls13_has_alpn_h2(tls13_session_t* ctx) {
-    if (!ctx) {
+boolean_t tls13_has_alpn_h2(tls13_session_t* tls13_session) {
+    if (!tls13_session) {
         return false;
     }
-    return ctx->connection_state.alpn_h2;
+    return tls13_session->connection_state.alpn_h2;
 }
 
-static int8_t tls13_hash_compute(tls13_session_t* ctx, const uint8_t* data, uint32_t len, uint8_t* out_hash) {
-    if (ctx->connection_state.selected_hash_algorithm == TLS_HASH_SHA256) {
+static int8_t tls13_hash_compute(tls13_session_t* tls13_session, const uint8_t* data, uint32_t len, uint8_t* out_hash) {
+    if (tls13_session->connection_state.selected_hash_algorithm == TLS_HASH_SHA256) {
         uint8_t* hash = sha256_hash(data, len);
         if (!hash) {
             return -1; // Hash computation failed
@@ -432,7 +438,7 @@ static int8_t tls13_hash_compute(tls13_session_t* ctx, const uint8_t* data, uint
         memory_memcopy(hash, out_hash, SHA256_OUTPUT_SIZE);
         memory_free(hash);
         return 0;
-    } else if (ctx->connection_state.selected_hash_algorithm == TLS_HASH_SHA384) {
+    } else if (tls13_session->connection_state.selected_hash_algorithm == TLS_HASH_SHA384) {
         uint8_t* hash = sha384_hash(data, len);
         if (!hash) {
             return -1; // Hash computation failed
@@ -446,26 +452,26 @@ static int8_t tls13_hash_compute(tls13_session_t* ctx, const uint8_t* data, uint
 
 }
 
-static int8_t tls13_hash_update(tls13_session_t* ctx, const uint8_t* data, uint32_t len) {
-    if (ctx->connection_state.selected_hash_algorithm == TLS_HASH_SHA256) {
-        if (!ctx->connection_state.handshake_hash_ctx.sha256) {
-            ctx->connection_state.handshake_hash_ctx.sha256 = sha256_init();
-            if (!ctx->connection_state.handshake_hash_ctx.sha256) {
+static int8_t tls13_hash_update(tls13_session_t* tls13_session, const uint8_t* data, uint32_t len) {
+    if (tls13_session->connection_state.selected_hash_algorithm == TLS_HASH_SHA256) {
+        if (!tls13_session->connection_state.handshake_hash_ctx.sha256) {
+            tls13_session->connection_state.handshake_hash_ctx.sha256 = sha256_init();
+            if (!tls13_session->connection_state.handshake_hash_ctx.sha256) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to initialize SHA256 context");
                 return -1; // Initialization Failed
             }
         }
-        sha256_update(ctx->connection_state.handshake_hash_ctx.sha256, data, len);
+        sha256_update(tls13_session->connection_state.handshake_hash_ctx.sha256, data, len);
         return 0;
-    } else if (ctx->connection_state.selected_hash_algorithm == TLS_HASH_SHA384) {
-        if (!ctx->connection_state.handshake_hash_ctx.sha384) {
-            ctx->connection_state.handshake_hash_ctx.sha384 = sha384_init();
-            if (!ctx->connection_state.handshake_hash_ctx.sha384) {
+    } else if (tls13_session->connection_state.selected_hash_algorithm == TLS_HASH_SHA384) {
+        if (!tls13_session->connection_state.handshake_hash_ctx.sha384) {
+            tls13_session->connection_state.handshake_hash_ctx.sha384 = sha384_init();
+            if (!tls13_session->connection_state.handshake_hash_ctx.sha384) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to initialize SHA384 context");
                 return -1; // Initialization Failed
             }
         }
-        sha384_update(ctx->connection_state.handshake_hash_ctx.sha384, data, len);
+        sha384_update(tls13_session->connection_state.handshake_hash_ctx.sha384, data, len);
         return 0;
     }
     PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported hash algorithm for handshake hash update");
@@ -492,15 +498,15 @@ static int8_t tls13_hash_hmac(tls13_hash_algorithm_t hash_alg,
     return 0;
 }
 
-static int8_t tls13_hash_get_current(tls13_session_t* ctx, uint8_t* out_hash) {
-    uint32_t hlen = ctx->connection_state.handshake_hash_len;
-    if (ctx->connection_state.selected_hash_algorithm == TLS_HASH_SHA256) {
-        sha256_ctx_t* tmp = sha256_clone(ctx->connection_state.handshake_hash_ctx.sha256);
+static int8_t tls13_hash_get_current(tls13_session_t* tls13_session, uint8_t* out_hash) {
+    uint32_t hlen = tls13_session->connection_state.handshake_hash_len;
+    if (tls13_session->connection_state.selected_hash_algorithm == TLS_HASH_SHA256) {
+        sha256_ctx_t* tmp = sha256_clone(tls13_session->connection_state.handshake_hash_ctx.sha256);
         uint8_t* h = sha256_final(tmp);
         memory_memcopy(h, out_hash, hlen);
         memory_free(h);
-    } else if (ctx->connection_state.selected_hash_algorithm == TLS_HASH_SHA384) {
-        sha384_ctx_t* tmp = sha384_clone(ctx->connection_state.handshake_hash_ctx.sha384);
+    } else if (tls13_session->connection_state.selected_hash_algorithm == TLS_HASH_SHA384) {
+        sha384_ctx_t* tmp = sha384_clone(tls13_session->connection_state.handshake_hash_ctx.sha384);
         uint8_t* h = sha384_final(tmp);
         memory_memcopy(h, out_hash, hlen);
         memory_free(h);
@@ -512,12 +518,12 @@ static int8_t tls13_hash_get_current(tls13_session_t* ctx, uint8_t* out_hash) {
     return 0;
 }
 
-static int8_t tls13_hash_get_empty(tls13_session_t* ctx, uint8_t* out_hash) {
-    uint32_t hlen = ctx->connection_state.handshake_hash_len;
+static int8_t tls13_hash_get_empty(tls13_session_t* tls13_session, uint8_t* out_hash) {
+    uint32_t hlen = tls13_session->connection_state.handshake_hash_len;
 
-    if (ctx->connection_state.selected_hash_algorithm == TLS_HASH_SHA256) {
+    if (tls13_session->connection_state.selected_hash_algorithm == TLS_HASH_SHA256) {
         memory_memcopy(sha256_empty_hash, out_hash, hlen);
-    } else if (ctx->connection_state.selected_hash_algorithm == TLS_HASH_SHA384) {
+    } else if (tls13_session->connection_state.selected_hash_algorithm == TLS_HASH_SHA384) {
         memory_memcopy(sha384_empty_hash, out_hash, hlen);
     } else {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported hash algorithm for getting empty hash");
@@ -535,12 +541,12 @@ static void tls13_make_nonce(uint8_t* iv, uint64_t seq_num, uint8_t* out_nonce) 
     }
 }
 
-static int32_t hkdf_expand(tls13_session_t* ctx,
+static int32_t hkdf_expand(tls13_session_t* tls13_session,
                            uint8_t* prk, uint8_t* info, uint16_t info_len,
                            uint8_t* out, uint16_t out_len) {
 
-    uint16_t hash_len = ctx->connection_state.handshake_hash_len;
-    tls13_hash_algorithm_t hash_alg = ctx->connection_state.selected_hash_algorithm;
+    uint16_t hash_len = tls13_session->connection_state.handshake_hash_len;
+    tls13_hash_algorithm_t hash_alg = tls13_session->connection_state.selected_hash_algorithm;
     uint16_t n = (out_len + hash_len - 1) / hash_len; // Number of iterations
 
     if (n > 255) {
@@ -597,7 +603,7 @@ static int32_t hkdf_expand(tls13_session_t* ctx,
     return 0;
 }
 
-static int32_t hkdf_expand_label_ext(tls13_session_t* ctx, uint8_t* secret,
+static int32_t hkdf_expand_label_ext(tls13_session_t* tls13_session, uint8_t* secret,
                                      const char* label, uint8_t* context,
                                      uint8_t context_len, uint8_t* out, uint16_t out_len) {
     uint8_t info[255];
@@ -621,15 +627,15 @@ static int32_t hkdf_expand_label_ext(tls13_session_t* ctx, uint8_t* secret,
         p += context_len;
     }
 
-    return hkdf_expand(ctx, secret, info, p, out, out_len);
+    return hkdf_expand(tls13_session, secret, info, p, out, out_len);
 }
 
-static int32_t hkdf_extract(tls13_session_t* ctx,
+static int32_t hkdf_extract(tls13_session_t* tls13_session,
                             uint8_t* salt, uint32_t salt_len,
                             uint8_t* ikm, uint32_t ikm_len,
                             uint8_t* out_prk) {
     uint8_t* hash_result = NULL;
-    uint32_t hash_len = ctx->connection_state.handshake_hash_len;
+    uint32_t hash_len = tls13_session->connection_state.handshake_hash_len;
 
     // If salt is NULL, use a string of zeros of hash_len
     uint8_t zero_salt[64] = {0};
@@ -638,7 +644,7 @@ static int32_t hkdf_extract(tls13_session_t* ctx,
         salt_len = hash_len;
     }
 
-    if (tls13_hash_hmac(ctx->connection_state.selected_hash_algorithm,
+    if (tls13_hash_hmac(tls13_session->connection_state.selected_hash_algorithm,
                         salt, salt_len,
                         ikm, ikm_len,
                         &hash_result) != 0) {
@@ -650,56 +656,40 @@ static int32_t hkdf_extract(tls13_session_t* ctx,
     return 0;
 }
 
-static int8_t tls13_check_plain_text_protcol(tls13_session_t * ctx, uint8_t* header) {
+char_t* tls13_get_host_port(tls13_session_t* session) {
+    if (!session || !session->config || !session->config->default_host_port) {
+        return NULL;
+    }
+    return strdup(session->config->default_host_port);
+}
+
+static int8_t tls13_check_plain_text_protcol(tls13_session_t* tls13_session, uint8_t* header) {
     if(header[0] != TLS13_CONTENT_TYPE_HANDSHAKE || header[1] != 0x03 || (header[2] < 0x01 || header[2] > 0x04)) {
-        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Not a handshake record");
 
-        // check for GET request (HTTP)
-        if(memory_memcompare(header, "GET ", 4) == 0 // GET
-           || (memory_memcompare(header, "HEAD ", 5) == 0) // HEAD
-           || (memory_memcompare(header, "POST ", 5) == 0) // POST
-           ) {
-            PRINTLOG(CRYPTOLIB, LOG_INFO, "Received HTTP request on TLS port, sending 308 redirect to HTTPS");
-            uint8_t buffer[512];
-            memory_memclean(buffer, sizeof(buffer));
-            memory_memcopy(header, &buffer[0], 5);
-            uint32_t received = ctx->config->network_recv(ctx->connection_state.network_client_identifier, &buffer[5], 506, 0 | 0x80000000); // try once.
-            if(received > 0) {
-                buffer[5 + received] = '\0';
-                // find Host header
-                char_t default_host[256];
-                memory_memclean(default_host, sizeof(default_host));
-                memory_memcopy(ctx->config->default_host_port, default_host, strlen(ctx->config->default_host_port));
-                char_t* host_header = strstr((char_t*)buffer, "Host: ");
-                if(host_header) {
-                    char_t* host_end = strstr(host_header, "\r\n");
-                    if(host_end) {
-                        size_t host_len = host_end - (host_header + 6);
-                        if(host_len < sizeof(default_host)) {
-                            memory_memcopy(host_header + 6, default_host, host_len);
-                            default_host[host_len] = '\0';
-                        }
-                    }
-                }
-
-                char_t* response = strprintf(
-                    "HTTP/1.1 308 Permanent Redirect\r\n"
-                    "Location: https://%s/\r\n"
-                    "Content-Length: 0\r\n"
-                    "Connection: close\r\n"
-                    "\r\n",
-                    default_host
-                    );
-                ctx->config->network_send(ctx->connection_state.network_client_identifier, (uint8_t*)response, strlen(response), 0);
-                memory_free(response);
-                PRINTLOG(CRYPTOLIB, LOG_INFO, "Sent 308 redirect to https://%s/", default_host);
-
-                return -2;
-            }
-
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive complete HTTP request");
+        if(!tls13_session->config->application_plaintext_redirect_callback) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Received non-handshake record on TLS port and no plaintext redirect callback configured");
             return -1;
         }
+
+        uint8_t buffer[512];
+        uint8_t response[512];
+        int32_t response_len = 0;
+        memory_memclean(buffer, sizeof(buffer));
+        memory_memcopy(header, &buffer[0], 5);
+        int32_t received = tls13_session->config->network_recv(tls13_session->connection_state.network_client_identifier, &buffer[5], 506, 0 | 0x80000000); // try once.
+
+        if(received < 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive data from client");
+            return -1;
+        }
+
+        received += 5; // include header in received data count
+
+
+
+        tls13_session->config->network_send(tls13_session->connection_state.network_client_identifier, response, response_len, 0);
+
+        return -2;
 
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Not a handshake record (Type: 0x%02x)", header[0]);
         return -1;
@@ -708,29 +698,29 @@ static int8_t tls13_check_plain_text_protcol(tls13_session_t * ctx, uint8_t* hea
     return 0; // It's a handshake record, continue processing
 }
 
-static int8_t tls13_parse_client_hello_cipher_suites(tls13_session_t* ctx, uint8_t* cipher_suites, uint16_t cipher_suites_len) {
+static int8_t tls13_parse_client_hello_cipher_suites(tls13_session_t* tls13_session, uint8_t* cipher_suites, uint16_t cipher_suites_len) {
     boolean_t cipher_suit_found = false;
 
     for (int i = 0; i < cipher_suites_len; i += 2) {
         uint16_t suite = (cipher_suites[i] << 8) | cipher_suites[i + 1];
 
         if (suite == TLS_AES_128_GCM_SHA256) { // TLS_AES_128_GCM_SHA256
-            if(ctx->connection_state.selected_cipher_suite == TLS_AES_256_GCM_SHA384) { // Prefer stronger suite if both are offered
+            if(tls13_session->connection_state.selected_cipher_suite == TLS_AES_256_GCM_SHA384) { // Prefer stronger suite if both are offered
                 continue; // Already selected, skip
             }
-            ctx->connection_state.selected_cipher_suite = TLS_AES_128_GCM_SHA256;
-            ctx->connection_state.selected_hash_algorithm = TLS_HASH_SHA256;
-            ctx->connection_state.handshake_hash_len = SHA256_OUTPUT_SIZE;
-            ctx->connection_state.handshake_key_len  = AES128_KEY_SIZE; // AES-128 key length
-            ctx->connection_state.handshake_iv_len = 12; // AES-GCM standard IV length
+            tls13_session->connection_state.selected_cipher_suite = TLS_AES_128_GCM_SHA256;
+            tls13_session->connection_state.selected_hash_algorithm = TLS_HASH_SHA256;
+            tls13_session->connection_state.handshake_hash_len = SHA256_OUTPUT_SIZE;
+            tls13_session->connection_state.handshake_key_len  = AES128_KEY_SIZE; // AES-128 key length
+            tls13_session->connection_state.handshake_iv_len = 12; // AES-GCM standard IV length
             cipher_suit_found = true;
             // You can break here or continue to see what else the client offers
         } else if (suite == TLS_AES_256_GCM_SHA384) {
-            ctx->connection_state.selected_cipher_suite = TLS_AES_256_GCM_SHA384;
-            ctx->connection_state.selected_hash_algorithm = TLS_HASH_SHA384;
-            ctx->connection_state.handshake_hash_len = SHA384_OUTPUT_SIZE;
-            ctx->connection_state.handshake_key_len  = AES256_KEY_SIZE; // AES-256 key length
-            ctx->connection_state.handshake_iv_len = 12; // AES-GCM standard IV length
+            tls13_session->connection_state.selected_cipher_suite = TLS_AES_256_GCM_SHA384;
+            tls13_session->connection_state.selected_hash_algorithm = TLS_HASH_SHA384;
+            tls13_session->connection_state.handshake_hash_len = SHA384_OUTPUT_SIZE;
+            tls13_session->connection_state.handshake_key_len  = AES256_KEY_SIZE; // AES-256 key length
+            tls13_session->connection_state.handshake_iv_len = 12; // AES-GCM standard IV length
             cipher_suit_found = true;
         } else if (suite == TLS_CHACHA20_POLY1305_SHA256) {
             // Not implemented, reserved for future use
@@ -748,7 +738,7 @@ static int8_t tls13_parse_client_hello_cipher_suites(tls13_session_t* ctx, uint8
     return 0; // Cipher suite successfully parsed and selected
 }
 
-static int8_t tls13_parse_client_hello_extension_sni(tls13_session_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+static int8_t tls13_parse_client_hello_extension_sni(tls13_session_t* tls13_session, uint8_t* ext_ptr, uint16_t ext_len) {
     // Parse SNI to extract hostname
     uint8_t * sni_data = ext_ptr + 4;
     uint16_t sni_list_len  = (sni_data[0] << 8) | sni_data[1];
@@ -764,9 +754,9 @@ static int8_t tls13_parse_client_hello_extension_sni(tls13_session_t* ctx, uint8
         uint8_t name_type = sni_list_ptr[0];
         uint16_t name_len = (sni_list_ptr[1] << 8) | sni_list_ptr[2];
         if (name_type == 0) { // hostname
-            if (name_len < sizeof(ctx->connection_state.sni_hostname)) {
-                memory_memcopy(sni_list_ptr + 3, ctx->connection_state.sni_hostname, name_len);
-                ctx->connection_state.sni_hostname[name_len] = '\0';
+            if (name_len < sizeof(tls13_session->connection_state.sni_hostname)) {
+                memory_memcopy(sni_list_ptr + 3, tls13_session->connection_state.sni_hostname, name_len);
+                tls13_session->connection_state.sni_hostname[name_len] = '\0';
             } else {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "SNI hostname too long: %d", name_len);
                 return -1;
@@ -779,8 +769,8 @@ static int8_t tls13_parse_client_hello_extension_sni(tls13_session_t* ctx, uint8
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_alpn(tls13_session_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
-    ctx->connection_state.has_alpn = true;
+static int8_t tls13_parse_client_hello_extension_alpn(tls13_session_t* tls13_session, uint8_t* ext_ptr, uint16_t ext_len) {
+    tls13_session->connection_state.has_alpn = true;
     uint8_t * alpn_data = ext_ptr + 4;
     uint16_t alpn_list_len = (alpn_data[0] << 8) | alpn_data[1];
     uint8_t * ptr = alpn_data + 2;
@@ -800,9 +790,9 @@ static int8_t tls13_parse_client_hello_extension_alpn(tls13_session_t* ctx, uint
             protocol[str_len] = '\0';
 
             if (strcmp(protocol, "h2") == 0) {
-                ctx->connection_state.alpn_h2 = true;
+                tls13_session->connection_state.alpn_h2 = true;
             } else if (strcmp(protocol, "http/1.1") == 0) {
-                ctx->connection_state.alpn_http11 = true;
+                tls13_session->connection_state.alpn_http11 = true;
             }
         }
 
@@ -813,7 +803,7 @@ static int8_t tls13_parse_client_hello_extension_alpn(tls13_session_t* ctx, uint
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_supported_versions(tls13_session_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+static int8_t tls13_parse_client_hello_extension_supported_versions(tls13_session_t* tls13_session, uint8_t* ext_ptr, uint16_t ext_len) {
     uint8_t version_count = ext_ptr[4] / 2; // Each version is 2 bytes
     uint8_t* version_list_ptr = ext_ptr + 5;
 
@@ -825,7 +815,7 @@ static int8_t tls13_parse_client_hello_extension_supported_versions(tls13_sessio
     for (int i = 0; i < version_count; i++) {
         uint16_t version = (version_list_ptr[i * 2] << 8) | version_list_ptr[i * 2 + 1];
         if (version == TLS_VERSION_1_3) {
-            ctx->connection_state.tls13_supported = true;
+            tls13_session->connection_state.tls13_supported = true;
             return 0; // TLS 1.3 supported, no need to check further
         }
     }
@@ -833,8 +823,8 @@ static int8_t tls13_parse_client_hello_extension_supported_versions(tls13_sessio
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_key_share_group_x25519(tls13_session_t* ctx, uint8_t* key_data, uint16_t key_len) {
-    if(ctx->connection_state.selected_group == TLS_GROUP_X25519_ML_KEM768) {
+static int8_t tls13_parse_client_hello_extension_key_share_group_x25519(tls13_session_t* tls13_session, uint8_t* key_data, uint16_t key_len) {
+    if(tls13_session->connection_state.selected_group == TLS_GROUP_X25519_ML_KEM768) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered multiple key share groups, prioritizing x25519_mlkem768 over x25519");
         return 0;
     }
@@ -844,29 +834,29 @@ static int8_t tls13_parse_client_hello_extension_key_share_group_x25519(tls13_se
         return -1;
     }
 
-    ctx->server_state.server_key_exchange_public_key_len = X25519_PUBLIC_KEY_RAW_LEN;
-    memory_free(ctx->server_state.server_key_exchange_public_key); // Free previous if any
-    ctx->server_state.server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_state.server_key_exchange_public_key_len);
+    tls13_session->server_state.server_key_exchange_public_key_len = X25519_PUBLIC_KEY_RAW_LEN;
+    memory_free(tls13_session->server_state.server_key_exchange_public_key); // Free previous if any
+    tls13_session->server_state.server_key_exchange_public_key = (uint8_t*)memory_malloc(tls13_session->server_state.server_key_exchange_public_key_len);
 
-    if (!ctx->server_state.server_key_exchange_public_key) {
+    if (!tls13_session->server_state.server_key_exchange_public_key) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
         return -1;
     }
 
     uint8_t server_private_key[X25519_PRIVATE_KEY_RAW_LEN];
 
-    if(x25519_generate_keypair(server_private_key, ctx->server_state.server_key_exchange_public_key) != 0) {
+    if(x25519_generate_keypair(server_private_key, tls13_session->server_state.server_key_exchange_public_key) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
         return -1;
     }
 
-    ctx->connection_state.shared_secret = (uint8_t*)memory_malloc(X25519_SHARED_SECRET_LEN);
-    if (!ctx->connection_state.shared_secret) {
+    tls13_session->connection_state.shared_secret = (uint8_t*)memory_malloc(X25519_SHARED_SECRET_LEN);
+    if (!tls13_session->connection_state.shared_secret) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
         return -1;
     }
 
-    if(x25519_shared_secret(ctx->connection_state.shared_secret,
+    if(x25519_shared_secret(tls13_session->connection_state.shared_secret,
                             server_private_key,
                             key_data) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
@@ -875,15 +865,15 @@ static int8_t tls13_parse_client_hello_extension_key_share_group_x25519(tls13_se
 
     memory_memclean(server_private_key, sizeof(server_private_key)); // Clear private key from memory
 
-    ctx->connection_state.shared_secret_len = X25519_SHARED_SECRET_LEN; // X25519 shared secret is 32 bytes
-    ctx->connection_state.selected_group = TLS_GROUP_X25519;
+    tls13_session->connection_state.shared_secret_len = X25519_SHARED_SECRET_LEN; // X25519 shared secret is 32 bytes
+    tls13_session->connection_state.selected_group = TLS_GROUP_X25519;
     PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: x25519");
 
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_key_share_group_secp256r1(tls13_session_t* ctx, uint8_t* key_data, uint16_t key_len) {
-    if(ctx->connection_state.selected_group == TLS_GROUP_X25519 || ctx->connection_state.selected_group == TLS_GROUP_X25519_ML_KEM768) {
+static int8_t tls13_parse_client_hello_extension_key_share_group_secp256r1(tls13_session_t* tls13_session, uint8_t* key_data, uint16_t key_len) {
+    if(tls13_session->connection_state.selected_group == TLS_GROUP_X25519 || tls13_session->connection_state.selected_group == TLS_GROUP_X25519_ML_KEM768) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered multiple key share groups, prioritizing x25519 over secp256r1");
         return 0;
     }
@@ -895,45 +885,45 @@ static int8_t tls13_parse_client_hello_extension_key_share_group_secp256r1(tls13
 
     key_data++; // Skip the 0x04 prefix
 
-    ctx->server_state.server_key_exchange_public_key_len = ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1;
-    memory_free(ctx->server_state.server_key_exchange_public_key); // Free previous if any
-    ctx->server_state.server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_state.server_key_exchange_public_key_len);
-    if (!ctx->server_state.server_key_exchange_public_key) {
+    tls13_session->server_state.server_key_exchange_public_key_len = ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1;
+    memory_free(tls13_session->server_state.server_key_exchange_public_key); // Free previous if any
+    tls13_session->server_state.server_key_exchange_public_key = (uint8_t*)memory_malloc(tls13_session->server_state.server_key_exchange_public_key_len);
+    if (!tls13_session->server_state.server_key_exchange_public_key) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
         return -1;
     }
 
-    ctx->server_state.server_key_exchange_public_key[0] = 0x04; // Uncompressed point prefix
+    tls13_session->server_state.server_key_exchange_public_key[0] = 0x04; // Uncompressed point prefix
 
     uint8_t server_private_key[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN];
 
-    if(ellipticcurve_secp256r1_generate_keypair(server_private_key, ctx->server_state.server_key_exchange_public_key + 1) != 0) {
+    if(ellipticcurve_secp256r1_generate_keypair(server_private_key, tls13_session->server_state.server_key_exchange_public_key + 1) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate Secp256r1 keypair");
         return -1;
     }
 
-    ctx->connection_state.shared_secret = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN);
-    if (!ctx->connection_state.shared_secret) {
+    tls13_session->connection_state.shared_secret = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN);
+    if (!tls13_session->connection_state.shared_secret) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
         return -1;
     }
 
-    if(ellipticcurve_secp256r1_shared_secret(ctx->connection_state.shared_secret,
+    if(ellipticcurve_secp256r1_shared_secret(tls13_session->connection_state.shared_secret,
                                              server_private_key,
                                              key_data) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
         return -1;
     }
 
-    ctx->connection_state.shared_secret_len = ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN; // P-256 shared secret is 32 bytes
-    ctx->connection_state.selected_group = TLS_GROUP_SECP256R1;
+    tls13_session->connection_state.shared_secret_len = ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN; // P-256 shared secret is 32 bytes
+    tls13_session->connection_state.selected_group = TLS_GROUP_SECP256R1;
     PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: secp256r1");
 
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_key_share_group_secp384r1(tls13_session_t* ctx, uint8_t* key_data, uint16_t key_len) {
-    if(ctx->connection_state.selected_group == TLS_GROUP_X25519 || ctx->connection_state.selected_group == TLS_GROUP_X25519_ML_KEM768) {
+static int8_t tls13_parse_client_hello_extension_key_share_group_secp384r1(tls13_session_t* tls13_session, uint8_t* key_data, uint16_t key_len) {
+    if(tls13_session->connection_state.selected_group == TLS_GROUP_X25519 || tls13_session->connection_state.selected_group == TLS_GROUP_X25519_ML_KEM768) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered multiple key share groups, prioritizing x25519 over secp384r1");
         return 0;
     }
@@ -945,61 +935,61 @@ static int8_t tls13_parse_client_hello_extension_key_share_group_secp384r1(tls13
 
     key_data++; // Skip the 0x04 prefix
 
-    ctx->server_state.server_key_exchange_public_key_len = ELLIPTICCURVE_SECP384R1_PUBLIC_KEY_RAW_LEN + 1;
-    memory_free(ctx->server_state.server_key_exchange_public_key); // Free previous if any
-    ctx->server_state.server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_state.server_key_exchange_public_key_len);
-    if (!ctx->server_state.server_key_exchange_public_key) {
+    tls13_session->server_state.server_key_exchange_public_key_len = ELLIPTICCURVE_SECP384R1_PUBLIC_KEY_RAW_LEN + 1;
+    memory_free(tls13_session->server_state.server_key_exchange_public_key); // Free previous if any
+    tls13_session->server_state.server_key_exchange_public_key = (uint8_t*)memory_malloc(tls13_session->server_state.server_key_exchange_public_key_len);
+    if (!tls13_session->server_state.server_key_exchange_public_key) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
         return -1;
     }
 
-    ctx->server_state.server_key_exchange_public_key[0] = 0x04; // Uncompressed point prefix
+    tls13_session->server_state.server_key_exchange_public_key[0] = 0x04; // Uncompressed point prefix
 
     uint8_t server_private_key[ELLIPTICCURVE_SECP384R1_PRIVATE_KEY_RAW_LEN];
 
-    if(ellipticcurve_secp384r1_generate_keypair(server_private_key, ctx->server_state.server_key_exchange_public_key + 1) != 0) {
+    if(ellipticcurve_secp384r1_generate_keypair(server_private_key, tls13_session->server_state.server_key_exchange_public_key + 1) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate Secp384r1 keypair");
         return -1;
     }
 
-    ctx->connection_state.shared_secret = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP384R1_SHARED_SECRET_LEN);
-    if (!ctx->connection_state.shared_secret) {
+    tls13_session->connection_state.shared_secret = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP384R1_SHARED_SECRET_LEN);
+    if (!tls13_session->connection_state.shared_secret) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
         return -1;
     }
 
-    if(ellipticcurve_secp384r1_shared_secret(ctx->connection_state.shared_secret,
+    if(ellipticcurve_secp384r1_shared_secret(tls13_session->connection_state.shared_secret,
                                              server_private_key,
                                              key_data) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
         return -1;
     }
 
-    ctx->connection_state.shared_secret_len = ELLIPTICCURVE_SECP384R1_SHARED_SECRET_LEN; // P-384 shared secret is 32 bytes
-    ctx->connection_state.selected_group = TLS_GROUP_SECP384R1;
+    tls13_session->connection_state.shared_secret_len = ELLIPTICCURVE_SECP384R1_SHARED_SECRET_LEN; // P-384 shared secret is 32 bytes
+    tls13_session->connection_state.selected_group = TLS_GROUP_SECP384R1;
     PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: secp384r1");
 
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_key_share_group_x25519_mlkem768(tls13_session_t* ctx, uint8_t* key_data, uint16_t key_len) {
+static int8_t tls13_parse_client_hello_extension_key_share_group_x25519_mlkem768(tls13_session_t* tls13_session, uint8_t* key_data, uint16_t key_len) {
     if(key_len != X25519_PUBLIC_KEY_RAW_LEN + MLKEM768_PUBLICKEYBYTES) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid key length for x25519_mlkem768: %d", key_len);
         return -1;
     }
 
-    ctx->server_state.server_key_exchange_public_key_len = MLKEM768_CIPHERTEXTBYTES + X25519_PUBLIC_KEY_RAW_LEN; // Combined length of ML-KEM ciphertext and X25519 public key
-    memory_free(ctx->server_state.server_key_exchange_public_key); // Free previous if any
-    ctx->server_state.server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_state.server_key_exchange_public_key_len);
+    tls13_session->server_state.server_key_exchange_public_key_len = MLKEM768_CIPHERTEXTBYTES + X25519_PUBLIC_KEY_RAW_LEN; // Combined length of ML-KEM ciphertext and X25519 public key
+    memory_free(tls13_session->server_state.server_key_exchange_public_key); // Free previous if any
+    tls13_session->server_state.server_key_exchange_public_key = (uint8_t*)memory_malloc(tls13_session->server_state.server_key_exchange_public_key_len);
 
-    if (!ctx->server_state.server_key_exchange_public_key) {
+    if (!tls13_session->server_state.server_key_exchange_public_key) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
         return -1;
     }
 
-    ctx->connection_state.shared_secret_len = MLKEM768_SHARED_SECRET_BYTES + X25519_SHARED_SECRET_LEN; // Combined shared secret length
-    ctx->connection_state.shared_secret = (uint8_t*)memory_malloc(ctx->connection_state.shared_secret_len);
-    if (!ctx->connection_state.shared_secret) {
+    tls13_session->connection_state.shared_secret_len = MLKEM768_SHARED_SECRET_BYTES + X25519_SHARED_SECRET_LEN; // Combined shared secret length
+    tls13_session->connection_state.shared_secret = (uint8_t*)memory_malloc(tls13_session->connection_state.shared_secret_len);
+    if (!tls13_session->connection_state.shared_secret) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
         return -1;
     }
@@ -1007,11 +997,11 @@ static int8_t tls13_parse_client_hello_extension_key_share_group_x25519_mlkem768
     uint8_t* mlkem768_public_key = key_data;
     uint8_t* x25519_client_public_key = key_data + MLKEM768_PUBLICKEYBYTES;
 
-    uint8_t* mlkem768_ciphertext = ctx->server_state.server_key_exchange_public_key;
-    uint8_t* server_x25519_public_key = ctx->server_state.server_key_exchange_public_key + MLKEM768_CIPHERTEXTBYTES;
+    uint8_t* mlkem768_ciphertext = tls13_session->server_state.server_key_exchange_public_key;
+    uint8_t* server_x25519_public_key = tls13_session->server_state.server_key_exchange_public_key + MLKEM768_CIPHERTEXTBYTES;
 
-    uint8_t* mlkem768_shared_secret_part = ctx->connection_state.shared_secret;
-    uint8_t* x25519_shared_secret_part = ctx->connection_state.shared_secret + MLKEM768_SHARED_SECRET_BYTES;
+    uint8_t* mlkem768_shared_secret_part = tls13_session->connection_state.shared_secret;
+    uint8_t* x25519_shared_secret_part = tls13_session->connection_state.shared_secret + MLKEM768_SHARED_SECRET_BYTES;
 
     // Encapsulate ML-KEM768 using client's ML-KEM public key
     mlkem768_encaps(mlkem768_ciphertext,
@@ -1036,12 +1026,12 @@ static int8_t tls13_parse_client_hello_extension_key_share_group_x25519_mlkem768
 
     memory_memclean(server_private_key, sizeof(server_private_key)); // Clear private key from memory
 
-    ctx->connection_state.selected_group = TLS_GROUP_X25519_ML_KEM768;
+    tls13_session->connection_state.selected_group = TLS_GROUP_X25519_ML_KEM768;
 
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_key_share(tls13_session_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+static int8_t tls13_parse_client_hello_extension_key_share(tls13_session_t* tls13_session, uint8_t* ext_ptr, uint16_t ext_len) {
     uint8_t * share_ptr = ext_ptr + 4;
     uint16_t total_shares_len = (share_ptr[0] << 8) | share_ptr[1];
     uint8_t * current_share = share_ptr + 2;
@@ -1058,19 +1048,19 @@ static int8_t tls13_parse_client_hello_extension_key_share(tls13_session_t* ctx,
         uint8_t * key_data = current_share + 4;
 
         if (group == TLS_GROUP_X25519) { // X25519
-            if(tls13_parse_client_hello_extension_key_share_group_x25519(ctx, key_data, key_len) != 0) {
+            if(tls13_parse_client_hello_extension_key_share_group_x25519(tls13_session, key_data, key_len) != 0) {
                 return -1; // Error already logged in the function
             }
         } else if (group == TLS_GROUP_SECP256R1) { // Secp256r1 (P-256)
-            if(tls13_parse_client_hello_extension_key_share_group_secp256r1(ctx, key_data, key_len) != 0) {
+            if(tls13_parse_client_hello_extension_key_share_group_secp256r1(tls13_session, key_data, key_len) != 0) {
                 return -1; // Error already logged in the function
             }
         } else if (group == TLS_GROUP_SECP384R1) { // Secp384r1 (P-384)
-            if(tls13_parse_client_hello_extension_key_share_group_secp384r1(ctx, key_data, key_len) != 0) {
+            if(tls13_parse_client_hello_extension_key_share_group_secp384r1(tls13_session, key_data, key_len) != 0) {
                 return -1; // Error already logged in the function
             }
         } else if(group == TLS_GROUP_X25519_ML_KEM768) {
-            if(tls13_parse_client_hello_extension_key_share_group_x25519_mlkem768(ctx, key_data, key_len) != 0) {
+            if(tls13_parse_client_hello_extension_key_share_group_x25519_mlkem768(tls13_session, key_data, key_len) != 0) {
                 return -1; // Error already logged in the function
             }
         } else {
@@ -1085,7 +1075,7 @@ static int8_t tls13_parse_client_hello_extension_key_share(tls13_session_t* ctx,
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_signature_algorithms(tls13_session_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+static int8_t tls13_parse_client_hello_extension_signature_algorithms(tls13_session_t* tls13_session, uint8_t* ext_ptr, uint16_t ext_len) {
     uint16_t sigalgs_len  = (ext_ptr[2] << 8) | ext_ptr[3];
     uint8_t* sigalgs_data = ext_ptr + 4;
 
@@ -1096,28 +1086,28 @@ static int8_t tls13_parse_client_hello_extension_signature_algorithms(tls13_sess
 
     int32_t algorithms_len = sigalgs_len / 2 + 1; // NONE ended list
 
-    ctx->client_state.client_supported_signature_algorithms = (tls13_signature_algorithm_t*)memory_malloc(algorithms_len * sizeof(tls13_signature_algorithm_t));
-    ctx->client_state.client_supported_signature_algorithms_x509 = (x509_algorithm_t*)memory_malloc(algorithms_len * sizeof(x509_algorithm_t));
+    tls13_session->client_state.client_supported_signature_algorithms = (tls13_signature_algorithm_t*)memory_malloc(algorithms_len * sizeof(tls13_signature_algorithm_t));
+    tls13_session->client_state.client_supported_signature_algorithms_x509 = (x509_algorithm_t*)memory_malloc(algorithms_len * sizeof(x509_algorithm_t));
 
-    if (!ctx->client_state.client_supported_signature_algorithms || !ctx->client_state.client_supported_signature_algorithms_x509) {
+    if (!tls13_session->client_state.client_supported_signature_algorithms || !tls13_session->client_state.client_supported_signature_algorithms_x509) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for client supported signature algorithms failed");
-        memory_free(ctx->client_state.client_supported_signature_algorithms);
-        memory_free(ctx->client_state.client_supported_signature_algorithms_x509);
+        memory_free(tls13_session->client_state.client_supported_signature_algorithms);
+        memory_free(tls13_session->client_state.client_supported_signature_algorithms_x509);
         return -1;
     }
 
     int32_t x509_alg_index = 0;
     for (int32_t i = 0; i < sigalgs_len; i += 2) {
         uint16_t alg = (sigalgs_data[i] << 8) | sigalgs_data[i + 1];
-        ctx->client_state.client_supported_signature_algorithms[i / 2] = alg;
+        tls13_session->client_state.client_supported_signature_algorithms[i / 2] = alg;
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client supported signature algorithm: 0x%04x", alg);
 
         if(alg == TLS_SIG_ALG_ED25519) {
-            ctx->client_state.client_supported_signature_algorithms_x509[x509_alg_index++] = X509_ALGORITHM_ED25519;
+            tls13_session->client_state.client_supported_signature_algorithms_x509[x509_alg_index++] = X509_ALGORITHM_ED25519;
         } else if(alg == TLS_SIG_ALG_ECDSA_SECP256R1_SHA256) {
-            ctx->client_state.client_supported_signature_algorithms_x509[x509_alg_index++] = X509_ALGORITHM_ECDSA_SECP256R1_SHA256;
+            tls13_session->client_state.client_supported_signature_algorithms_x509[x509_alg_index++] = X509_ALGORITHM_ECDSA_SECP256R1_SHA256;
         } else if(alg == TLS_SIG_ALG_ECDSA_SECP384R1_SHA384) {
-            ctx->client_state.client_supported_signature_algorithms_x509[x509_alg_index++] = X509_ALGORITHM_ECDSA_SECP384R1_SHA384;
+            tls13_session->client_state.client_supported_signature_algorithms_x509[x509_alg_index++] = X509_ALGORITHM_ECDSA_SECP384R1_SHA384;
         } else {
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Unsupported signature algorithm: 0x%04x, skipping", alg);
         }
@@ -1126,7 +1116,7 @@ static int8_t tls13_parse_client_hello_extension_signature_algorithms(tls13_sess
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_supported_groups(tls13_session_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+static int8_t tls13_parse_client_hello_extension_supported_groups(tls13_session_t* tls13_session, uint8_t* ext_ptr, uint16_t ext_len) {
     uint16_t groups_len  = (ext_ptr[2] << 8) | ext_ptr[3];
     uint8_t* groups_data = ext_ptr + 4;
 
@@ -1147,9 +1137,9 @@ static int8_t tls13_parse_client_hello_extension_supported_groups(tls13_session_
         }
     }
 
-    ctx->client_state.client_supported_groups_len = groups_len / 2;
-    ctx->client_state.client_supported_groups = (tls13_key_exchange_group_t*)memory_malloc(ctx->client_state.client_supported_groups_len * sizeof(tls13_key_exchange_group_t));
-    if (!ctx->client_state.client_supported_groups) {
+    tls13_session->client_state.client_supported_groups_len = groups_len / 2;
+    tls13_session->client_state.client_supported_groups = (tls13_key_exchange_group_t*)memory_malloc(tls13_session->client_state.client_supported_groups_len * sizeof(tls13_key_exchange_group_t));
+    if (!tls13_session->client_state.client_supported_groups) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for client supported groups failed");
         return -1;
     }
@@ -1163,14 +1153,14 @@ static int8_t tls13_parse_client_hello_extension_supported_groups(tls13_session_
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered unsupported group: 0x%04x, skipping", group);
             continue;
         }
-        ctx->client_state.client_supported_groups[i / 2] = group;
+        tls13_session->client_state.client_supported_groups[i / 2] = group;
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client supported group: 0x%04x", group);
     }
 
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_psk_key_exchange_modes(tls13_session_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+static int8_t tls13_parse_client_hello_extension_psk_key_exchange_modes(tls13_session_t* tls13_session, uint8_t* ext_ptr, uint16_t ext_len) {
     uint8_t mode_count  = ext_ptr[4];
     uint8_t* modes_data = ext_ptr + 4;
 
@@ -1188,13 +1178,13 @@ static int8_t tls13_parse_client_hello_extension_psk_key_exchange_modes(tls13_se
             continue;
         }
 
-        ctx->connection_state.psk_key_exchange_mode = mode;
+        tls13_session->connection_state.psk_key_exchange_mode = mode;
     }
 
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t* ctx, uint8_t* ext_ptr, uint16_t ext_len, const uint8_t* handshake) {
+static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t* tls13_session, uint8_t* ext_ptr, uint16_t ext_len, const uint8_t* handshake) {
     uint16_t identity_list_len = (ext_ptr[4] << 8) | ext_ptr[5];
     uint8_t* identity_list_ptr = ext_ptr + 6;
     uint8_t* identity_list_end = identity_list_ptr + identity_list_len;
@@ -1204,8 +1194,8 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t*
     uint8_t* binders_data_ptr = binders_data_start + 2;
     uint8_t* binders_data_end = binders_data_ptr + binders_list_len;
 
-    if(!ctx->config->get_psk_encryption_keys_callback) {
-        ctx->connection_state.session_resumed = false; // Can't resume without keys, but allow full handshake to proceed
+    if(!tls13_session->config->get_psk_encryption_keys_callback) {
+        tls13_session->connection_state.session_resumed = false; // Can't resume without keys, but allow full handshake to proceed
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "No callback registered to retrieve PSK encryption keys");
         return 0;
     }
@@ -1247,7 +1237,7 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t*
 
     PRINTLOG(CRYPTOLIB, LOG_INFO, "PSK Identity Count: %d, Binder Count: %d", identity_count, binder_count);
 
-    int32_t hash_len = ctx->connection_state.handshake_hash_len;
+    int32_t hash_len = tls13_session->connection_state.handshake_hash_len;
 
     uint8_t* binder_locations[binder_count];
     memory_memclean(binder_locations, sizeof(binder_locations));
@@ -1290,7 +1280,7 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t*
         uint8_t* psk_encryption_iv;
         uint8_t* psk_aed_key;
 
-        if(ctx->config->get_psk_encryption_keys_callback(ctx, false, &psk_encryption_key, &psk_encryption_iv, &psk_aed_key) != 0) {
+        if(tls13_session->config->get_psk_encryption_keys_callback(tls13_session, false, &psk_encryption_key, &psk_encryption_iv, &psk_aed_key) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to retrieve PSK encryption keys for PSK identity %d", psk_index);
             NEXT_IDENTITY();
         }
@@ -1305,7 +1295,7 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t*
 
         if (status != 0) {
             // get previous keys
-            if(ctx->config->get_psk_encryption_keys_callback(ctx, true, &psk_encryption_key, &psk_encryption_iv, &psk_aed_key) != 0) {
+            if(tls13_session->config->get_psk_encryption_keys_callback(tls13_session, true, &psk_encryption_key, &psk_encryption_iv, &psk_aed_key) != 0) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to retrieve previous PSK encryption keys for PSK identity %d", psk_index);
                 NEXT_IDENTITY();
             }
@@ -1329,8 +1319,8 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t*
         tls13_cipher_suite_t cipher_suite = (plaintext[offset] << 8) | plaintext[offset + 1]; // Extract cipher suite from decrypted PSK identity
         offset += 2;
 
-        if(cipher_suite != ctx->connection_state.selected_cipher_suite) {
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Cipher suite mismatch between PSK identity and ClientHello: 0x%04x vs 0x%04x", cipher_suite, ctx->connection_state.selected_cipher_suite);
+        if(cipher_suite != tls13_session->connection_state.selected_cipher_suite) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Cipher suite mismatch between PSK identity and ClientHello: 0x%04x vs 0x%04x", cipher_suite, tls13_session->connection_state.selected_cipher_suite);
             NEXT_IDENTITY();
         }
 
@@ -1372,7 +1362,7 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t*
             NEXT_IDENTITY();
         }
 
-        const char_t* expected_alpn = ctx->connection_state.alpn_h2 ? "h2" : (ctx->connection_state.alpn_http11 ? "http/1.1" : NULL);
+        const char_t* expected_alpn = tls13_session->connection_state.alpn_h2 ? "h2" : (tls13_session->connection_state.alpn_http11 ? "http/1.1" : NULL);
         if (expected_alpn && strlen(alpn_name) == strlen(expected_alpn) && strcmp(alpn_name, expected_alpn) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_WARNING, "ALPN name mismatch between PSK identity and ClientHello: %s vs %s", alpn_name, expected_alpn);
             NEXT_IDENTITY();
@@ -1402,34 +1392,34 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t*
         uint8_t binder_key[SHA384_OUTPUT_SIZE];
         uint8_t finished_key[SHA384_OUTPUT_SIZE];
 
-        if(tls13_hash_get_empty(ctx, empty_hash) != 0) {
+        if(tls13_hash_get_empty(tls13_session, empty_hash) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get empty hash");
             return -1;
         }
 
-        if(hkdf_extract(ctx, NULL, 0, psk_bytes, hash_len, early_secret) != 0) {
+        if(hkdf_extract(tls13_session, NULL, 0, psk_bytes, hash_len, early_secret) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute early secret");
             return -1;
         }
 
-        if(hkdf_expand_label_ext(ctx, early_secret, "res binder", empty_hash, hash_len, binder_key, hash_len) != 0) {
+        if(hkdf_expand_label_ext(tls13_session, early_secret, "res binder", empty_hash, hash_len, binder_key, hash_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute binder key");
             return -1;
         }
 
-        if(hkdf_expand_label_ext(ctx, binder_key, "finished", NULL, 0, finished_key, hash_len) != 0) {
+        if(hkdf_expand_label_ext(tls13_session, binder_key, "finished", NULL, 0, finished_key, hash_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute finished key");
             return -1;
         }
 
         uint8_t handshake_hash[SHA384_OUTPUT_SIZE];
 
-        if(tls13_hash_compute(ctx, handshake, binders_data_start - handshake, handshake_hash) != 0) {
+        if(tls13_hash_compute(tls13_session, handshake, binders_data_start - handshake, handshake_hash) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute handshake hash for PSK binder verification");
             return -1;
         }
 
-        if(tls13_hash_hmac(ctx->connection_state.selected_hash_algorithm, finished_key, hash_len, handshake_hash, hash_len, &hmac) != 0) {
+        if(tls13_hash_hmac(tls13_session->connection_state.selected_hash_algorithm, finished_key, hash_len, handshake_hash, hash_len, &hmac) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute PSK binder HMAC");
             return -1;
         }
@@ -1442,9 +1432,9 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t*
         memory_free(hmac); // Free the HMAC result after use
 
         if(diff == 0) {
-            ctx->connection_state.session_resumed = true; // Mark session as resumed based on valid PSK binder
-            ctx->connection_state.selected_identity_index = psk_index; // Store the index of the selected PSK identity
-            memory_memcopy(psk_bytes, ctx->connection_state.selected_psk_value, hash_len); // Store the selected PSK identity for later use
+            tls13_session->connection_state.session_resumed = true; // Mark session as resumed based on valid PSK binder
+            tls13_session->connection_state.selected_identity_index = psk_index; // Store the index of the selected PSK identity
+            memory_memcopy(psk_bytes, tls13_session->connection_state.selected_psk_value, hash_len); // Store the selected PSK identity for later use
             break; // Stop after the first valid binder is found
         } else {
             PRINTLOG(CRYPTOLIB, LOG_WARNING, "PSK binder verification failed for identity index %d", psk_index);
@@ -1457,8 +1447,8 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_session_t*
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_post_handshake_auth(tls13_session_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
-    UNUSED(ctx);
+static int8_t tls13_parse_client_hello_extension_post_handshake_auth(tls13_session_t* tls13_session, uint8_t* ext_ptr, uint16_t ext_len) {
+    UNUSED(tls13_session);
     UNUSED(ext_ptr);
     UNUSED(ext_len);
     // Not implemented, reserved for future use
@@ -1466,8 +1456,8 @@ static int8_t tls13_parse_client_hello_extension_post_handshake_auth(tls13_sessi
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_status_request(tls13_session_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
-    UNUSED(ctx);
+static int8_t tls13_parse_client_hello_extension_status_request(tls13_session_t* tls13_session, uint8_t* ext_ptr, uint16_t ext_len) {
+    UNUSED(tls13_session);
     UNUSED(ext_ptr);
     UNUSED(ext_len);
     // Not implemented, reserved for future use
@@ -1475,8 +1465,8 @@ static int8_t tls13_parse_client_hello_extension_status_request(tls13_session_t*
     return 0;
 }
 
-static int8_t tls13_parse_client_hello_extension_signed_certificate_timestamp(tls13_session_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
-    UNUSED(ctx);
+static int8_t tls13_parse_client_hello_extension_signed_certificate_timestamp(tls13_session_t* tls13_session, uint8_t* ext_ptr, uint16_t ext_len) {
+    UNUSED(tls13_session);
     UNUSED(ext_ptr);
     UNUSED(ext_len);
     // Not implemented, reserved for future use
@@ -1484,21 +1474,21 @@ static int8_t tls13_parse_client_hello_extension_signed_certificate_timestamp(tl
     return 0;
 }
 
-static int8_t tls13_process_client_hello(tls13_session_t* ctx) {
-    if(!ctx) {
+static int8_t tls13_process_client_hello(tls13_session_t* tls13_session) {
+    if(!tls13_session) {
         return -1;
     }
 
     uint8_t header[5];
 
-    int32_t received = ctx->config->network_recv(ctx->connection_state.network_client_identifier, header, 5, 0);
+    int32_t received = tls13_session->config->network_recv(tls13_session->connection_state.network_client_identifier, header, 5, 0);
 
     if(received != 5) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive TLS record header");
         return -1;
     }
 
-    int8_t check = tls13_check_plain_text_protcol(ctx, header);
+    int8_t check = tls13_check_plain_text_protcol(tls13_session, header);
     if(check < 0) {
         return check; // -1 for error, -2 for handled HTTP request
     }
@@ -1511,7 +1501,7 @@ static int8_t tls13_process_client_hello(tls13_session_t* ctx) {
         return -1;
     }
 
-    received = ctx->config->network_recv(ctx->connection_state.network_client_identifier, buffer, record_len, 0);
+    received = tls13_session->config->network_recv(tls13_session->connection_state.network_client_identifier, buffer, record_len, 0);
 
     if(received != record_len) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive complete TLS record");
@@ -1533,30 +1523,30 @@ static int8_t tls13_process_client_hello(tls13_session_t* ctx) {
     // 3. Skip Handshake header (1 byte type + 3 bytes length = 4 bytes)
     // Client Version (2 bytes)
     uint16_t client_version = (handshake[4] << 8) | handshake[5];
-    ctx->connection_state.version = client_version;
+    tls13_session->connection_state.version = client_version;
 
     offset = 6; // Start of Client Random
 
     // 4. Client Random (32 bytes)
     uint8_t* client_random = &handshake[offset];
-    memory_memcopy(client_random, ctx->client_state.client_random, 32);
+    memory_memcopy(client_random, tls13_session->client_state.client_random, 32);
 
     offset += 32; // Move past Client Random
 
     // 5. Session ID (Variable length)
     uint8_t session_id_len = handshake[offset++];
     uint8_t* session_id = &handshake[offset];
-    ctx->connection_state.session_id_len = session_id_len;
+    tls13_session->connection_state.session_id_len = session_id_len;
     if (session_id_len > 0) {
-        ctx->connection_state.session_id = (uint8_t*)memory_malloc(session_id_len);
-        if (!ctx->connection_state.session_id) {
+        tls13_session->connection_state.session_id = (uint8_t*)memory_malloc(session_id_len);
+        if (!tls13_session->connection_state.session_id) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for session_id failed");
             memory_free(buffer);
             return -1;
         }
-        memory_memcopy(session_id, ctx->connection_state.session_id, session_id_len);
+        memory_memcopy(session_id, tls13_session->connection_state.session_id, session_id_len);
     } else {
-        ctx->connection_state.session_id = NULL;
+        tls13_session->connection_state.session_id = NULL;
     }
 
     offset += session_id_len; // Move past Session ID
@@ -1567,7 +1557,7 @@ static int8_t tls13_process_client_hello(tls13_session_t* ctx) {
     uint16_t cipher_suites_len = (handshake[offset] << 8) | handshake[offset + 1];
     uint8_t* cipher_suites = &handshake[offset + 2];
 
-    if (tls13_parse_client_hello_cipher_suites(ctx, cipher_suites, cipher_suites_len) < 0) {
+    if (tls13_parse_client_hello_cipher_suites(tls13_session, cipher_suites, cipher_suites_len) < 0) {
         memory_free(buffer);
         return -1; // No supported cipher suites found or error in parsing
     }
@@ -1591,37 +1581,37 @@ static int8_t tls13_process_client_hello(tls13_session_t* ctx) {
 
         switch(ext_type) {
         case TLS_EXTENSION_SNI:
-            ext_res = tls13_parse_client_hello_extension_sni(ctx, ext_ptr, ext_len);
+            ext_res = tls13_parse_client_hello_extension_sni(tls13_session, ext_ptr, ext_len);
             break;
         case TLS_EXTENSION_ALPN:
-            ext_res = tls13_parse_client_hello_extension_alpn(ctx, ext_ptr, ext_len);
+            ext_res = tls13_parse_client_hello_extension_alpn(tls13_session, ext_ptr, ext_len);
             break;
         case TLS_EXTENSION_SUPPORTED_VERSIONS:
-            ext_res = tls13_parse_client_hello_extension_supported_versions(ctx, ext_ptr, ext_len);
+            ext_res = tls13_parse_client_hello_extension_supported_versions(tls13_session, ext_ptr, ext_len);
             break;
         case TLS_EXTENSION_KEY_SHARE:
-            ext_res = tls13_parse_client_hello_extension_key_share(ctx, ext_ptr, ext_len);
+            ext_res = tls13_parse_client_hello_extension_key_share(tls13_session, ext_ptr, ext_len);
             break;
         case TLS_EXTENSION_SIGNATURE_ALGORITHMS:
-            ext_res = tls13_parse_client_hello_extension_signature_algorithms(ctx, ext_ptr, ext_len);
+            ext_res = tls13_parse_client_hello_extension_signature_algorithms(tls13_session, ext_ptr, ext_len);
             break;
         case TLS_EXTENSION_SUPPORTED_GROUPS:
-            ext_res = tls13_parse_client_hello_extension_supported_groups(ctx, ext_ptr, ext_len);
+            ext_res = tls13_parse_client_hello_extension_supported_groups(tls13_session, ext_ptr, ext_len);
             break;
         case TLS_EXTENSION_PSK_KEY_EXCHANGE_MODES:
-            ext_res = tls13_parse_client_hello_extension_psk_key_exchange_modes(ctx, ext_ptr, ext_len);
+            ext_res = tls13_parse_client_hello_extension_psk_key_exchange_modes(tls13_session, ext_ptr, ext_len);
             break;
         case TLS_EXTENSION_PRE_SHARED_KEY:
-            ext_res = tls13_parse_client_hello_extension_pre_shared_key(ctx, ext_ptr, ext_len, handshake);
+            ext_res = tls13_parse_client_hello_extension_pre_shared_key(tls13_session, ext_ptr, ext_len, handshake);
             break;
         case TLS_EXTENSION_POST_HANDSHAKE_AUTH:
-            ext_res = tls13_parse_client_hello_extension_post_handshake_auth(ctx, ext_ptr, ext_len);
+            ext_res = tls13_parse_client_hello_extension_post_handshake_auth(tls13_session, ext_ptr, ext_len);
             break;
         case TLS_EXTENSION_STATUS_REQUEST:
-            ext_res = tls13_parse_client_hello_extension_status_request(ctx, ext_ptr, ext_len);
+            ext_res = tls13_parse_client_hello_extension_status_request(tls13_session, ext_ptr, ext_len);
             break;
         case TLS_EXTENSION_SIGNED_CERTIFICATE_TIMESTAMP:
-            ext_res = tls13_parse_client_hello_extension_signed_certificate_timestamp(ctx, ext_ptr, ext_len);
+            ext_res = tls13_parse_client_hello_extension_signed_certificate_timestamp(tls13_session, ext_ptr, ext_len);
             break;
         default:
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Skipping unsupported extension type: 0x%04x", ext_type);
@@ -1643,21 +1633,21 @@ static int8_t tls13_process_client_hello(tls13_session_t* ctx) {
         return -1;
     }
 
-    if (!ctx->connection_state.tls13_supported) {
+    if (!tls13_session->connection_state.tls13_supported) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client does not support TLS 1.3");
         memory_free(buffer);
         return -1;
     }
 
-    if (ctx->connection_state.selected_group == TLS_GROUP_NONE) {
+    if (tls13_session->connection_state.selected_group == TLS_GROUP_NONE) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "No supported key exchange group found");
         memory_free(buffer);
         return -1;
     }
 
     boolean_t selected_group_supported_by_client = false;
-    for (size_t i = 0; i < ctx->client_state.client_supported_groups_len; i++) {
-        if (ctx->client_state.client_supported_groups[i] == ctx->connection_state.selected_group) {
+    for (size_t i = 0; i < tls13_session->client_state.client_supported_groups_len; i++) {
+        if (tls13_session->client_state.client_supported_groups[i] == tls13_session->connection_state.selected_group) {
             selected_group_supported_by_client = true;
             break;
         }
@@ -1668,13 +1658,13 @@ static int8_t tls13_process_client_hello(tls13_session_t* ctx) {
         return -1;
     }
 
-    if(ctx->connection_state.selected_hash_algorithm == TLS_HASH_NONE) {
+    if(tls13_session->connection_state.selected_hash_algorithm == TLS_HASH_NONE) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "No supported hash algorithm selected");
         memory_free(buffer);
         return -1;
     }
 
-    if(tls13_hash_update(ctx, handshake, record_len) != 0) {
+    if(tls13_hash_update(tls13_session, handshake, record_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to update handshake hash");
         memory_free(buffer);
         return -1;
@@ -1685,7 +1675,7 @@ static int8_t tls13_process_client_hello(tls13_session_t* ctx) {
     return 0;
 }
 
-static int32_t tls13_send_server_hello(tls13_session_t* ctx) {
+static int32_t tls13_send_server_hello(tls13_session_t* tls13_session) {
     uint8_t msg[4096];
     int32_t p = 5; // Start after Record Header
 
@@ -1698,19 +1688,19 @@ static int32_t tls13_send_server_hello(tls13_session_t* ctx) {
     msg[p++] = 0x03; msg[p++] = 0x03;
 
     // Server Random
-    memory_memcopy(ctx->server_state.server_random, &msg[p], 32);
+    memory_memcopy(tls13_session->server_state.server_random, &msg[p], 32);
     p += 32;
 
     // Echo Session ID
-    msg[p++] = ctx->connection_state.session_id_len;
-    if (ctx->connection_state.session_id_len > 0) {
-        memory_memcopy(ctx->connection_state.session_id, &msg[p], ctx->connection_state.session_id_len);
-        p += ctx->connection_state.session_id_len;
+    msg[p++] = tls13_session->connection_state.session_id_len;
+    if (tls13_session->connection_state.session_id_len > 0) {
+        memory_memcopy(tls13_session->connection_state.session_id, &msg[p], tls13_session->connection_state.session_id_len);
+        p += tls13_session->connection_state.session_id_len;
     }
 
     // Selected Cipher Suite
-    msg[p++] = (ctx->connection_state.selected_cipher_suite >> 8) & 0xFF;
-    msg[p++] = ctx->connection_state.selected_cipher_suite & 0xFF;
+    msg[p++] = (tls13_session->connection_state.selected_cipher_suite >> 8) & 0xFF;
+    msg[p++] = tls13_session->connection_state.selected_cipher_suite & 0xFF;
 
     // Compression Method (null)
     msg[p++] = 0x00;
@@ -1724,17 +1714,17 @@ static int32_t tls13_send_server_hello(tls13_session_t* ctx) {
     msg[p++] = 0x00; msg[p++] = 0x02;
     msg[p++] = 0x03; msg[p++] = 0x04; // TLS 1.3
 
-    size_t key_len = ctx->server_state.server_key_exchange_public_key_len;
+    size_t key_len = tls13_session->server_state.server_key_exchange_public_key_len;
     size_t key_len_placeholder = 4 + key_len; // 2 bytes for group + 2 bytes for key length + key data
-    uint8_t* key_data = ctx->server_state.server_key_exchange_public_key;
+    uint8_t* key_data = tls13_session->server_state.server_key_exchange_public_key;
 
     // Extension: Key Share (0x0033)
     msg[p++] = 0x00; msg[p++] = 0x33;
     msg[p++] = (key_len_placeholder >> 8) & 0xFF;
     msg[p++] = key_len_placeholder & 0xFF;
     // Key Share Group
-    msg[p++] = ((ctx->connection_state.selected_group >> 8) & 0xFF);
-    msg[p++] = (ctx->connection_state.selected_group & 0xFF);
+    msg[p++] = ((tls13_session->connection_state.selected_group >> 8) & 0xFF);
+    msg[p++] = (tls13_session->connection_state.selected_group & 0xFF);
     // Key Length
     msg[p++] = ((key_len >> 8) & 0xFF);
     msg[p++] = (key_len & 0xFF);
@@ -1742,12 +1732,12 @@ static int32_t tls13_send_server_hello(tls13_session_t* ctx) {
     memory_memcopy(key_data, &msg[p], key_len);
     p += key_len;
 
-    if(ctx->connection_state.session_resumed) {
+    if(tls13_session->connection_state.session_resumed) {
         msg[p++] = (TLS_EXTENSION_PRE_SHARED_KEY >> 8) & 0xFF;
         msg[p++] = TLS_EXTENSION_PRE_SHARED_KEY & 0xFF;
         msg[p++] = 0x00; msg[p++] = 0x02; // Extension length
-        msg[p++] = (ctx->connection_state.selected_identity_index >> 8) & 0xFF;
-        msg[p++] = ctx->connection_state.selected_identity_index & 0xFF;
+        msg[p++] = (tls13_session->connection_state.selected_identity_index >> 8) & 0xFF;
+        msg[p++] = tls13_session->connection_state.selected_identity_index & 0xFF;
     }
 
     // Fix up Lengths
@@ -1767,31 +1757,31 @@ static int32_t tls13_send_server_hello(tls13_session_t* ctx) {
     msg[3] = (rec_len >> 8) & 0xFF;
     msg[4] = rec_len & 0xFF;
 
-    if(tls13_hash_update(ctx, msg + 5, p - 5) != 0) {
+    if(tls13_hash_update(tls13_session, msg + 5, p - 5) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to update handshake hash with Server Hello");
         return -1;
     }
 
-    memory_memcopy(msg, ctx->server_state.server_handshake_buffer, p);
-    ctx->server_state.server_handshake_buffer_len = p;
+    memory_memcopy(msg, tls13_session->server_state.server_handshake_buffer, p);
+    tls13_session->server_state.server_handshake_buffer_len = p;
 
     return 0;
 }
 
-static int8_t tls13_generate_handshake_key_and_iv(tls13_session_t* ctx) {
-    uint32_t hlen = ctx->connection_state.handshake_hash_len;
-    uint32_t key_len = ctx->connection_state.handshake_key_len;
-    uint32_t iv_len  = ctx->connection_state.handshake_iv_len;
+static int8_t tls13_generate_handshake_key_and_iv(tls13_session_t* tls13_session) {
+    uint32_t hlen = tls13_session->connection_state.handshake_hash_len;
+    uint32_t key_len = tls13_session->connection_state.handshake_key_len;
+    uint32_t iv_len  = tls13_session->connection_state.handshake_iv_len;
 
     uint8_t empty_hash[SHA384_OUTPUT_SIZE] = {0};
-    if(tls13_hash_get_empty(ctx, empty_hash) != 0) {
+    if(tls13_hash_get_empty(tls13_session, empty_hash) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get empty hash");
         return -1;
     }
 
     // Snapshot of current transcript hash (ClientHello + ServerHello)
     uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
-    if(tls13_hash_get_current(ctx, current_hash) != 0) {
+    if(tls13_hash_get_current(tls13_session, current_hash) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get current handshake hash");
         return -1;
     }
@@ -1803,95 +1793,95 @@ static int8_t tls13_generate_handshake_key_and_iv(tls13_session_t* ctx) {
             c_hs_traffic_secret[SHA384_OUTPUT_SIZE];
 
     // 1. Early Secret
-    if(ctx->connection_state.session_resumed) {
+    if(tls13_session->connection_state.session_resumed) {
         // If resuming, use the selected PSK as the IKM for early secret
-        if(hkdf_extract(ctx, NULL, 0, ctx->connection_state.selected_psk_value, hlen, early_secret) != 0) {
+        if(hkdf_extract(tls13_session, NULL, 0, tls13_session->connection_state.selected_psk_value, hlen, early_secret) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive early secret from PSK");
             return -1;
         }
     } else {
-        if(hkdf_extract(ctx, NULL, 0, zero_ikm, hlen, early_secret) != 0) {
+        if(hkdf_extract(tls13_session, NULL, 0, zero_ikm, hlen, early_secret) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive early secret");
             return -1;
         }
     }
 
     // 2. Derived Secret
-    if(hkdf_expand_label_ext(ctx, early_secret, "derived", (uint8_t*)empty_hash, hlen, derived_early, hlen) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, early_secret, "derived", (uint8_t*)empty_hash, hlen, derived_early, hlen) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive derived early secret");
         return -1;
     }
 
     // 3. Handshake Secret
-    if(hkdf_extract(ctx, derived_early, hlen, ctx->connection_state.shared_secret, ctx->connection_state.shared_secret_len, handshake_secret) != 0) {
+    if(hkdf_extract(tls13_session, derived_early, hlen, tls13_session->connection_state.shared_secret, tls13_session->connection_state.shared_secret_len, handshake_secret) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive handshake secret");
         return -1;
     }
 
     // 4a. Server Handshake Traffic Secret
-    if(hkdf_expand_label_ext(ctx, handshake_secret, "s hs traffic", current_hash, hlen, s_hs_traffic_secret, hlen) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, handshake_secret, "s hs traffic", current_hash, hlen, s_hs_traffic_secret, hlen) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive server handshake traffic secret");
         return -1;
     }
-    memory_memcopy(s_hs_traffic_secret, ctx->server_state.server_handshake_traffic_secret, hlen);
+    memory_memcopy(s_hs_traffic_secret, tls13_session->server_state.server_handshake_traffic_secret, hlen);
 
     // 4b. Client Handshake Traffic Secret (Uses the same current_hash)
-    if(hkdf_expand_label_ext(ctx, handshake_secret, "c hs traffic", current_hash, hlen, c_hs_traffic_secret, hlen) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, handshake_secret, "c hs traffic", current_hash, hlen, c_hs_traffic_secret, hlen) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive client handshake traffic secret");
         return -1;
     }
-    memory_memcopy(c_hs_traffic_secret, ctx->client_state.client_handshake_traffic_secret, hlen);
+    memory_memcopy(c_hs_traffic_secret, tls13_session->client_state.client_handshake_traffic_secret, hlen);
 
     // 5. SERVER HANDSHAKE KEYS
-    if(hkdf_expand_label_ext(ctx, s_hs_traffic_secret, "key", NULL, 0, ctx->server_state.server_handshake_key, key_len) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, s_hs_traffic_secret, "key", NULL, 0, tls13_session->server_state.server_handshake_key, key_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive server handshake key");
         return -1;
     }
-    if(hkdf_expand_label_ext(ctx, s_hs_traffic_secret, "iv", NULL, 0, ctx->server_state.server_handshake_iv, iv_len) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, s_hs_traffic_secret, "iv", NULL, 0, tls13_session->server_state.server_handshake_iv, iv_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive server handshake IV");
         return -1;
     }
 
     // 6. CLIENT HANDSHAKE KEYS (Used to decrypt the Client Finished message)
-    if(hkdf_expand_label_ext(ctx, c_hs_traffic_secret, "key", NULL, 0, ctx->client_state.client_handshake_key, key_len) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, c_hs_traffic_secret, "key", NULL, 0, tls13_session->client_state.client_handshake_key, key_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive client handshake key");
         return -1;
     }
-    if(hkdf_expand_label_ext(ctx, c_hs_traffic_secret, "iv", NULL, 0, ctx->client_state.client_handshake_iv, iv_len) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, c_hs_traffic_secret, "iv", NULL, 0, tls13_session->client_state.client_handshake_iv, iv_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive client handshake IV");
         return -1;
     }
 
     // 7. Finished Keys
-    if(hkdf_expand_label_ext(ctx, ctx->server_state.server_handshake_traffic_secret, "finished", NULL, 0, ctx->server_state.server_finished_key, hlen) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, tls13_session->server_state.server_handshake_traffic_secret, "finished", NULL, 0, tls13_session->server_state.server_finished_key, hlen) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive server finished key");
         return -1;
     }
 
-    if(hkdf_expand_label_ext(ctx, ctx->client_state.client_handshake_traffic_secret, "finished", NULL, 0, ctx->client_state.client_finished_key, hlen) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, tls13_session->client_state.client_handshake_traffic_secret, "finished", NULL, 0, tls13_session->client_state.client_finished_key, hlen) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive client finished key");
         return -1;
     }
 
     // 8. Master Secret
     uint8_t derived_hs[SHA384_OUTPUT_SIZE];
-    if(hkdf_expand_label_ext(ctx, handshake_secret, "derived", (uint8_t*)empty_hash, hlen, derived_hs, hlen) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, handshake_secret, "derived", (uint8_t*)empty_hash, hlen, derived_hs, hlen) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive derived handshake secret");
         return -1;
     }
 
     uint8_t master_secret[SHA384_OUTPUT_SIZE];
-    if(hkdf_extract(ctx, derived_hs, hlen, zero_ikm, hlen, master_secret) != 0) {
+    if(hkdf_extract(tls13_session, derived_hs, hlen, zero_ikm, hlen, master_secret) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive master secret");
         return -1;
     }
 
-    memory_memcopy(master_secret, ctx->connection_state.master_secret, hlen);
+    memory_memcopy(master_secret, tls13_session->connection_state.master_secret, hlen);
 
     return 0;
 }
 
-static int8_t tls13_send_encrypted_extensions(tls13_session_t* ctx) {
+static int8_t tls13_send_encrypted_extensions(tls13_session_t* tls13_session) {
     uint8_t plaintext[4096]; // Increased slightly for safety
 
     // We start reverse filling from the end of the DATA part,
@@ -1900,10 +1890,10 @@ static int8_t tls13_send_encrypted_extensions(tls13_session_t* ctx) {
     int32_t start_pos = reverse_p;
 
     /* --- ALPN Extension (Reverse) --- */
-    if(ctx->connection_state.has_alpn) {
+    if(tls13_session->connection_state.has_alpn) {
         int32_t alpn_extension_end = reverse_p;
 
-        const char* alpn_selected = ctx->connection_state.alpn_h2 ? "h2" : "http/1.1";
+        const char* alpn_selected = tls13_session->connection_state.alpn_h2 ? "h2" : "http/1.1";
         int name_len = strlen(alpn_selected);
 
         // 1. The actual string
@@ -1968,7 +1958,7 @@ static int8_t tls13_send_encrypted_extensions(tls13_session_t* ctx) {
     uint8_t* handshake_start = &plaintext[reverse_p];
 
     // Update Transcript Hash
-    tls13_hash_update(ctx, handshake_start, handshake_total_len);
+    tls13_hash_update(tls13_session, handshake_start, handshake_total_len);
 
     // --- Content Type (Inner) ---
     // The 0x16 byte MUST immediately follow the handshake data
@@ -1977,17 +1967,17 @@ static int8_t tls13_send_encrypted_extensions(tls13_session_t* ctx) {
 
     /* --- Nonce and AAD --- */
     uint8_t nonce[12];
-    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num++, nonce);
+    tls13_make_nonce(tls13_session->server_state.server_handshake_iv, tls13_session->server_state.write_seq_num++, nonce);
 
     uint16_t encrypted_record_len = aead_plaintext_len + 16;
 
-    if(5 + encrypted_record_len > ctx->server_state.server_handshake_buffer_len) {
-        if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
-                                     ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+    if(5 + encrypted_record_len > tls13_session->server_state.server_handshake_buffer_len) {
+        if(tls13_session->config->network_send(tls13_session->connection_state.network_client_identifier,
+                                               tls13_session->server_state.server_handshake_buffer, tls13_session->server_state.server_handshake_buffer_len, 0) < 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send buffered handshake messages before Encrypted Extensions");
             return -1;
         }
-        ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+        tls13_session->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
     }
 
     uint8_t aad[5] = {
@@ -1996,16 +1986,16 @@ static int8_t tls13_send_encrypted_extensions(tls13_session_t* ctx) {
         (encrypted_record_len >> 8), (encrypted_record_len & 0xff)
     };
 
-    memory_memcopy(aad, ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len, 5);
-    ctx->server_state.server_handshake_buffer_len += 5;
+    memory_memcopy(aad, tls13_session->server_state.server_handshake_buffer + tls13_session->server_state.server_handshake_buffer_len, 5);
+    tls13_session->server_state.server_handshake_buffer_len += 5;
 
-    uint8_t* ciphertext = ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len;
+    uint8_t* ciphertext = tls13_session->server_state.server_handshake_buffer + tls13_session->server_state.server_handshake_buffer_len;
 
     /* --- Encrypt --- */
     int32_t status = aes_gcm_encrypt_with_aad_with_tag(
         ciphertext,
         handshake_start, aead_plaintext_len, // Encrypt Handshake + 0x16
-        ctx->server_state.server_handshake_key, ctx->connection_state.handshake_key_len,
+        tls13_session->server_state.server_handshake_key, tls13_session->connection_state.handshake_key_len,
         nonce, 12, aad, 5,
         ciphertext + aead_plaintext_len, 16);
 
@@ -2014,13 +2004,13 @@ static int8_t tls13_send_encrypted_extensions(tls13_session_t* ctx) {
         return -1;
     }
 
-    ctx->server_state.server_handshake_buffer_len += encrypted_record_len;
+    tls13_session->server_state.server_handshake_buffer_len += encrypted_record_len;
 
     return 0;
 }
 
-static int8_t tls13_send_certificate_request(tls13_session_t* ctx) {
-    if(ctx->connection_state.session_resumed) {
+static int8_t tls13_send_certificate_request(tls13_session_t* tls13_session) {
+    if(tls13_session->connection_state.session_resumed) {
         // No need to request certificate if session is resumed
         return 0;
     }
@@ -2031,8 +2021,8 @@ static int8_t tls13_send_certificate_request(tls13_session_t* ctx) {
 
     size_t msg_predicted_len = 128; // Initial estimate, will adjust if CA list is provided
 
-    if(ctx->config->client_certificates_ca_dn_list_callback) {
-        if(ctx->config->client_certificates_ca_dn_list_callback(ctx, &ca_dn_list, &ca_dn_len_list, &ca_count) != 0) {
+    if(tls13_session->config->client_certificates_ca_dn_list_callback) {
+        if(tls13_session->config->client_certificates_ca_dn_list_callback(tls13_session, &ca_dn_list, &ca_dn_len_list, &ca_count) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get CA DN list for CertificateRequest");
             return -1;
         }
@@ -2174,7 +2164,7 @@ static int8_t tls13_send_certificate_request(tls13_session_t* ctx) {
     uint8_t* handshake_start = &plaintext[reverse_p];
 
     // Update Transcript
-    tls13_hash_update(ctx, handshake_start, handshake_total_len);
+    tls13_hash_update(tls13_session, handshake_start, handshake_total_len);
 
     // Append Inner Content Type
     plaintext[start_pos] = TLS13_CONTENT_TYPE_HANDSHAKE;
@@ -2182,17 +2172,17 @@ static int8_t tls13_send_certificate_request(tls13_session_t* ctx) {
 
     /* --- Nonce and AAD --- */
     uint8_t nonce[12];
-    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num++, nonce);
+    tls13_make_nonce(tls13_session->server_state.server_handshake_iv, tls13_session->server_state.write_seq_num++, nonce);
 
     uint16_t encrypted_record_len = aead_plaintext_len + 16;
 
-    if(5 + encrypted_record_len > ctx->server_state.server_handshake_buffer_len) {
-        if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
-                                     ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+    if(5 + encrypted_record_len > tls13_session->server_state.server_handshake_buffer_len) {
+        if(tls13_session->config->network_send(tls13_session->connection_state.network_client_identifier,
+                                               tls13_session->server_state.server_handshake_buffer, tls13_session->server_state.server_handshake_buffer_len, 0) < 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send buffered handshake messages before Encrypted Extensions");
             return -1;
         }
-        ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+        tls13_session->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
     }
 
     uint8_t aad[5] = {
@@ -2201,16 +2191,16 @@ static int8_t tls13_send_certificate_request(tls13_session_t* ctx) {
         (encrypted_record_len >> 8), (encrypted_record_len & 0xff)
     };
 
-    memory_memcopy(aad, ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len, 5);
-    ctx->server_state.server_handshake_buffer_len += 5;
+    memory_memcopy(aad, tls13_session->server_state.server_handshake_buffer + tls13_session->server_state.server_handshake_buffer_len, 5);
+    tls13_session->server_state.server_handshake_buffer_len += 5;
 
-    uint8_t* ciphertext = ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len;
+    uint8_t* ciphertext = tls13_session->server_state.server_handshake_buffer + tls13_session->server_state.server_handshake_buffer_len;
 
     /* --- Encrypt --- */
     int32_t status = aes_gcm_encrypt_with_aad_with_tag(
         ciphertext,
         handshake_start, aead_plaintext_len, // Encrypt Handshake + 0x16
-        ctx->server_state.server_handshake_key, ctx->connection_state.handshake_key_len,
+        tls13_session->server_state.server_handshake_key, tls13_session->connection_state.handshake_key_len,
         nonce, 12, aad, 5,
         ciphertext + aead_plaintext_len, 16);
 
@@ -2219,18 +2209,18 @@ static int8_t tls13_send_certificate_request(tls13_session_t* ctx) {
         return -1;
     }
 
-    ctx->server_state.server_handshake_buffer_len += encrypted_record_len;
+    tls13_session->server_state.server_handshake_buffer_len += encrypted_record_len;
 
     return 0;
 }
 
-static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
-    if(ctx->connection_state.session_resumed) {
+static int8_t tls13_send_certificate_and_verify(tls13_session_t* tls13_session) {
+    if(tls13_session->connection_state.session_resumed) {
         // No need to send certificate if session is resumed
         return 0;
     }
 
-    if(!ctx->config->load_server_certificate_and_key) {
+    if(!tls13_session->config->load_server_certificate_and_key) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to load server certificate and key");
         return -1;
     }
@@ -2240,12 +2230,12 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
     uint8_t* server_private_key = NULL;
     size_t server_private_key_len = 0;
 
-    if(ctx->config->load_server_certificate_and_key(ctx,
-                                                    ctx->client_state.client_supported_signature_algorithms_x509,
-                                                    &ca_certificate,
-                                                    &server_certificate,
-                                                    &server_private_key,
-                                                    &server_private_key_len) != 0) {
+    if(tls13_session->config->load_server_certificate_and_key(tls13_session,
+                                                              tls13_session->client_state.client_supported_signature_algorithms_x509,
+                                                              &ca_certificate,
+                                                              &server_certificate,
+                                                              &server_private_key,
+                                                              &server_private_key_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to load server certificate and key");
         return -1;
     }
@@ -2314,24 +2304,24 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
     plaintext[hs_len_ptr + 2] = (total_hs_len & 0xFF);
 
     /* --- Transcript Hash Update --- */
-    tls13_hash_update(ctx, plaintext, p);
+    tls13_hash_update(tls13_session, plaintext, p);
 
     /* --- Encrypt and Send --- */
     plaintext[p++] = TLS13_CONTENT_TYPE_HANDSHAKE; // Inner Type: Handshake
 
     uint8_t nonce[12];
-    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num++, nonce);
+    tls13_make_nonce(tls13_session->server_state.server_handshake_iv, tls13_session->server_state.write_seq_num++, nonce);
 
-    size_t key_len = ctx->connection_state.handshake_key_len;
+    size_t key_len = tls13_session->connection_state.handshake_key_len;
     uint16_t encrypted_record_len = p + 16;
 
-    if(5 + encrypted_record_len > ctx->server_state.server_handshake_buffer_len) {
-        if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
-                                     ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+    if(5 + encrypted_record_len > tls13_session->server_state.server_handshake_buffer_len) {
+        if(tls13_session->config->network_send(tls13_session->connection_state.network_client_identifier,
+                                               tls13_session->server_state.server_handshake_buffer, tls13_session->server_state.server_handshake_buffer_len, 0) < 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send buffered handshake messages before Encrypted Extensions");
             return -1;
         }
-        ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+        tls13_session->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
     }
 
     uint8_t aad[5] = {
@@ -2340,19 +2330,19 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
         (encrypted_record_len >> 8), (encrypted_record_len & 0xFF)
     };
 
-    memory_memcopy(aad, ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len, 5);
-    ctx->server_state.server_handshake_buffer_len += 5;
+    memory_memcopy(aad, tls13_session->server_state.server_handshake_buffer + tls13_session->server_state.server_handshake_buffer_len, 5);
+    tls13_session->server_state.server_handshake_buffer_len += 5;
 
-    uint8_t* ciphertext = &ctx->server_state.server_handshake_buffer[ctx->server_state.server_handshake_buffer_len];
+    uint8_t* ciphertext = &tls13_session->server_state.server_handshake_buffer[tls13_session->server_state.server_handshake_buffer_len];
 
     if(aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
-                                         ctx->server_state.server_handshake_key, key_len,
+                                         tls13_session->server_state.server_handshake_key, key_len,
                                          nonce, 12, aad, 5, ciphertext + p, 16) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS Encryption failed for Certificate message");
         return -1;
     }
 
-    ctx->server_state.server_handshake_buffer_len += encrypted_record_len;
+    tls13_session->server_state.server_handshake_buffer_len += encrypted_record_len;
 
     const size_t space_count  = 64;
     const char_t* sign_string = "TLS 1.3, server CertificateVerify";
@@ -2363,11 +2353,11 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
     sign_buffer[space_count + strlen(sign_string)] = 0x00; // Null terminator
 
     // Get the current snapshot of the handshake hash
-    uint32_t hlen = ctx->connection_state.handshake_hash_len;
+    uint32_t hlen = tls13_session->connection_state.handshake_hash_len;
 
     // Note: This must include the Certificate message bytes!
     uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
-    if(tls13_hash_get_current(ctx, current_hash) != 0) {
+    if(tls13_hash_get_current(tls13_session, current_hash) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get current handshake hash for CertificateVerify");
         memory_free(server_private_key);
         return -1;
@@ -2493,22 +2483,22 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
 
     /* --- Finalize Transcript and Send --- */
     // 1. Update hash with the Certificate Verify message (p bytes)
-    tls13_hash_update(ctx, plaintext, p);
+    tls13_hash_update(tls13_session, plaintext, p);
 
     // 2. Wrap in encrypted record
     plaintext[p++] = TLS13_CONTENT_TYPE_HANDSHAKE; // Inner Type: Handshake
 
-    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num++, nonce);
+    tls13_make_nonce(tls13_session->server_state.server_handshake_iv, tls13_session->server_state.write_seq_num++, nonce);
 
     encrypted_record_len = p + 16;
 
-    if(5 + encrypted_record_len > ctx->server_state.server_handshake_buffer_len) {
-        if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
-                                     ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+    if(5 + encrypted_record_len > tls13_session->server_state.server_handshake_buffer_len) {
+        if(tls13_session->config->network_send(tls13_session->connection_state.network_client_identifier,
+                                               tls13_session->server_state.server_handshake_buffer, tls13_session->server_state.server_handshake_buffer_len, 0) < 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send buffered handshake messages before Encrypted Extensions");
             return -1;
         }
-        ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+        tls13_session->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
     }
 
     aad[0] = TLS13_CONTENT_TYPE_APPLICATION_DATA;
@@ -2517,36 +2507,36 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
     aad[3] = (encrypted_record_len >> 8) & 0xFF;
     aad[4] = (encrypted_record_len & 0xFF);
 
-    memory_memcopy(aad, ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len, 5);
-    ctx->server_state.server_handshake_buffer_len += 5;
+    memory_memcopy(aad, tls13_session->server_state.server_handshake_buffer + tls13_session->server_state.server_handshake_buffer_len, 5);
+    tls13_session->server_state.server_handshake_buffer_len += 5;
 
-    ciphertext = &ctx->server_state.server_handshake_buffer[ctx->server_state.server_handshake_buffer_len];
+    ciphertext = &tls13_session->server_state.server_handshake_buffer[tls13_session->server_state.server_handshake_buffer_len];
 
     aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
-                                      ctx->server_state.server_handshake_key, key_len,
+                                      tls13_session->server_state.server_handshake_key, key_len,
                                       nonce, 12, aad, 5, ciphertext + p, 16);
 
-    ctx->server_state.server_handshake_buffer_len += encrypted_record_len;
+    tls13_session->server_state.server_handshake_buffer_len += encrypted_record_len;
 
     return 0;
 }
 
-static int8_t tls13_send_finished(tls13_session_t* ctx) {
+static int8_t tls13_send_finished(tls13_session_t* tls13_session) {
     uint8_t verify_data[SHA384_OUTPUT_SIZE];
-    uint8_t hlen = ctx->connection_state.handshake_hash_len;
-    size_t key_len = ctx->connection_state.handshake_key_len;
+    uint8_t hlen = tls13_session->connection_state.handshake_hash_len;
+    size_t key_len = tls13_session->connection_state.handshake_key_len;
 
     // Get the current Transcript Hash (includes ClientHello...CertificateVerify)
     uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
-    if(tls13_hash_get_current(ctx, current_hash) != 0) {
+    if(tls13_hash_get_current(tls13_session, current_hash) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get current handshake hash for Server Finished");
         return -1;
     }
 
     // Compute HMAC(finished_key, current_hash)
     uint8_t* hmac_out;
-    if(tls13_hash_hmac(ctx->connection_state.selected_hash_algorithm,
-                       ctx->server_state.server_finished_key, hlen,
+    if(tls13_hash_hmac(tls13_session->connection_state.selected_hash_algorithm,
+                       tls13_session->server_state.server_finished_key, hlen,
                        current_hash, hlen,
                        &hmac_out) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute HMAC for Server Finished");
@@ -2565,13 +2555,13 @@ static int8_t tls13_send_finished(tls13_session_t* ctx) {
     p += hlen;
 
     /* --- Update Hash (The Finished message IS hashed for the next steps) --- */
-    tls13_hash_update(ctx, plaintext, p);
+    tls13_hash_update(tls13_session, plaintext, p);
 
     /* --- Wrap in Encrypted Record --- */
     plaintext[p++] = TLS13_CONTENT_TYPE_HANDSHAKE; // Inner Type: Handshake
 
     uint8_t nonce[12];
-    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num++, nonce);
+    tls13_make_nonce(tls13_session->server_state.server_handshake_iv, tls13_session->server_state.write_seq_num++, nonce);
 
     uint16_t encrypted_record_len = p + 16;
 
@@ -2581,41 +2571,41 @@ static int8_t tls13_send_finished(tls13_session_t* ctx) {
         (encrypted_record_len >> 8), (encrypted_record_len & 0xFF)
     };
 
-    if(5 + encrypted_record_len > ctx->server_state.server_handshake_buffer_len) {
-        if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
-                                     ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+    if(5 + encrypted_record_len > tls13_session->server_state.server_handshake_buffer_len) {
+        if(tls13_session->config->network_send(tls13_session->connection_state.network_client_identifier,
+                                               tls13_session->server_state.server_handshake_buffer, tls13_session->server_state.server_handshake_buffer_len, 0) < 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send buffered handshake messages before Encrypted Extensions");
             return -1;
         }
-        ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+        tls13_session->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
     }
 
-    memory_memcopy(aad, ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len, 5);
-    ctx->server_state.server_handshake_buffer_len += 5;
+    memory_memcopy(aad, tls13_session->server_state.server_handshake_buffer + tls13_session->server_state.server_handshake_buffer_len, 5);
+    tls13_session->server_state.server_handshake_buffer_len += 5;
 
-    uint8_t* ciphertext = &ctx->server_state.server_handshake_buffer[ctx->server_state.server_handshake_buffer_len];
+    uint8_t* ciphertext = &tls13_session->server_state.server_handshake_buffer[tls13_session->server_state.server_handshake_buffer_len];
 
     if(aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
-                                         ctx->server_state.server_handshake_key, key_len,
+                                         tls13_session->server_state.server_handshake_key, key_len,
                                          nonce, 12, aad, 5, ciphertext + p, 16) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS Encryption failed for Finished message");
         return -1;
     }
 
-    ctx->server_state.server_handshake_buffer_len += encrypted_record_len;
+    tls13_session->server_state.server_handshake_buffer_len += encrypted_record_len;
 
     // server handshake complete, send all buffered handshake messages including this Finished message
-    if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
-                                 ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+    if(tls13_session->config->network_send(tls13_session->connection_state.network_client_identifier,
+                                           tls13_session->server_state.server_handshake_buffer, tls13_session->server_state.server_handshake_buffer_len, 0) < 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Server Finished message");
         return -1;
     }
-    ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+    tls13_session->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
 
     return 0;
 }
 
-static int32_t tls13_write_chunk(tls13_session_t* ctx, const uint8_t* data, uint32_t len, tls13_content_type_t content_type) {
+static int32_t tls13_write_chunk(tls13_session_t* tls13_session, const uint8_t* data, uint32_t len, tls13_content_type_t content_type) {
     // 16384 is the max TLS record size
     uint32_t p_len = len + 1;
     uint8_t plaintext[p_len];
@@ -2627,7 +2617,7 @@ static int32_t tls13_write_chunk(tls13_session_t* ctx, const uint8_t* data, uint
 
     // Prepare Nonce (IV ^ write_seq_num)
     uint8_t nonce[12];
-    tls13_make_nonce(ctx->server_state.server_application_iv, ctx->server_state.write_seq_num, nonce);
+    tls13_make_nonce(tls13_session->server_state.server_application_iv, tls13_session->server_state.write_seq_num, nonce);
 
     // Prepare AAD (5-byte Record Header)
     uint16_t encrypted_record_len = p_len + 16;
@@ -2638,10 +2628,10 @@ static int32_t tls13_write_chunk(tls13_session_t* ctx, const uint8_t* data, uint
     };
 
     // Encrypt
-    size_t key_len = ctx->connection_state.handshake_key_len;
+    size_t key_len = tls13_session->connection_state.handshake_key_len;
     int32_t status = aes_gcm_encrypt_with_aad_with_tag(
         ciphertext, plaintext, p_len,
-        ctx->server_state.server_application_key, key_len,
+        tls13_session->server_state.server_application_key, key_len,
         nonce, 12, aad, 5, ciphertext + p_len, 16
         );
 
@@ -2651,21 +2641,21 @@ static int32_t tls13_write_chunk(tls13_session_t* ctx, const uint8_t* data, uint
     }
 
     // Send Header + Ciphertext
-    if (ctx->config->network_send(ctx->connection_state.network_client_identifier, aad, 5, 0) < 0) {
+    if (tls13_session->config->network_send(tls13_session->connection_state.network_client_identifier, aad, 5, 0) < 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record header");
         return -1;
     }
-    if (ctx->config->network_send(ctx->connection_state.network_client_identifier, ciphertext, encrypted_record_len, 0) < 0) {
+    if (tls13_session->config->network_send(tls13_session->connection_state.network_client_identifier, ciphertext, encrypted_record_len, 0) < 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record ciphertext");
         return -1;
     }
 
-    ctx->server_state.write_seq_num++;
+    tls13_session->server_state.write_seq_num++;
     return len;
 }
 
-static int32_t tls13_write_ext(tls13_session_t* ctx, const uint8_t* data, uint32_t len, tls13_content_type_t content_type) {
-    if(!ctx || !data) {
+static int32_t tls13_write_ext(tls13_session_t* tls13_session, const uint8_t* data, uint32_t len, tls13_content_type_t content_type) {
+    if(!tls13_session || !data) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS context or data buffer is NULL");
         return -1;
     }
@@ -2674,7 +2664,7 @@ static int32_t tls13_write_ext(tls13_session_t* ctx, const uint8_t* data, uint32
         return 0;
     }
 
-    if(ctx->connection_state.connection_closed) {
+    if(tls13_session->connection_state.connection_closed) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Attempted to write to a closed TLS connection");
         return -1;
     }
@@ -2684,7 +2674,7 @@ static int32_t tls13_write_ext(tls13_session_t* ctx, const uint8_t* data, uint32
 
     while(remaining > 0) {
         uint32_t chunk_size = remaining > 16384 ? 16384 : (uint32_t)remaining;
-        int32_t sent = tls13_write_chunk(ctx, data + total_sent, chunk_size, content_type);
+        int32_t sent = tls13_write_chunk(tls13_session, data + total_sent, chunk_size, content_type);
         if(sent < 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to write TLS chunk");
             return -1;
@@ -2696,17 +2686,17 @@ static int32_t tls13_write_ext(tls13_session_t* ctx, const uint8_t* data, uint32
     return len;
 }
 
-int32_t tls13_write(tls13_session_t* ctx, const uint8_t* data, uint32_t len) {
-    return tls13_write_ext(ctx, data, len, TLS13_CONTENT_TYPE_APPLICATION_DATA);
+int32_t tls13_write(tls13_session_t* tls13_session, const uint8_t* data, uint32_t len) {
+    return tls13_write_ext(tls13_session, data, len, TLS13_CONTENT_TYPE_APPLICATION_DATA);
 }
 
-int32_t tls13_read(tls13_session_t* ctx, uint8_t* out_data, uint32_t max_len) {
-    if(!ctx || !out_data) {
+int32_t tls13_read(tls13_session_t* tls13_session, uint8_t* out_data, uint32_t max_len) {
+    if(!tls13_session || !out_data) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS context or output buffer is NULL");
         return -1;
     }
 
-    if(ctx->connection_state.connection_closed) {
+    if(tls13_session->connection_state.connection_closed) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Attempted to read from a closed TLS connection");
         return 0;
     }
@@ -2716,9 +2706,9 @@ int32_t tls13_read(tls13_session_t* ctx, uint8_t* out_data, uint32_t max_len) {
         return 0;
     }
 
-    if(!ctx->client_state.read_buffer) {
-        ctx->client_state.read_buffer = pipeline_create(16384); // 16KB buffer
-        if(!ctx->client_state.read_buffer) {
+    if(!tls13_session->client_state.read_buffer) {
+        tls13_session->client_state.read_buffer = pipeline_create(16384); // 16KB buffer
+        if(!tls13_session->client_state.read_buffer) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to create read buffer pipeline");
             return -1;
         }
@@ -2726,7 +2716,7 @@ int32_t tls13_read(tls13_session_t* ctx, uint8_t* out_data, uint32_t max_len) {
 
     int32_t remaining = max_len;
 
-    int32_t total_read = pipeline_read(ctx->client_state.read_buffer, remaining, out_data);
+    int32_t total_read = pipeline_read(tls13_session->client_state.read_buffer, remaining, out_data);
     remaining -= total_read;
 
     if(remaining == 0) {
@@ -2735,15 +2725,15 @@ int32_t tls13_read(tls13_session_t* ctx, uint8_t* out_data, uint32_t max_len) {
 
     uint8_t header[5];
 
-    int32_t bytes_read = ctx->config->network_recv(ctx->connection_state.network_client_identifier, header, 5, 0);
+    int32_t bytes_read = tls13_session->config->network_recv(tls13_session->connection_state.network_client_identifier, header, 5, 0);
 
     if(bytes_read == 0) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "TLS connection closed by peer");
-        ctx->connection_state.connection_closed = true;
+        tls13_session->connection_state.connection_closed = true;
         return total_read; // Return what we have so far
     } else if (bytes_read < 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Network receive error while reading TLS record header");
-        ctx->connection_state.connection_closed = true;
+        tls13_session->connection_state.connection_closed = true;
         return -1;
     }
 
@@ -2751,8 +2741,8 @@ int32_t tls13_read(tls13_session_t* ctx, uint8_t* out_data, uint32_t max_len) {
     if (header[0] == TLS13_CONTENT_TYPE_CHANGE_CIPHER_SPEC) {
         uint16_t ccs_len = (header[3] << 8) | header[4];
         uint8_t dummy[16];
-        ctx->config->network_recv(ctx->connection_state.network_client_identifier, dummy, ccs_len, 0);
-        return tls13_read(ctx, out_data, max_len);
+        tls13_session->config->network_recv(tls13_session->connection_state.network_client_identifier, dummy, ccs_len, 0);
+        return tls13_read(tls13_session, out_data, max_len);
     }
 
     if (header[0] != TLS13_CONTENT_TYPE_APPLICATION_DATA) {
@@ -2763,25 +2753,25 @@ int32_t tls13_read(tls13_session_t* ctx, uint8_t* out_data, uint32_t max_len) {
     uint16_t record_len = (header[3] << 8) | header[4];
     uint8_t* buffer = memory_malloc(record_len);
 
-    bytes_read = ctx->config->network_recv(ctx->connection_state.network_client_identifier, buffer, record_len, 0);
+    bytes_read = tls13_session->config->network_recv(tls13_session->connection_state.network_client_identifier, buffer, record_len, 0);
 
     if (bytes_read <= 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read TLS record payload");
         memory_free(buffer);
-        ctx->connection_state.connection_closed = true;
+        tls13_session->connection_state.connection_closed = true;
         return -1;
     }
 
     // Decrypt using Application Keys
     uint8_t nonce[12];
-    tls13_make_nonce(ctx->client_state.client_application_iv, ctx->client_state.read_seq_num, nonce);
+    tls13_make_nonce(tls13_session->client_state.client_application_iv, tls13_session->client_state.read_seq_num, nonce);
 
     uint8_t* plaintext = memory_malloc(record_len);
     uint32_t ciphertext_len = record_len - 16;
 
     int32_t status = aes_gcm_decrypt_with_aad_with_tag(
         plaintext, buffer, ciphertext_len,
-        ctx->client_state.client_application_key, ctx->connection_state.handshake_key_len,
+        tls13_session->client_state.client_application_key, tls13_session->connection_state.handshake_key_len,
         nonce, 12, header, 5, buffer + ciphertext_len, 16
         );
 
@@ -2806,7 +2796,7 @@ int32_t tls13_read(tls13_session_t* ctx, uint8_t* out_data, uint32_t max_len) {
         if (plaintext[0] == TLS13_ALERT_LEVEL_WARNING
             && plaintext[1] == TLS13_ALERT_DESCRIPTION_CLOSE_NOTIFY) {
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Received Close Notify.");
-            ctx->connection_state.connection_closed = true;
+            tls13_session->connection_state.connection_closed = true;
             memory_free(plaintext);
             return 0;
         }
@@ -2820,7 +2810,7 @@ int32_t tls13_read(tls13_session_t* ctx, uint8_t* out_data, uint32_t max_len) {
         // Note: KeyUpdate is 0x18. If you don't handle it,
         // the next record will fail decryption because keys didn't rotate!
         memory_free(plaintext);
-        return tls13_read(ctx, out_data, max_len);
+        return tls13_read(tls13_session, out_data, max_len);
     }
 
     if (inner_type != TLS13_CONTENT_TYPE_APPLICATION_DATA) {
@@ -2836,29 +2826,29 @@ int32_t tls13_read(tls13_session_t* ctx, uint8_t* out_data, uint32_t max_len) {
     // Buffer any excess data for future reads
     if (real_data_len > to_copy) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Buffering %d excess bytes for future reads", real_data_len - to_copy);
-        pipeline_write(ctx->client_state.read_buffer, real_data_len - to_copy, &plaintext[to_copy]);
+        pipeline_write(tls13_session->client_state.read_buffer, real_data_len - to_copy, &plaintext[to_copy]);
     }
 
-    ctx->client_state.read_seq_num++;
+    tls13_session->client_state.read_seq_num++;
     memory_free(plaintext);
     return to_copy + total_read;
 }
 
-static int8_t tls13_read_client_handshake_message(tls13_session_t* ctx, uint8_t** out_buffer, uint16_t* out_len) {
+static int8_t tls13_read_client_handshake_message(tls13_session_t* tls13_session, uint8_t** out_buffer, uint16_t* out_len) {
     uint8_t header[5];
-    int32_t ret = ctx->config->network_recv(ctx->connection_state.network_client_identifier, header, 5, 0);
+    int32_t ret = tls13_session->config->network_recv(tls13_session->connection_state.network_client_identifier, header, 5, 0);
 
     if(ret == 0) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client closed the connection");
-        ctx->connection_state.connection_closed = true;
+        tls13_session->connection_state.connection_closed = true;
         return 0;
     }
 
     if (ret != 5) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read TLS record header for Client Handshake message: ret=%d", ret);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
         return -1;
     }
 
@@ -2866,9 +2856,9 @@ static int8_t tls13_read_client_handshake_message(tls13_session_t* ctx, uint8_t*
     if (header[0] == TLS13_CONTENT_TYPE_CHANGE_CIPHER_SPEC) {
         uint16_t ccs_len = (header[3] << 8) | header[4];
         uint8_t dummy[16];
-        ctx->config->network_recv(ctx->connection_state.network_client_identifier, dummy, ccs_len, 0);
+        tls13_session->config->network_recv(tls13_session->connection_state.network_client_identifier, dummy, ccs_len, 0);
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Received Dummy ChangeCipherSpec before Client Finished");
-        return tls13_read_client_handshake_message(ctx, out_buffer, out_len);
+        return tls13_read_client_handshake_message(tls13_session, out_buffer, out_len);
     }
 
     if(header[0] == TLS13_CONTENT_TYPE_ALERT) {
@@ -2879,7 +2869,7 @@ static int8_t tls13_read_client_handshake_message(tls13_session_t* ctx, uint8_t*
         }
 
         uint8_t alert_payload[2];
-        ctx->config->network_recv(ctx->connection_state.network_client_identifier, alert_payload, 2, 0);
+        tls13_session->config->network_recv(tls13_session->connection_state.network_client_identifier, alert_payload, 2, 0);
         tls13_alert_level_t alert_level = alert_payload[0];
         tls13_alert_description_t alert_desc = alert_payload[1];
         tls13_print_alert(alert_level, alert_desc);
@@ -2888,9 +2878,9 @@ static int8_t tls13_read_client_handshake_message(tls13_session_t* ctx, uint8_t*
 
     if (header[0] != TLS13_CONTENT_TYPE_APPLICATION_DATA) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Expected encrypted record (0x17), got 0x%02x", header[0]);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE;
         return -1;
     }
 
@@ -2902,19 +2892,19 @@ static int8_t tls13_read_client_handshake_message(tls13_session_t* ctx, uint8_t*
 
     if (!buffer) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for record buffer");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
         return -1;
     }
 
-    ret = ctx->config->network_recv(ctx->connection_state.network_client_identifier, buffer, record_len, 0);
+    ret = tls13_session->config->network_recv(tls13_session->connection_state.network_client_identifier, buffer, record_len, 0);
     if (ret != record_len) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read full Client Message");
         memory_free(buffer);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
         return -1;
     }
 
@@ -2922,22 +2912,22 @@ static int8_t tls13_read_client_handshake_message(tls13_session_t* ctx, uint8_t*
     uint8_t* tag = buffer + ciphertext_len;
 
     uint8_t nonce[12];
-    tls13_make_nonce(ctx->client_state.client_handshake_iv, ctx->client_state.read_seq_num, nonce);
+    tls13_make_nonce(tls13_session->client_state.client_handshake_iv, tls13_session->client_state.read_seq_num, nonce);
 
     uint8_t* plaintext = (uint8_t*)memory_malloc(ciphertext_len);
     if (!plaintext) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for Client Message plaintext");
         memory_free(buffer);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
         return -1;
     }
 
     int32_t status = aes_gcm_decrypt_with_aad_with_tag(
         plaintext,
         buffer, ciphertext_len,
-        ctx->client_state.client_handshake_key, ctx->connection_state.handshake_key_len,
+        tls13_session->client_state.client_handshake_key, tls13_session->connection_state.handshake_key_len,
         nonce, 12,
         header, 5,
         tag, 16
@@ -2948,9 +2938,9 @@ static int8_t tls13_read_client_handshake_message(tls13_session_t* ctx, uint8_t*
     if (status != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Decryption Failed! Nonce/Key/AAD mismatch.");
         memory_free(plaintext);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_RECORD_MAC;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_RECORD_MAC;
         return -1;
     }
 
@@ -2970,9 +2960,9 @@ static int8_t tls13_read_client_handshake_message(tls13_session_t* ctx, uint8_t*
     if(inner_type != TLS13_CONTENT_TYPE_HANDSHAKE) { // Handshake
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unexpected Inner Content Type 0x%02x received", inner_type);
         memory_free(plaintext);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE;
         return -1;
     }
 
@@ -2980,9 +2970,9 @@ static int8_t tls13_read_client_handshake_message(tls13_session_t* ctx, uint8_t*
     if (inner_len > type_pos) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Handshake message length %d exceeds actual data length %d", inner_len, type_pos);
         memory_free(plaintext);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
         return -1;
     }
 
@@ -2992,33 +2982,33 @@ static int8_t tls13_read_client_handshake_message(tls13_session_t* ctx, uint8_t*
     return 0;
 }
 
-static int8_t tls13_process_client_certificate_internal(tls13_session_t*     ctx,
+static int8_t tls13_process_client_certificate_internal(tls13_session_t*     tls13_session,
                                                         uint8_t*             handshake_message,
                                                         uint16_t             handshake_message_len,
                                                         x509_certificate_t** client_certificate) {
 
     if (handshake_message_len < 4) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Malformed Certificate message");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
         return -1;
     }
 
     if (handshake_message[0] != TLS13_HANDSHAKE_TYPE_CERTIFICATE) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Expected Certificate handshake message, got 0x%02x", handshake_message[0]);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE;
         return -1;
     }
 
     uint16_t body_len = (handshake_message[1] << 16) | (handshake_message[2] << 8) | handshake_message[3];
     if (body_len > handshake_message_len - 4) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Certificate message length longer than actual data received");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
         return -1;
     }
 
@@ -3028,9 +3018,9 @@ static int8_t tls13_process_client_certificate_internal(tls13_session_t*     ctx
     // 1. request_context (1 byte length prefix)
     if (p + 1 > end) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Malformed Certificate message");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
         return -1;
     }
 
@@ -3040,9 +3030,9 @@ static int8_t tls13_process_client_certificate_internal(tls13_session_t*     ctx
     // 2. certificate_list (3 bytes length prefix)
     if (p + 3 > end) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Malformed Certificate message");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
         return -1;
     }
 
@@ -3051,9 +3041,9 @@ static int8_t tls13_process_client_certificate_internal(tls13_session_t*     ctx
 
     if (cert_list_len == 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Empty client certificate list - Auth Failed");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_CERTIFICATE_REQUIRED;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_CERTIFICATE_REQUIRED;
         return -1;
     }
 
@@ -3069,17 +3059,17 @@ static int8_t tls13_process_client_certificate_internal(tls13_session_t*     ctx
 
     if (tmp_p != tmp_end) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Malformed Certificate message - cert_list length mismatch");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
         return -1;
     }
 
     if (cert_count == 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "No certificates found in client certificate list");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_CERTIFICATE_REQUIRED;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_CERTIFICATE_REQUIRED;
         return -1;
     }
 
@@ -3092,9 +3082,9 @@ static int8_t tls13_process_client_certificate_internal(tls13_session_t*     ctx
     while(cert_list_len > 0) {
         if (p + 3 > end) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Malformed Certificate message while counting certificates");
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
             return -1;
         }
 
@@ -3108,9 +3098,9 @@ static int8_t tls13_process_client_certificate_internal(tls13_session_t*     ctx
                     x509_certificate_free(cert_list[i]);
                 }
             }
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
             return -1;
         }
 
@@ -3122,9 +3112,9 @@ static int8_t tls13_process_client_certificate_internal(tls13_session_t*     ctx
                     x509_certificate_free(cert_list[i]);
                 }
             }
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
             return -1;
         }
 
@@ -3137,9 +3127,9 @@ static int8_t tls13_process_client_certificate_internal(tls13_session_t*     ctx
                     x509_certificate_free(cert_list[i]);
                 }
             }
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
             return -1;
         }
 
@@ -3156,29 +3146,29 @@ static int8_t tls13_process_client_certificate_internal(tls13_session_t*     ctx
         return -1;
     }
 
-    if(!ctx->config->client_certificate_verify_callback) {
+    if(!tls13_session->config->client_certificate_verify_callback) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "No client certificate verification callback provided - cannot verify client certificate");
         for (int32_t i = 0; i < cert_count; i++) {
             if(cert_list[i]) {
                 x509_certificate_free(cert_list[i]);
             }
         }
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
         return -1;
     }
 
-    if (ctx->config->client_certificate_verify_callback(ctx, cert_list, cert_count) != 0) {
+    if (tls13_session->config->client_certificate_verify_callback(tls13_session, cert_list, cert_count) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client certificate verification callback failed - Auth Failed");
         for (int32_t i = 0; i < cert_count; i++) {
             if(cert_list[i]) {
                 x509_certificate_free(cert_list[i]);
             }
         }
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE;
         return -1;
     }
 
@@ -3191,18 +3181,18 @@ static int8_t tls13_process_client_certificate_internal(tls13_session_t*     ctx
     }
 
     // Update transcript with decrypted Handshake message
-    if(tls13_hash_update(ctx, handshake_message, body_len + 4) != 0) {
+    if(tls13_hash_update(tls13_session, handshake_message, body_len + 4) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to update transcript hash with Client Handshake message");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
         return -1;
     }
 
     return 0;
 }
 
-static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t*    ctx,
+static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t*    tls13_session,
                                                                uint8_t*            handshake_message,
                                                                uint16_t            handshake_message_len,
                                                                x509_certificate_t* client_certificate) {
@@ -3210,9 +3200,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
     if (handshake_message[0] != TLS13_HANDSHAKE_TYPE_CERTIFICATE_VERIFY) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Expected CertificateVerify handshake message, got 0x%02x", handshake_message[0]);
         x509_certificate_free(client_certificate);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE;
         return -1;
     }
 
@@ -3222,9 +3212,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
     if (verify_data_len > handshake_message_len - 4) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "CertificateVerify message length longer than actual data received");
         x509_certificate_free(client_certificate);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
         return -1;
     }
 
@@ -3235,9 +3225,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
         if (sig_len != ED25519_SIGNATURE_LEN || (4 + sig_len) != verify_data_len) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid signature length in CertificateVerify");
             x509_certificate_free(client_certificate);
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
             return -1;
         }
     } else if(algorithm == TLS_SIG_ALG_ECDSA_SECP256R1_SHA256) {
@@ -3245,9 +3235,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
         if (sig_len == 0 || sig_len > 72 || (4 + sig_len) != verify_data_len) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid signature length in CertificateVerify for ECDSA");
             x509_certificate_free(client_certificate);
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
             return -1;
         }
     } else if(algorithm == TLS_SIG_ALG_ECDSA_SECP384R1_SHA384) {
@@ -3255,9 +3245,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
         if (sig_len == 0 || sig_len > 104 || (4 + sig_len) != verify_data_len) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid signature length in CertificateVerify for ECDSA");
             x509_certificate_free(client_certificate);
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
             return -1;
         }
     } else {
@@ -3273,9 +3263,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
         (algorithm == TLS_SIG_ALG_ECDSA_SECP384R1_SHA384 && cert_alg != X509_ALGORITHM_ECDSA_SECP384R1_SHA384)) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Signature algorithm in CertificateVerify does not match client certificate public key algorithm: 0x%04x vs cert alg %d", algorithm, cert_alg);
         x509_certificate_free(client_certificate);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE;
         return -1;
     }
 
@@ -3287,16 +3277,16 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
     verify_buffer[64 + strlen(verify_string)] = 0x00; // Null terminator
 
     // Get the current snapshot of the handshake hash
-    uint32_t hlen = ctx->connection_state.handshake_hash_len;
+    uint32_t hlen = tls13_session->connection_state.handshake_hash_len;
 
     // Note: This must include the Certificate message bytes!
     uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
-    if(tls13_hash_get_current(ctx, current_hash) != 0) {
+    if(tls13_hash_get_current(tls13_session, current_hash) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get current handshake hash for CertificateVerify");
         x509_certificate_free(client_certificate);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
         return -1;
     }
 
@@ -3308,9 +3298,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
     if (!public_key) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get public key from client certificate");
         x509_certificate_free(client_certificate);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
         return -1;
     }
 
@@ -3322,9 +3312,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client CertificateVerify signature verification failed");
             memory_free(public_key);
             x509_certificate_free(client_certificate);
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE;
             return -1;
         }
     } else if(algorithm == TLS_SIG_ALG_ECDSA_SECP256R1_SHA256) {
@@ -3336,9 +3326,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode DER signature in CertificateVerify");
             memory_free(public_key);
             x509_certificate_free(client_certificate);
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
             return -1;
         }
 
@@ -3347,9 +3337,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
             memory_free(raw_signature);
             memory_free(public_key);
             x509_certificate_free(client_certificate);
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE;
             return -1;
         }
         memory_free(raw_signature);
@@ -3362,9 +3352,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode DER signature in CertificateVerify");
             memory_free(public_key);
             x509_certificate_free(client_certificate);
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
             return -1;
         }
 
@@ -3373,9 +3363,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
             memory_free(raw_signature);
             memory_free(public_key);
             x509_certificate_free(client_certificate);
-            ctx->connection_state.has_alert = true;
-            ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-            ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE;
+            tls13_session->connection_state.has_alert = true;
+            tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+            tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE;
             return -1;
         }
         memory_free(raw_signature);
@@ -3383,9 +3373,9 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported signature algorithm in CertificateVerify: 0x%04x", algorithm);
         memory_free(public_key);
         x509_certificate_free(client_certificate);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
         return -1;
     }
 
@@ -3395,35 +3385,35 @@ static int8_t tls13_process_client_certificate_verify_internal(tls13_session_t* 
     PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client CertificateVerify processed successfully");
 
     // Update transcript with decrypted Handshake message
-    if(tls13_hash_update(ctx, handshake_message, verify_data_len + 4) != 0) {
+    if(tls13_hash_update(tls13_session, handshake_message, verify_data_len + 4) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to update transcript hash with Client Handshake message");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
         return -1;
     }
 
     return 0;
 }
 
-static int8_t tls13_process_client_finished_internal(tls13_session_t* ctx,
+static int8_t tls13_process_client_finished_internal(tls13_session_t* tls13_session,
                                                      uint8_t*         handshake_message,
                                                      uint16_t         handshake_message_len) {
-    uint8_t hlen = ctx->connection_state.handshake_hash_len;
+    uint8_t hlen = tls13_session->connection_state.handshake_hash_len;
 
     if (handshake_message_len < 4) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Malformed Client Finished message");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
         return -1;
     }
 
     if (handshake_message[0] != TLS13_HANDSHAKE_TYPE_FINISHED) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Expected Client Finished handshake message, got 0x%02x", handshake_message[0]);
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE;
         return -1;
     }
 
@@ -3432,34 +3422,34 @@ static int8_t tls13_process_client_finished_internal(tls13_session_t* ctx,
 
     if (verify_data_len != hlen) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client Finished: Invalid verify_data length");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_DECODE_ERROR;
         return -1;
     }
 
     // 1. Get the Transcript Hash
     // This snapshot must include everything up to your Server Finished
     uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
-    if(tls13_hash_get_current(ctx, current_hash) != 0) {
+    if(tls13_hash_get_current(tls13_session, current_hash) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get current handshake hash for Client Finished");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
         return -1;
     }
 
     // 2. Compute the expected HMAC
     uint8_t expected_verify_data[SHA384_OUTPUT_SIZE];
     uint8_t* hmac_out;
-    if(tls13_hash_hmac(ctx->connection_state.selected_hash_algorithm,
-                       ctx->client_state.client_finished_key, hlen,
+    if(tls13_hash_hmac(tls13_session->connection_state.selected_hash_algorithm,
+                       tls13_session->client_state.client_finished_key, hlen,
                        current_hash, hlen,
                        &hmac_out) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute expected HMAC for Client Finished");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
         return -1;
     }
     memory_memcopy(hmac_out, expected_verify_data, hlen);
@@ -3468,54 +3458,54 @@ static int8_t tls13_process_client_finished_internal(tls13_session_t* ctx,
     // 3. Constant-time comparison (if available in your library)
     if (memory_memcompare(expected_verify_data, received_verify_data, hlen) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client Finished: HMAC verification failed!");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_HANDSHAKE_FAILURE;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_HANDSHAKE_FAILURE;
         return -1;
     }
 
     // Update transcript with decrypted Handshake message
-    if(tls13_hash_update(ctx, handshake_message, verify_data_len + 4) != 0) {
+    if(tls13_hash_update(tls13_session, handshake_message, verify_data_len + 4) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to update transcript hash with Client Handshake message");
-        ctx->connection_state.has_alert = true;
-        ctx->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
-        ctx->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
+        tls13_session->connection_state.has_alert = true;
+        tls13_session->connection_state.alert_level = TLS13_ALERT_LEVEL_FATAL;
+        tls13_session->connection_state.alert_description = TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR;
         return -1;
     }
 
-    ctx->client_state.read_seq_num = 0; // Reset sequence number for application data
+    tls13_session->client_state.read_seq_num = 0; // Reset sequence number for application data
 
     return 0;
 }
 
-static int8_t tls13_handle_client_handshake_read(tls13_session_t* ctx) {
+static int8_t tls13_handle_client_handshake_read(tls13_session_t* tls13_session) {
     uint8_t* handshake_message = NULL;
     uint16_t handshake_message_len = 0;
 
-    if (tls13_read_client_handshake_message(ctx, &handshake_message, &handshake_message_len) != 0) {
+    if (tls13_read_client_handshake_message(tls13_session, &handshake_message, &handshake_message_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read Client Certificate message");
-        tls13_print_alert(ctx->connection_state.alert_level, ctx->connection_state.alert_description);
-        uint8_t alert_payload[2] = {ctx->connection_state.alert_level, ctx->connection_state.alert_description};
-        tls13_write_ext(ctx, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
+        tls13_print_alert(tls13_session->connection_state.alert_level, tls13_session->connection_state.alert_description);
+        uint8_t alert_payload[2] = {tls13_session->connection_state.alert_level, tls13_session->connection_state.alert_description};
+        tls13_write_ext(tls13_session, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
         return -1;
     }
 
-    if(ctx->connection_state.connection_closed) {
+    if(tls13_session->connection_state.connection_closed) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Connection closed by client during handshake");
         return 0;
     }
 
     uint8_t* original_handshake_message = handshake_message; // Keep track for freeing later
 
-    if(ctx->connection_state.session_resumed || !ctx->config->require_client_certificate) {
-        if(tls13_process_client_finished_internal(ctx,
+    if(tls13_session->connection_state.session_resumed || !tls13_session->config->require_client_certificate) {
+        if(tls13_process_client_finished_internal(tls13_session,
                                                   handshake_message,
                                                   handshake_message_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to process client finished for resumed session");
             memory_free(original_handshake_message);
-            tls13_print_alert(ctx->connection_state.alert_level, ctx->connection_state.alert_description);
-            uint8_t alert_payload[2] = {ctx->connection_state.alert_level, ctx->connection_state.alert_description};
-            tls13_write_ext(ctx, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
+            tls13_print_alert(tls13_session->connection_state.alert_level, tls13_session->connection_state.alert_description);
+            uint8_t alert_payload[2] = {tls13_session->connection_state.alert_level, tls13_session->connection_state.alert_description};
+            tls13_write_ext(tls13_session, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
             return -1;
         }
 
@@ -3528,7 +3518,7 @@ static int8_t tls13_handle_client_handshake_read(tls13_session_t* ctx) {
 
     x509_certificate_t* client_certificate = NULL;
 
-    if(tls13_process_client_certificate_internal(ctx,
+    if(tls13_process_client_certificate_internal(tls13_session,
                                                  handshake_message,
                                                  handshake_message_len,
                                                  &client_certificate) != 0) {
@@ -3544,17 +3534,17 @@ static int8_t tls13_handle_client_handshake_read(tls13_session_t* ctx) {
     } else {
         memory_free(original_handshake_message);
 
-        ctx->client_state.read_seq_num++;
+        tls13_session->client_state.read_seq_num++;
 
-        if(tls13_read_client_handshake_message(ctx, &handshake_message, &handshake_message_len) != 0) {
+        if(tls13_read_client_handshake_message(tls13_session, &handshake_message, &handshake_message_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read Client CertificateVerify message");
-            tls13_print_alert(ctx->connection_state.alert_level, ctx->connection_state.alert_description);
-            uint8_t alert_payload[2] = {ctx->connection_state.alert_level, ctx->connection_state.alert_description};
-            tls13_write_ext(ctx, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
+            tls13_print_alert(tls13_session->connection_state.alert_level, tls13_session->connection_state.alert_description);
+            uint8_t alert_payload[2] = {tls13_session->connection_state.alert_level, tls13_session->connection_state.alert_description};
+            tls13_write_ext(tls13_session, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
             return -1;
         }
 
-        if(ctx->connection_state.connection_closed) {
+        if(tls13_session->connection_state.connection_closed) {
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Connection closed by client during handshake");
             x509_certificate_free(client_certificate);
             return 0;
@@ -3565,23 +3555,23 @@ static int8_t tls13_handle_client_handshake_read(tls13_session_t* ctx) {
 
     body_len = (handshake_message[1] << 16) | (handshake_message[2] << 8) | handshake_message[3];
 
-    if(ctx->connection_state.has_alert) {
+    if(tls13_session->connection_state.has_alert) {
         x509_certificate_free(client_certificate);
         client_certificate = NULL; // Avoid double free in error case
 
         if(handshake_message[0] == TLS13_HANDSHAKE_TYPE_FINISHED) {
             memory_free(original_handshake_message);
-            tls13_print_alert(ctx->connection_state.alert_level, ctx->connection_state.alert_description);
-            uint8_t alert_payload[2] = {ctx->connection_state.alert_level, ctx->connection_state.alert_description};
-            tls13_write_ext(ctx, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
+            tls13_print_alert(tls13_session->connection_state.alert_level, tls13_session->connection_state.alert_description);
+            uint8_t alert_payload[2] = {tls13_session->connection_state.alert_level, tls13_session->connection_state.alert_description};
+            tls13_write_ext(tls13_session, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
             return -1;
         }
     }
 
-    if(!ctx->connection_state.has_alert && tls13_process_client_certificate_verify_internal(ctx,
-                                                                                            handshake_message,
-                                                                                            handshake_message_len,
-                                                                                            client_certificate) != 0) {
+    if(!tls13_session->connection_state.has_alert && tls13_process_client_certificate_verify_internal(tls13_session,
+                                                                                                      handshake_message,
+                                                                                                      handshake_message_len,
+                                                                                                      client_certificate) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to process client certificate verify");
         x509_certificate_free(client_certificate);
         client_certificate = NULL; // Avoid double free in error case
@@ -3594,17 +3584,17 @@ static int8_t tls13_handle_client_handshake_read(tls13_session_t* ctx) {
     } else {
         memory_free(original_handshake_message);
 
-        ctx->client_state.read_seq_num++;
+        tls13_session->client_state.read_seq_num++;
 
         // Read the next message which should be Finished
-        if(tls13_read_client_handshake_message(ctx, &handshake_message, &handshake_message_len) != 0) {
+        if(tls13_read_client_handshake_message(tls13_session, &handshake_message, &handshake_message_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read Client Finished message after CertificateVerify");
-            uint8_t alert_payload[2] = {ctx->connection_state.alert_level, ctx->connection_state.alert_description};
-            tls13_write_ext(ctx, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
+            uint8_t alert_payload[2] = {tls13_session->connection_state.alert_level, tls13_session->connection_state.alert_description};
+            tls13_write_ext(tls13_session, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
             return -1;
         }
 
-        if(ctx->connection_state.connection_closed) {
+        if(tls13_session->connection_state.connection_closed) {
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Connection closed by client during handshake");
             x509_certificate_free(client_certificate);
             return 0;
@@ -3613,38 +3603,38 @@ static int8_t tls13_handle_client_handshake_read(tls13_session_t* ctx) {
         original_handshake_message = handshake_message; // Keep track for freeing later
     }
 
-    if(ctx->connection_state.has_alert) {
+    if(tls13_session->connection_state.has_alert) {
         x509_certificate_free(client_certificate);
         client_certificate = NULL; // Avoid double free in error case
     }
 
-    if(!ctx->connection_state.has_alert && tls13_process_client_finished_internal(ctx,
-                                                                                  handshake_message,
-                                                                                  handshake_message_len) != 0) {
+    if(!tls13_session->connection_state.has_alert && tls13_process_client_finished_internal(tls13_session,
+                                                                                            handshake_message,
+                                                                                            handshake_message_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to process client finished");
     }
 
     memory_free(original_handshake_message);
 
-    if(!ctx->connection_state.has_alert) {
+    if(!tls13_session->connection_state.has_alert) {
         PRINTLOG(CRYPTOLIB, LOG_INFO, "Handshake with client completed successfully");
     } else {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Handshake with client failed.");
-        tls13_print_alert(ctx->connection_state.alert_level, ctx->connection_state.alert_description);
-        uint8_t alert_payload[2] = {ctx->connection_state.alert_level, ctx->connection_state.alert_description};
-        tls13_write_ext(ctx, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
+        tls13_print_alert(tls13_session->connection_state.alert_level, tls13_session->connection_state.alert_description);
+        uint8_t alert_payload[2] = {tls13_session->connection_state.alert_level, tls13_session->connection_state.alert_description};
+        tls13_write_ext(tls13_session, alert_payload, sizeof(alert_payload), TLS13_CONTENT_TYPE_ALERT);
         return -1;
     }
 
     return 0;
 }
 
-static int8_t tls13_send_new_session_ticket(tls13_session_t* ctx) {
-    if(ctx->connection_state.psk_key_exchange_mode != TLS13_PSK_KEY_EXCHANGE_MODE_DHE_PSK) {
+static int8_t tls13_send_new_session_ticket(tls13_session_t* tls13_session) {
+    if(tls13_session->connection_state.psk_key_exchange_mode != TLS13_PSK_KEY_EXCHANGE_MODE_DHE_PSK) {
         return 0; // No ticket if not doing DHE_PSK
     }
 
-    if(!ctx->config->get_psk_encryption_keys_callback) {
+    if(!tls13_session->config->get_psk_encryption_keys_callback) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "No callback provided for getting PSK encryption keys - cannot send NewSessionTicket");
         return 0;
     }
@@ -3653,8 +3643,8 @@ static int8_t tls13_send_new_session_ticket(tls13_session_t* ctx) {
     get_random_bytes(ticket_nonce, sizeof(ticket_nonce));
 
     uint8_t resumption_secret[SHA384_OUTPUT_SIZE];
-    uint8_t hlen = ctx->connection_state.handshake_hash_len;
-    if(hkdf_expand_label_ext(ctx, ctx->connection_state.resumption_master_secret, "resumption", ticket_nonce, sizeof(ticket_nonce), resumption_secret, hlen) != 0) {
+    uint8_t hlen = tls13_session->connection_state.handshake_hash_len;
+    if(hkdf_expand_label_ext(tls13_session, tls13_session->connection_state.resumption_master_secret, "resumption", ticket_nonce, sizeof(ticket_nonce), resumption_secret, hlen) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive resumption secret for NewSessionTicket");
         return -1;
     }
@@ -3668,8 +3658,8 @@ static int8_t tls13_send_new_session_ticket(tls13_session_t* ctx) {
     int32_t psk_len = 0;
 
     // put cipher suite
-    psk_identity[psk_len++] = (ctx->connection_state.selected_cipher_suite >> 8) & 0xFF;
-    psk_identity[psk_len++] = (ctx->connection_state.selected_cipher_suite & 0xFF);
+    psk_identity[psk_len++] = (tls13_session->connection_state.selected_cipher_suite >> 8) & 0xFF;
+    psk_identity[psk_len++] = (tls13_session->connection_state.selected_cipher_suite & 0xFF);
 
     // put resumption secret
     memory_memcopy(resumption_secret, &psk_identity[psk_len], hlen);
@@ -3698,7 +3688,7 @@ static int8_t tls13_send_new_session_ticket(tls13_session_t* ctx) {
     psk_identity[psk_len++] = (now_ns >> 8) & 0xFF;
     psk_identity[psk_len++] = (now_ns & 0xFF);
 
-    const char* alpn_selected = ctx->connection_state.alpn_h2 ? "h2" : "http/1.1";
+    const char* alpn_selected = tls13_session->connection_state.alpn_h2 ? "h2" : "http/1.1";
     int32_t name_len = strlen(alpn_selected);
 
     psk_identity[psk_len++] = (name_len >> 8) & 0xFF;
@@ -3716,7 +3706,7 @@ static int8_t tls13_send_new_session_ticket(tls13_session_t* ctx) {
     uint8_t* psk_encryption_iv;
     uint8_t* psk_aed_key;
 
-    if(ctx->config->get_psk_encryption_keys_callback(ctx, false, &psk_encryption_key, &psk_encryption_iv, &psk_aed_key) != 0) {
+    if(tls13_session->config->get_psk_encryption_keys_callback(tls13_session, false, &psk_encryption_key, &psk_encryption_iv, &psk_aed_key) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive ticket encryption key for NewSessionTicket");
         return -1;
     }
@@ -3779,38 +3769,38 @@ static int8_t tls13_send_new_session_ticket(tls13_session_t* ctx) {
     plaintext[hs_len_ptr + 1] = (hs_body_len >> 8) & 0xFF;
     plaintext[hs_len_ptr + 2] = (hs_body_len & 0xFF);
 
-    return tls13_write_ext(ctx, plaintext, p, TLS13_CONTENT_TYPE_HANDSHAKE) < p ? -1 : 0;
+    return tls13_write_ext(tls13_session, plaintext, p, TLS13_CONTENT_TYPE_HANDSHAKE) < p ? -1 : 0;
 }
 
-static int8_t tls13_generate_resumption_keys(tls13_session_t* ctx) {
-    size_t hlen = ctx->connection_state.handshake_hash_len;
+static int8_t tls13_generate_resumption_keys(tls13_session_t* tls13_session) {
+    size_t hlen = tls13_session->connection_state.handshake_hash_len;
     uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
-    if(tls13_hash_get_current(ctx, current_hash) != 0) {
+    if(tls13_hash_get_current(tls13_session, current_hash) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get current handshake hash for post-handshake processing");
         return -1;
     }
 
-    if(ctx->connection_state.psk_key_exchange_mode == TLS13_PSK_KEY_EXCHANGE_MODE_DHE_PSK) {
+    if(tls13_session->connection_state.psk_key_exchange_mode == TLS13_PSK_KEY_EXCHANGE_MODE_DHE_PSK) {
         uint8_t resumption_master_secret[64];
-        if(hkdf_expand_label_ext(ctx, ctx->connection_state.master_secret, "res master", current_hash, hlen, resumption_master_secret, hlen) != 0) {
+        if(hkdf_expand_label_ext(tls13_session, tls13_session->connection_state.master_secret, "res master", current_hash, hlen, resumption_master_secret, hlen) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive resumption secret");
             return -1;
         }
-        memory_memcopy(resumption_master_secret, ctx->connection_state.resumption_master_secret, hlen);
+        memory_memcopy(resumption_master_secret, tls13_session->connection_state.resumption_master_secret, hlen);
         memory_memclean(resumption_master_secret, sizeof(resumption_master_secret));
     }
 
     return 0;
 }
 
-static int8_t tls13_generate_application_keys(tls13_session_t* ctx) {
-    uint32_t hlen = ctx->connection_state.handshake_hash_len;
-    uint32_t key_len = ctx->connection_state.handshake_key_len;
-    uint32_t iv_len  = ctx->connection_state.handshake_iv_len;
+static int8_t tls13_generate_application_keys(tls13_session_t* tls13_session) {
+    uint32_t hlen = tls13_session->connection_state.handshake_hash_len;
+    uint32_t key_len = tls13_session->connection_state.handshake_key_len;
+    uint32_t iv_len  = tls13_session->connection_state.handshake_iv_len;
 
     // 1. Get current transcript hash (Includes EVERYTHING up to Client Finished)
     uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
-    if(tls13_hash_get_current(ctx, current_hash) != 0) {
+    if(tls13_hash_get_current(tls13_session, current_hash) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get current handshake hash for application key generation");
         return -1;
     }
@@ -3819,30 +3809,30 @@ static int8_t tls13_generate_application_keys(tls13_session_t* ctx) {
     uint8_t s_ap_traffic_secret[64];
     uint8_t c_ap_traffic_secret[64];
 
-    if(hkdf_expand_label_ext(ctx, ctx->connection_state.master_secret, "s ap traffic", current_hash, hlen, s_ap_traffic_secret, hlen) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, tls13_session->connection_state.master_secret, "s ap traffic", current_hash, hlen, s_ap_traffic_secret, hlen) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive server application traffic secret");
         return -1;
     }
-    if(hkdf_expand_label_ext(ctx, ctx->connection_state.master_secret, "c ap traffic", current_hash, hlen, c_ap_traffic_secret, hlen) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, tls13_session->connection_state.master_secret, "c ap traffic", current_hash, hlen, c_ap_traffic_secret, hlen) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive client application traffic secret");
         return -1;
     }
 
     // 3. Generate the actual Application Keys/IVs (Context length must be 0)
-    if(hkdf_expand_label_ext(ctx, s_ap_traffic_secret, "key", NULL, 0, ctx->server_state.server_application_key, key_len) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, s_ap_traffic_secret, "key", NULL, 0, tls13_session->server_state.server_application_key, key_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive server application key");
         return -1;
     }
-    if(hkdf_expand_label_ext(ctx, s_ap_traffic_secret, "iv", NULL, 0, ctx->server_state.server_application_iv, iv_len) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, s_ap_traffic_secret, "iv", NULL, 0, tls13_session->server_state.server_application_iv, iv_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive server application IV");
         return -1;
     }
 
-    if(hkdf_expand_label_ext(ctx, c_ap_traffic_secret, "key", NULL, 0, ctx->client_state.client_application_key, key_len) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, c_ap_traffic_secret, "key", NULL, 0, tls13_session->client_state.client_application_key, key_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive client application key");
         return -1;
     }
-    if(hkdf_expand_label_ext(ctx, c_ap_traffic_secret, "iv", NULL, 0, ctx->client_state.client_application_iv, iv_len) != 0) {
+    if(hkdf_expand_label_ext(tls13_session, c_ap_traffic_secret, "iv", NULL, 0, tls13_session->client_state.client_application_iv, iv_len) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive client application IV");
         return -1;
     }
@@ -3851,14 +3841,14 @@ static int8_t tls13_generate_application_keys(tls13_session_t* ctx) {
     memory_memclean(c_ap_traffic_secret, sizeof(c_ap_traffic_secret));
 
     // 5. CRITICAL: Reset sequence numbers for Application Phase
-    ctx->server_state.write_seq_num = 0;
-    // ctx->client_state.read_seq_num = 0; // it should set to 0 after processing Client Finished
+    tls13_session->server_state.write_seq_num = 0;
+    // tls13_session->client_state.read_seq_num = 0; // it should set to 0 after processing Client Finished
 
     return 0;
 }
 
-int8_t tls13_send_close_notify(tls13_session_t* ctx) {
-    if(ctx->connection_state.connection_closed) {
+int8_t tls13_send_close_notify(tls13_session_t* tls13_session) {
+    if(tls13_session->connection_state.connection_closed) {
         return 0; // Already closed, no need to send again
     }
 
@@ -3867,11 +3857,11 @@ int8_t tls13_send_close_notify(tls13_session_t* ctx) {
         TLS13_ALERT_DESCRIPTION_CLOSE_NOTIFY,
     }; // Warning, CloseNotify, InnerType: Alert
 
-    return tls13_write_ext(ctx, plaintext, sizeof(plaintext), TLS13_CONTENT_TYPE_ALERT) < (int32_t)sizeof(plaintext) ? -1 : 0;
+    return tls13_write_ext(tls13_session, plaintext, sizeof(plaintext), TLS13_CONTENT_TYPE_ALERT) < (int32_t)sizeof(plaintext) ? -1 : 0;
 }
 
-int8_t tls13_handle_handshake(tls13_session_t* ctx) {
-    int32_t res_client_hello = tls13_process_client_hello(ctx);
+int8_t tls13_handle_handshake(tls13_session_t* tls13_session) {
+    int32_t res_client_hello = tls13_process_client_hello(tls13_session);
 
     if(res_client_hello == -2) {
         PRINTLOG(CRYPTOLIB, LOG_WARNING, "Redirecting HTTP/1.1 client to HTTPS URL");
@@ -3883,62 +3873,62 @@ int8_t tls13_handle_handshake(tls13_session_t* ctx) {
         return -1;
     }
 
-    get_random_bytes(ctx->server_state.server_random, sizeof(ctx->server_state.server_random));
+    get_random_bytes(tls13_session->server_state.server_random, sizeof(tls13_session->server_state.server_random));
 
-    if(tls13_send_server_hello(ctx) < 0) {
+    if(tls13_send_server_hello(tls13_session) < 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Server Hello");
         return -1;
     }
 
-    if(tls13_generate_handshake_key_and_iv(ctx) != 0) {
+    if(tls13_generate_handshake_key_and_iv(tls13_session) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate handshake key and IV");
         return -1;
     }
 
-    if(tls13_send_encrypted_extensions(ctx) != 0) {
+    if(tls13_send_encrypted_extensions(tls13_session) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Encrypted Extensions");
         return -1;
     }
 
-    if(ctx->config->require_client_certificate) {
-        if(tls13_send_certificate_request(ctx) != 0) {
+    if(tls13_session->config->require_client_certificate) {
+        if(tls13_send_certificate_request(tls13_session) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Certificate Request");
             return -1;
         }
     }
 
-    if(tls13_send_certificate_and_verify(ctx) != 0) {
+    if(tls13_send_certificate_and_verify(tls13_session) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Certificate");
         return -1;
     }
 
-    if(tls13_send_finished(ctx) != 0) {
+    if(tls13_send_finished(tls13_session) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Finished");
         return -1;
     }
 
-    if(tls13_generate_application_keys(ctx) != 0) {
+    if(tls13_generate_application_keys(tls13_session) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate application keys");
         return -1;
     }
 
-    if(tls13_handle_client_handshake_read(ctx) != 0) {
+    if(tls13_handle_client_handshake_read(tls13_session) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to handle Client Handshake Read related messages (Certificate, CertificateVerify, Finished)");
         return -1;
     }
 
-    if(ctx->connection_state.connection_closed) {
+    if(tls13_session->connection_state.connection_closed) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Connection closed by client after handshake");
         return -1;
     }
 
-    if(tls13_generate_resumption_keys(ctx) != 0) {
+    if(tls13_generate_resumption_keys(tls13_session) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate application keys");
         return -1;
     }
 
-    if(ctx->connection_state.psk_key_exchange_mode == TLS13_PSK_KEY_EXCHANGE_MODE_DHE_PSK) {
-        if(tls13_send_new_session_ticket(ctx) != 0) {
+    if(tls13_session->connection_state.psk_key_exchange_mode == TLS13_PSK_KEY_EXCHANGE_MODE_DHE_PSK) {
+        if(tls13_send_new_session_ticket(tls13_session) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send NewSessionTicket");
             return -1;
         }
@@ -3950,4 +3940,45 @@ int8_t tls13_handle_handshake(tls13_session_t* ctx) {
     return 0;
 }
 
+int8_t tls13_handle_connection(tls13_config_t* config, int64_t network_client_identifier) {
+    tls13_session_t* tls13_session = tls13_create_session(
+        config,
+        network_client_identifier
+        );
 
+    if(!tls13_session) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed");
+        return -1;
+    }
+
+    if(tls13_handle_handshake(tls13_session) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS handshake failed");
+        tls13_destroy_session(tls13_session);
+        return -1;
+    }
+
+    if(tls13_session->connection_state.connection_closed) {
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Connection closed by client after handshake");
+        tls13_destroy_session(tls13_session);
+        return 0;
+    }
+
+    int8_t res = 0;
+
+    if(config->application_handler_callback) {
+        if(config->application_handler_callback(tls13_session) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Application data callback returned error");
+            res = -1;
+        }
+    } else {
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "No application data callback provided - closing connection");
+    }
+
+    if(tls13_send_close_notify(tls13_session) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to send Close Notify");
+    }
+
+    tls13_destroy_session(tls13_session);
+
+    return res;
+}

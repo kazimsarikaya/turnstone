@@ -164,8 +164,12 @@ int8_t http_handle(http_request_t* request, http_response_t* response);
 void   http_free_request(http_request_t* request);
 void   http_free_response(http_response_t* response);
 
-int8_t http11_handle_connection(tls13_session_t* ctx);
-int8_t http2_handle_connection(tls13_session_t* ctx);
+int8_t http11_handle_connection(tls13_session_t* tls13_session);
+int8_t http2_handle_connection(tls13_session_t* tls13_session);
+
+int8_t http_plaintext_redirect_handler(tls13_session_t* tls13_session, const uint8_t* data, size_t data_len, uint8_t* response_buf, size_t* response_buf_len);
+
+int8_t http_application_handler(tls13_session_t* tls13_session);
 
 #ifdef __cplusplus
 }

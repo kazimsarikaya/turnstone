@@ -164,3 +164,79 @@ void http_free_response(http_response_t* response) {
 
     memory_free(response);
 }
+
+
+int8_t http_plaintext_redirect_handler(tls13_session_t* tls13_session, const uint8_t* data, size_t data_len, uint8_t* response_buf, size_t* response_buf_len) {
+    if(!tls13_session || !data || data_len == 0 || !response_buf || !response_buf_len) {
+        return -1;
+    }
+
+    // check for GET request (HTTP)
+    if(memory_memcompare(data, "GET ", 4) == 0 // GET
+       || (memory_memcompare(data, "HEAD ", 5) == 0) // HEAD
+       || (memory_memcompare(data, "POST ", 5) == 0) // POST
+       ) {
+        PRINTLOG(CRYPTOLIB, LOG_INFO, "Received HTTP request on TLS port, sending 308 redirect to HTTPS");
+
+        // find Host header
+        char_t default_host[256];
+        memory_memclean(default_host, sizeof(default_host));
+
+        char_t* default_host_port = tls13_get_host_port(tls13_session);
+        memory_memcopy(default_host_port, default_host, strlen(default_host_port));
+        memory_free(default_host_port);
+
+        char_t* host_header = strstr((char_t*)data, "Host: ");
+        if(host_header) {
+            char_t* host_end = strstr(host_header, "\r\n");
+            if(host_end) {
+                size_t host_len = host_end - (host_header + 6);
+                if(host_len < sizeof(default_host)) {
+                    memory_memcopy(host_header + 6, default_host, host_len);
+                    default_host[host_len] = '\0';
+                }
+            }
+        }
+
+        char_t* redirect_str = strprintf(
+            "HTTP/1.1 308 Permanent Redirect\r\n"
+            "Location: https://%s/\r\n"
+            "Content-Length: 0\r\n"
+            "Connection: close\r\n"
+            "\r\n",
+            default_host
+            );
+
+        memory_memcopy(redirect_str, response_buf, strlen(redirect_str));
+        *response_buf_len = strlen(redirect_str);
+        PRINTLOG(HTTP, LOG_INFO, "Sent 308 redirect to https://%s/", default_host);
+
+        memory_free(redirect_str);
+
+        return 0;
+    }
+
+    PRINTLOG(HTTP, LOG_WARNING, "Received non-HTTP request on TLS port, ignoring");
+
+    return -1;
+}
+
+int8_t http_application_handler(tls13_session_t* tls13_session) {
+    if(!tls13_session) {
+        return -1;
+    }
+
+    if(tls13_has_alpn_h2(tls13_session)) {
+        if(http2_handle_connection(tls13_session) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/2 connection handling failed");
+            return -1;
+        }
+    } else {
+        if(http11_handle_connection(tls13_session) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/1.1 connection handling failed");
+            return -1;
+        }
+    }
+
+    return 0;
+}
