@@ -29,6 +29,200 @@
 
 static x509_certificate_t* ca_certificate = NULL;
 
+static int8_t tls13_load_ca_certificate(void) {
+    FILE* f;
+
+    f = fopen("build/ca.pem", "rb");
+    if(!f) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open CA certificate file");
+        return -1;
+    }
+    fseek(f, 0, SEEK_END);
+    long ca_cert_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint8_t* ca_cert_data = memory_malloc(ca_cert_size);
+    if(!ca_cert_data) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA certificate");
+        fclose(f);
+        return -1;
+    }
+    fread(ca_cert_data, 1, ca_cert_size, f);
+    fclose(f);
+
+    ca_certificate = x509_certificate_from_pem((char_t*)ca_cert_data);
+    memory_free(ca_cert_data);
+
+    if(!ca_certificate) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to parse CA certificate from PEM");
+        return -1;
+    }
+
+    f = fopen("build/ca.key", "rb");
+    if(!f) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open CA private key file");
+        return -1;
+    }
+    fseek(f, 0, SEEK_END);
+    long ca_key_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint8_t* ca_key_data = memory_malloc(ca_key_size);
+    if(!ca_key_data) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA private key");
+        fclose(f);
+        return -1;
+    }
+    fread(ca_key_data, 1, ca_key_size, f);
+    fclose(f);
+
+    uint8_t* ca_private_key = NULL;
+    size_t ca_private_key_len = 0;
+    uint8_t* ca_public_key = NULL;
+    size_t ca_public_key_len = 0;
+
+    x509_algorithm_t ca_key_algorithm = x509_certificate_get_public_key_algorithm(ca_certificate);
+    if (ca_key_algorithm == X509_ALGORITHM_ED25519) {
+        ca_private_key_len = ED25519_PRIVATE_KEY_RAW_LEN;
+        ca_public_key_len  = ED25519_PUBLIC_KEY_RAW_LEN;
+
+        ca_private_key = memory_malloc(ca_private_key_len);
+
+        if(ca_private_key == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA private key");
+            memory_free(ca_key_data);
+            return -1;
+        }
+
+        ca_public_key = memory_malloc(ca_public_key_len);
+
+        if(ca_public_key == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA public key");
+            memory_free(ca_private_key);
+            memory_free(ca_key_data);
+            return -1;
+        }
+
+        if(pem_read_ed25519_private_key((char_t*)ca_key_data, ca_private_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read CA private key from PEM");
+            memory_free(ca_key_data);
+            return -1;
+        }
+        memory_free(ca_key_data);
+
+        if(ed25519_derive_pubkey(ca_public_key, ca_private_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive CA public key from private key");
+            return -1;
+        }
+
+        if(x509_certificate_verify_signature(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to verify CA certificate signature with rebuild, trying without rebuild");
+            if(x509_certificate_verify_signature_with_rebuild(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len, false) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to verify CA certificate signature");
+                memory_free(ca_public_key);
+                return -1;
+            }
+        }
+
+        memory_free(ca_public_key);
+    } else if(ca_key_algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
+        ca_private_key_len = ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN;
+        ca_public_key_len  = ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1;
+
+        ca_private_key = memory_malloc(ca_private_key_len);
+
+        if(ca_private_key == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA private key");
+            memory_free(ca_key_data);
+            return -1;
+        }
+
+        ca_public_key = memory_malloc(ca_public_key_len);
+
+        if(ca_public_key == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA public key");
+            memory_free(ca_private_key);
+            memory_free(ca_key_data);
+            return -1;
+        }
+
+        if(pem_read_secp256r1_private_key((char_t*)ca_key_data, ca_private_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read CA private key from PEM");
+            memory_free(ca_key_data);
+            return -1;
+        }
+        memory_free(ca_key_data);
+
+        if(ellipticcurve_secp256r1_derive_pubkey(ca_public_key + 1, ca_private_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive CA public key from private key");
+            return -1;
+        }
+
+        ca_public_key[0] = 0x04; // uncompressed point prefix
+
+        if(x509_certificate_verify_signature(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to verify CA certificate signature with rebuild, trying without rebuild");
+            if(x509_certificate_verify_signature_with_rebuild(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len, false) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to verify CA certificate signature");
+                memory_free(ca_public_key);
+                return -1;
+            }
+        }
+
+        memory_free(ca_public_key);
+    } else if(ca_key_algorithm == X509_ALGORITHM_ECDSA_SECP384R1_SHA384) {
+        ca_private_key_len = ELLIPTICCURVE_SECP384R1_PRIVATE_KEY_RAW_LEN;
+        ca_public_key_len  = ELLIPTICCURVE_SECP384R1_PUBLIC_KEY_RAW_LEN + 1;
+
+        ca_private_key = memory_malloc(ca_private_key_len);
+
+        if(ca_private_key == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA private key");
+            memory_free(ca_key_data);
+            return -1;
+        }
+
+        ca_public_key = memory_malloc(ca_public_key_len);
+
+        if(ca_public_key == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA public key");
+            memory_free(ca_private_key);
+            memory_free(ca_key_data);
+            return -1;
+        }
+
+        if(pem_read_secp384r1_private_key((char_t*)ca_key_data, ca_private_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read CA private key from PEM");
+            memory_free(ca_key_data);
+            return -1;
+        }
+        memory_free(ca_key_data);
+
+        if(ellipticcurve_secp384r1_derive_pubkey(ca_public_key + 1, ca_private_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive CA public key from private key");
+            return -1;
+        }
+
+        ca_public_key[0] = 0x04; // uncompressed point prefix
+
+        if(x509_certificate_verify_signature(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to verify CA certificate signature with rebuild, trying without rebuild");
+            if(x509_certificate_verify_signature_with_rebuild(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len, false) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to verify CA certificate signature");
+                memory_free(ca_public_key);
+                return -1;
+            }
+        }
+
+        memory_free(ca_public_key);
+    } else {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported CA public key algorithm: %d", ca_key_algorithm);
+        return -1;
+    }
+
+    memory_free(ca_private_key);
+
+    return 0;
+}
+
 static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, ellipticcurve_curve_type_t curve_type) {
     // first check build/ca.pem and build/ca.key exists
     // if exists load them else generate new CA certificate and key
@@ -49,7 +243,7 @@ static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, elli
     }
 
     if(ca_exists && !force_regenerate) {
-        return 0;
+        return tls13_load_ca_certificate();
     }
 
     // generate new CA certificate and KEY    x509_certificate_t* cert = x509_certificate_new();
@@ -269,28 +463,8 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
     FILE* f;
 
     if(!ca_certificate) { // cache CA certificate in memory after first load to avoid file I/O on every handshake
-        f = fopen("build/ca.pem", "rb");
-        if(!f) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open CA certificate file");
-            return -1;
-        }
-        fseek(f, 0, SEEK_END);
-        long ca_cert_size = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        uint8_t* ca_cert_data = memory_malloc(ca_cert_size);
-        if(!ca_cert_data) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA certificate");
-            fclose(f);
-            return -1;
-        }
-        fread(ca_cert_data, 1, ca_cert_size, f);
-        fclose(f);
-
-        ca_certificate = x509_certificate_from_pem((char_t*)ca_cert_data);
-        memory_free(ca_cert_data);
-
-        if(!ca_certificate) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to parse CA certificate from PEM");
+        if(tls13_load_ca_certificate() != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to load CA certificate");
             return -1;
         }
     }
@@ -329,27 +503,15 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
 
     uint8_t* ca_private_key = NULL;
     size_t ca_private_key_len = 0;
-    uint8_t* ca_public_key = NULL;
-    size_t ca_public_key_len = 0;
 
     x509_algorithm_t ca_key_algorithm = x509_certificate_get_public_key_algorithm(ca_certificate);
     if (ca_key_algorithm == X509_ALGORITHM_ED25519) {
         ca_private_key_len = ED25519_PRIVATE_KEY_RAW_LEN;
-        ca_public_key_len  = ED25519_PUBLIC_KEY_RAW_LEN;
 
         ca_private_key = memory_malloc(ca_private_key_len);
 
         if(ca_private_key == NULL) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA private key");
-            memory_free(ca_key_data);
-            return -1;
-        }
-
-        ca_public_key = memory_malloc(ca_public_key_len);
-
-        if(ca_public_key == NULL) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA public key");
-            memory_free(ca_private_key);
             memory_free(ca_key_data);
             return -1;
         }
@@ -360,39 +522,13 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
             return -1;
         }
         memory_free(ca_key_data);
-
-        if(ed25519_derive_pubkey(ca_public_key, ca_private_key) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive CA public key from private key");
-            return -1;
-        }
-
-        if(x509_certificate_verify_signature(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to verify CA certificate signature with rebuild, trying without rebuild");
-            if(x509_certificate_verify_signature_with_rebuild(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len, false) != 0) {
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to verify CA certificate signature");
-                memory_free(ca_public_key);
-                return -1;
-            }
-        }
-
-        memory_free(ca_public_key);
     } else if(ca_key_algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
         ca_private_key_len = ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN;
-        ca_public_key_len  = ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1;
 
         ca_private_key = memory_malloc(ca_private_key_len);
 
         if(ca_private_key == NULL) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA private key");
-            memory_free(ca_key_data);
-            return -1;
-        }
-
-        ca_public_key = memory_malloc(ca_public_key_len);
-
-        if(ca_public_key == NULL) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA public key");
-            memory_free(ca_private_key);
             memory_free(ca_key_data);
             return -1;
         }
@@ -403,41 +539,13 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
             return -1;
         }
         memory_free(ca_key_data);
-
-        if(ellipticcurve_secp256r1_derive_pubkey(ca_public_key + 1, ca_private_key) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive CA public key from private key");
-            return -1;
-        }
-
-        ca_public_key[0] = 0x04; // uncompressed point prefix
-
-        if(x509_certificate_verify_signature(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to verify CA certificate signature with rebuild, trying without rebuild");
-            if(x509_certificate_verify_signature_with_rebuild(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len, false) != 0) {
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to verify CA certificate signature");
-                memory_free(ca_public_key);
-                return -1;
-            }
-        }
-
-        memory_free(ca_public_key);
     } else if(ca_key_algorithm == X509_ALGORITHM_ECDSA_SECP384R1_SHA384) {
         ca_private_key_len = ELLIPTICCURVE_SECP384R1_PRIVATE_KEY_RAW_LEN;
-        ca_public_key_len  = ELLIPTICCURVE_SECP384R1_PUBLIC_KEY_RAW_LEN + 1;
 
         ca_private_key = memory_malloc(ca_private_key_len);
 
         if(ca_private_key == NULL) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA private key");
-            memory_free(ca_key_data);
-            return -1;
-        }
-
-        ca_public_key = memory_malloc(ca_public_key_len);
-
-        if(ca_public_key == NULL) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA public key");
-            memory_free(ca_private_key);
             memory_free(ca_key_data);
             return -1;
         }
@@ -448,28 +556,12 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
             return -1;
         }
         memory_free(ca_key_data);
-
-        if(ellipticcurve_secp384r1_derive_pubkey(ca_public_key + 1, ca_private_key) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive CA public key from private key");
-            return -1;
-        }
-
-        ca_public_key[0] = 0x04; // uncompressed point prefix
-
-        if(x509_certificate_verify_signature(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to verify CA certificate signature with rebuild, trying without rebuild");
-            if(x509_certificate_verify_signature_with_rebuild(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len, false) != 0) {
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to verify CA certificate signature");
-                memory_free(ca_public_key);
-                return -1;
-            }
-        }
-
-        memory_free(ca_public_key);
     } else {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported CA public key algorithm: %d", ca_key_algorithm);
         return -1;
     }
+
+    time_t cert_start = time_ns(NULL);
 
     // now generate server certificate signed by CA
     x509_certificate_t* cert = x509_certificate_new();
@@ -523,6 +615,11 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
     uint8_t* server_private_key = NULL;
     size_t server_private_key_len = 0;
 
+    time_t keygen_start;
+    time_t keygen_end;
+    time_t sign_start;
+    time_t sign_end;
+
     if(ca_key_algorithm == X509_ALGORITHM_ED25519) {
         server_private_key_len = ED25519_PRIVATE_KEY_RAW_LEN;
         server_private_key = memory_malloc(ED25519_PRIVATE_KEY_RAW_LEN);
@@ -533,13 +630,14 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
         }
 
         uint8_t server_public_key[32];
-
+        keygen_start = time_ns(NULL);
         if(ed25519_generate_keypair(server_private_key, server_public_key) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate server X25519 keypair");
             x509_certificate_free(cert);
             memory_free(server_private_key);
             return -1;
         }
+        keygen_end = time_ns(NULL);
 
         if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ED25519, server_public_key, ED25519_PUBLIC_KEY_RAW_LEN) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add public key to server certificate");
@@ -548,6 +646,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
             return -1;
         }
 
+        sign_start = time_ns(NULL);
         if (x509_certificate_sign(cert, ca_certificate, ca_key_algorithm,
                                   ca_private_key, ca_private_key_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to sign server certificate");
@@ -555,6 +654,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
             memory_free(server_private_key);
             return -1;
         }
+        sign_end = time_ns(NULL);
     } else if(ca_key_algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
         server_private_key_len = ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN;
         server_private_key = memory_malloc(ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN);
@@ -567,12 +667,14 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
 
         uint8_t server_public_key[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1]; // +1 for uncompressed point prefix
 
+        keygen_start = time_ns(NULL);
         if(ellipticcurve_secp256r1_generate_keypair(server_private_key, server_public_key + 1) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate server ECDSA SECP256R1 keypair");
             x509_certificate_free(cert);
             memory_free(server_private_key);
             return -1;
         }
+        keygen_end = time_ns(NULL);
 
         server_public_key[0] = 0x04; // uncompressed point prefix
 
@@ -583,6 +685,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
             return -1;
         }
 
+        sign_start = time_ns(NULL);
         if (x509_certificate_sign(cert, ca_certificate, ca_key_algorithm,
                                   ca_private_key, ca_private_key_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to sign server certificate");
@@ -590,6 +693,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
             memory_free(server_private_key);
             return -1;
         }
+        sign_end = time_ns(NULL);
     } else if(ca_key_algorithm == X509_ALGORITHM_ECDSA_SECP384R1_SHA384) {
         server_private_key_len = ELLIPTICCURVE_SECP384R1_PRIVATE_KEY_RAW_LEN;
         server_private_key = memory_malloc(ELLIPTICCURVE_SECP384R1_PRIVATE_KEY_RAW_LEN);
@@ -602,12 +706,14 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
 
         uint8_t server_public_key[ELLIPTICCURVE_SECP384R1_PUBLIC_KEY_RAW_LEN + 1]; // +1 for uncompressed point prefix
 
+        keygen_start = time_ns(NULL);
         if(ellipticcurve_secp384r1_generate_keypair(server_private_key, server_public_key + 1) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate server ECDSA SECP384R1 keypair");
             x509_certificate_free(cert);
             memory_free(server_private_key);
             return -1;
         }
+        keygen_end = time_ns(NULL);
 
         server_public_key[0] = 0x04; // uncompressed point prefix
 
@@ -618,6 +724,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
             return -1;
         }
 
+        sign_start = time_ns(NULL);
         if (x509_certificate_sign(cert, ca_certificate, ca_key_algorithm,
                                   ca_private_key, ca_private_key_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to sign server certificate");
@@ -625,6 +732,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
             memory_free(server_private_key);
             return -1;
         }
+        sign_end = time_ns(NULL);
     } else {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported CA public key algorithm: %d", ca_key_algorithm);
         x509_certificate_free(cert);
@@ -640,8 +748,11 @@ static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_s
     time_t end = time_ns(NULL);
 
     uint64_t duration_ms = (end - start) / 1000000;
+    uint64_t cert_duration_ms = (end - cert_start) / 1000000;
+    uint64_t keygen_duration_ms = (keygen_end - keygen_start) / 1000000;
+    uint64_t sign_duration_ms = (sign_end - sign_start) / 1000000;
 
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Server certificate and key loaded successfully in %llu ms", duration_ms);
+    PRINTLOG(CRYPTOLIB, LOG_INFO, "Server certificate and key loaded successfully in %llu ms (cert generation: %llu ms, keygen: %llu ms, signing: %llu ms)", duration_ms, cert_duration_ms, keygen_duration_ms, sign_duration_ms);
 
     return 0;
 }
@@ -652,30 +763,8 @@ static int8_t tls13_client_certificate_verify(tls13_session_t*     ctx,
     UNUSED(ctx);
 
     if(!ca_certificate) { // cache CA certificate in memory after first load to avoid file I/O on every handshake
-        FILE* f;
-
-        f = fopen("build/ca.pem", "rb");
-        if(!f) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open CA certificate file");
-            return -1;
-        }
-        fseek(f, 0, SEEK_END);
-        long ca_cert_size = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        uint8_t* ca_cert_data = memory_malloc(ca_cert_size);
-        if(!ca_cert_data) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA certificate");
-            fclose(f);
-            return -1;
-        }
-        fread(ca_cert_data, 1, ca_cert_size, f);
-        fclose(f);
-
-        ca_certificate = x509_certificate_from_pem((char_t*)ca_cert_data);
-        memory_free(ca_cert_data);
-
-        if(!ca_certificate) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to parse CA certificate from PEM");
+        if(tls13_load_ca_certificate() != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to load CA certificate for client certificate verification");
             return -1;
         }
     }
@@ -704,30 +793,8 @@ static int8_t tls13_client_certificates_ca_dn_list(tls13_session_t* ctx,
     UNUSED(ctx);
 
     if(!ca_certificate) { // cache CA certificate in memory after first load to avoid file I/O on every handshake
-        FILE* f;
-
-        f = fopen("build/ca.pem", "rb");
-        if(!f) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open CA certificate file");
-            return -1;
-        }
-        fseek(f, 0, SEEK_END);
-        long ca_cert_size = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        uint8_t* ca_cert_data = memory_malloc(ca_cert_size);
-        if(!ca_cert_data) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA certificate");
-            fclose(f);
-            return -1;
-        }
-        fread(ca_cert_data, 1, ca_cert_size, f);
-        fclose(f);
-
-        ca_certificate = x509_certificate_from_pem((char_t*)ca_cert_data);
-        memory_free(ca_cert_data);
-
-        if(!ca_certificate) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to parse CA certificate from PEM");
+        if(tls13_load_ca_certificate() != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to load CA certificate for client CA DN list");
             return -1;
         }
     }

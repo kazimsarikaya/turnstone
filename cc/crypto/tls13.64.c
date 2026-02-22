@@ -220,6 +220,8 @@ typedef struct tls13_server_state_t {
     uint8_t  server_finished_key[SHA384_OUTPUT_SIZE];
     uint8_t  server_application_key[AES256_KEY_SIZE];
     uint8_t  server_application_iv[12];
+    uint8_t  server_handshake_buffer[16384]; // Buffer to store handshake messages for reducing network message count, max size of a TLS record is 16KB
+    int32_t  server_handshake_buffer_len;
     int32_t  write_seq_num;
 } tls13_server_state_t;
 
@@ -1770,7 +1772,10 @@ static int32_t tls13_send_server_hello(tls13_session_t* ctx) {
         return -1;
     }
 
-    return ctx->config->network_send(ctx->connection_state.network_client_identifier, msg, p, 0);
+    memory_memcopy(msg, ctx->server_state.server_handshake_buffer, p);
+    ctx->server_state.server_handshake_buffer_len = p;
+
+    return 0;
 }
 
 static int8_t tls13_generate_handshake_key_and_iv(tls13_session_t* ctx) {
@@ -1888,7 +1893,6 @@ static int8_t tls13_generate_handshake_key_and_iv(tls13_session_t* ctx) {
 
 static int8_t tls13_send_encrypted_extensions(tls13_session_t* ctx) {
     uint8_t plaintext[4096]; // Increased slightly for safety
-    uint8_t ciphertext[4096 + 16];
 
     // We start reverse filling from the end of the DATA part,
     // leaving 1 byte for the Inner Content Type (0x16)
@@ -1973,14 +1977,29 @@ static int8_t tls13_send_encrypted_extensions(tls13_session_t* ctx) {
 
     /* --- Nonce and AAD --- */
     uint8_t nonce[12];
-    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num, nonce);
+    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num++, nonce);
 
     uint16_t encrypted_record_len = aead_plaintext_len + 16;
+
+    if(5 + encrypted_record_len > ctx->server_state.server_handshake_buffer_len) {
+        if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
+                                     ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send buffered handshake messages before Encrypted Extensions");
+            return -1;
+        }
+        ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+    }
+
     uint8_t aad[5] = {
         TLS13_CONTENT_TYPE_APPLICATION_DATA,
         0x03, 0x03,
         (encrypted_record_len >> 8), (encrypted_record_len & 0xff)
     };
+
+    memory_memcopy(aad, ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len, 5);
+    ctx->server_state.server_handshake_buffer_len += 5;
+
+    uint8_t* ciphertext = ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len;
 
     /* --- Encrypt --- */
     int32_t status = aes_gcm_encrypt_with_aad_with_tag(
@@ -1995,18 +2014,8 @@ static int8_t tls13_send_encrypted_extensions(tls13_session_t* ctx) {
         return -1;
     }
 
-    /* --- Send record --- */
-    if (ctx->config->network_send(ctx->connection_state.network_client_identifier, aad, 5, 0) < 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record header");
-        return -1;
-    }
+    ctx->server_state.server_handshake_buffer_len += encrypted_record_len;
 
-    if (ctx->config->network_send(ctx->connection_state.network_client_identifier, ciphertext, encrypted_record_len, 0) < 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send encrypted extensions");
-        return -1;
-    }
-
-    ctx->server_state.write_seq_num++;
     return 0;
 }
 
@@ -2039,7 +2048,6 @@ static int8_t tls13_send_certificate_request(tls13_session_t* ctx) {
     }
 
     uint8_t plaintext[msg_predicted_len];
-    uint8_t ciphertext[msg_predicted_len + 16];
 
     int32_t reverse_p = msg_predicted_len - 28; // Start offset
     int32_t start_pos = reverse_p;
@@ -2174,14 +2182,29 @@ static int8_t tls13_send_certificate_request(tls13_session_t* ctx) {
 
     /* --- Nonce and AAD --- */
     uint8_t nonce[12];
-    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num, nonce);
+    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num++, nonce);
 
     uint16_t encrypted_record_len = aead_plaintext_len + 16;
+
+    if(5 + encrypted_record_len > ctx->server_state.server_handshake_buffer_len) {
+        if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
+                                     ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send buffered handshake messages before Encrypted Extensions");
+            return -1;
+        }
+        ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+    }
+
     uint8_t aad[5] = {
         TLS13_CONTENT_TYPE_APPLICATION_DATA,
         0x03, 0x03,
         (encrypted_record_len >> 8), (encrypted_record_len & 0xff)
     };
+
+    memory_memcopy(aad, ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len, 5);
+    ctx->server_state.server_handshake_buffer_len += 5;
+
+    uint8_t* ciphertext = ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len;
 
     /* --- Encrypt --- */
     int32_t status = aes_gcm_encrypt_with_aad_with_tag(
@@ -2196,18 +2219,7 @@ static int8_t tls13_send_certificate_request(tls13_session_t* ctx) {
         return -1;
     }
 
-    /* --- Send record --- */
-    if (ctx->config->network_send(ctx->connection_state.network_client_identifier, aad, 5, 0) < 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record header");
-        return -1;
-    }
-
-    if (ctx->config->network_send(ctx->connection_state.network_client_identifier, ciphertext, encrypted_record_len, 0) < 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send encrypted extensions");
-        return -1;
-    }
-
-    ctx->server_state.write_seq_num++;
+    ctx->server_state.server_handshake_buffer_len += encrypted_record_len;
 
     return 0;
 }
@@ -2258,23 +2270,7 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
         return -1;
     }
 
-    size_t total_cert_len = 3 + server_der_len + 2 + 3 + ca_der_len + 2;
-    size_t estimated_hs_len = 1 + 3 + 1 + 3 + total_cert_len;
-    estimated_hs_len += 4096 - (estimated_hs_len % 4096); // Padding for safety
-
-    uint8_t* plaintext  = (uint8_t*)memory_malloc(estimated_hs_len);
-    uint8_t* ciphertext = (uint8_t*)memory_malloc(estimated_hs_len + 16);
-
-    if (!plaintext || !ciphertext) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for Certificate message");
-        memory_free(plaintext);
-        memory_free(ciphertext);
-        memory_free(server_der);
-        memory_free(ca_der);
-        memory_free(server_private_key);
-        return -1;
-    }
-
+    uint8_t plaintext[16384]; // Large buffer for handshake message
     int32_t p = 0;
 
     /* --- Build Handshake Body --- */
@@ -2324,28 +2320,39 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
     plaintext[p++] = TLS13_CONTENT_TYPE_HANDSHAKE; // Inner Type: Handshake
 
     uint8_t nonce[12];
-    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num, nonce);
+    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num++, nonce);
 
     size_t key_len = ctx->connection_state.handshake_key_len;
-    uint16_t encrypted_len = p + 16;
+    uint16_t encrypted_record_len = p + 16;
+
+    if(5 + encrypted_record_len > ctx->server_state.server_handshake_buffer_len) {
+        if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
+                                     ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send buffered handshake messages before Encrypted Extensions");
+            return -1;
+        }
+        ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+    }
 
     uint8_t aad[5] = {
         TLS13_CONTENT_TYPE_APPLICATION_DATA,
         0x03, 0x03,
-        (encrypted_len >> 8), (encrypted_len & 0xFF)
+        (encrypted_record_len >> 8), (encrypted_record_len & 0xFF)
     };
 
-    aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
-                                      ctx->server_state.server_handshake_key, key_len,
-                                      nonce, 12, aad, 5, ciphertext + p, 16);
+    memory_memcopy(aad, ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len, 5);
+    ctx->server_state.server_handshake_buffer_len += 5;
 
-    ctx->config->network_send(ctx->connection_state.network_client_identifier, aad, 5, 0);
-    ctx->config->network_send(ctx->connection_state.network_client_identifier, ciphertext, encrypted_len, 0);
+    uint8_t* ciphertext = &ctx->server_state.server_handshake_buffer[ctx->server_state.server_handshake_buffer_len];
 
-    ctx->server_state.write_seq_num++;
+    if(aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
+                                         ctx->server_state.server_handshake_key, key_len,
+                                         nonce, 12, aad, 5, ciphertext + p, 16) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS Encryption failed for Certificate message");
+        return -1;
+    }
 
-    memory_free(plaintext);
-    memory_free(ciphertext);
+    ctx->server_state.server_handshake_buffer_len += encrypted_record_len;
 
     const size_t space_count  = 64;
     const char_t* sign_string = "TLS 1.3, server CertificateVerify";
@@ -2461,14 +2468,6 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
         return -1;
     }
 
-    plaintext = memory_malloc(4 + 2 + 2 + signature_len); // Handshake Header (4) + Sig Alg (2) + Sig Len (2) + Signature
-
-    if (!plaintext) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for CertificateVerify message");
-        memory_free(signature);
-        return -1;
-    }
-
     p = 0;
 
     /* --- Build Handshake Message --- */
@@ -2499,34 +2498,120 @@ static int8_t tls13_send_certificate_and_verify(tls13_session_t* ctx) {
     // 2. Wrap in encrypted record
     plaintext[p++] = TLS13_CONTENT_TYPE_HANDSHAKE; // Inner Type: Handshake
 
-    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num, nonce);
+    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num++, nonce);
 
-    encrypted_len = p + 16;
+    encrypted_record_len = p + 16;
+
+    if(5 + encrypted_record_len > ctx->server_state.server_handshake_buffer_len) {
+        if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
+                                     ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send buffered handshake messages before Encrypted Extensions");
+            return -1;
+        }
+        ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+    }
+
     aad[0] = TLS13_CONTENT_TYPE_APPLICATION_DATA;
     aad[1] = 0x03;
     aad[2] = 0x03;
-    aad[3] = (encrypted_len >> 8) & 0xFF;
-    aad[4] = (encrypted_len & 0xFF);
+    aad[3] = (encrypted_record_len >> 8) & 0xFF;
+    aad[4] = (encrypted_record_len & 0xFF);
 
-    ciphertext = memory_malloc(encrypted_len);
-    if (!ciphertext) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for CertificateVerify ciphertext");
-        memory_free(plaintext);
-        return -1;
-    }
+    memory_memcopy(aad, ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len, 5);
+    ctx->server_state.server_handshake_buffer_len += 5;
+
+    ciphertext = &ctx->server_state.server_handshake_buffer[ctx->server_state.server_handshake_buffer_len];
 
     aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
                                       ctx->server_state.server_handshake_key, key_len,
                                       nonce, 12, aad, 5, ciphertext + p, 16);
 
-    memory_free(plaintext);
+    ctx->server_state.server_handshake_buffer_len += encrypted_record_len;
 
-    ctx->config->network_send(ctx->connection_state.network_client_identifier, aad, 5, 0);
-    ctx->config->network_send(ctx->connection_state.network_client_identifier, ciphertext, encrypted_len, 0);
+    return 0;
+}
 
-    memory_free(ciphertext);
+static int8_t tls13_send_finished(tls13_session_t* ctx) {
+    uint8_t verify_data[SHA384_OUTPUT_SIZE];
+    uint8_t hlen = ctx->connection_state.handshake_hash_len;
+    size_t key_len = ctx->connection_state.handshake_key_len;
 
-    ctx->server_state.write_seq_num++;
+    // Get the current Transcript Hash (includes ClientHello...CertificateVerify)
+    uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
+    if(tls13_hash_get_current(ctx, current_hash) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get current handshake hash for Server Finished");
+        return -1;
+    }
+
+    // Compute HMAC(finished_key, current_hash)
+    uint8_t* hmac_out;
+    if(tls13_hash_hmac(ctx->connection_state.selected_hash_algorithm,
+                       ctx->server_state.server_finished_key, hlen,
+                       current_hash, hlen,
+                       &hmac_out) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute HMAC for Server Finished");
+        return -1;
+    }
+    memory_memcopy(hmac_out, verify_data, hlen);
+    memory_free(hmac_out);
+
+    /* --- Build Handshake Message --- */
+    uint8_t plaintext[128];
+    int32_t p = 0;
+
+    plaintext[p++] = TLS13_HANDSHAKE_TYPE_FINISHED; // Type: Finished
+    plaintext[p++] = 0x00; plaintext[p++] = 0x00; plaintext[p++] = hlen; // Length
+    memory_memcopy(verify_data, &plaintext[p], hlen);
+    p += hlen;
+
+    /* --- Update Hash (The Finished message IS hashed for the next steps) --- */
+    tls13_hash_update(ctx, plaintext, p);
+
+    /* --- Wrap in Encrypted Record --- */
+    plaintext[p++] = TLS13_CONTENT_TYPE_HANDSHAKE; // Inner Type: Handshake
+
+    uint8_t nonce[12];
+    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num++, nonce);
+
+    uint16_t encrypted_record_len = p + 16;
+
+    uint8_t aad[5] = {
+        TLS13_CONTENT_TYPE_APPLICATION_DATA,
+        0x03, 0x03,
+        (encrypted_record_len >> 8), (encrypted_record_len & 0xFF)
+    };
+
+    if(5 + encrypted_record_len > ctx->server_state.server_handshake_buffer_len) {
+        if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
+                                     ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send buffered handshake messages before Encrypted Extensions");
+            return -1;
+        }
+        ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+    }
+
+    memory_memcopy(aad, ctx->server_state.server_handshake_buffer + ctx->server_state.server_handshake_buffer_len, 5);
+    ctx->server_state.server_handshake_buffer_len += 5;
+
+    uint8_t* ciphertext = &ctx->server_state.server_handshake_buffer[ctx->server_state.server_handshake_buffer_len];
+
+    if(aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
+                                         ctx->server_state.server_handshake_key, key_len,
+                                         nonce, 12, aad, 5, ciphertext + p, 16) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS Encryption failed for Finished message");
+        return -1;
+    }
+
+    ctx->server_state.server_handshake_buffer_len += encrypted_record_len;
+
+    // server handshake complete, send all buffered handshake messages including this Finished message
+    if(ctx->config->network_send(ctx->connection_state.network_client_identifier,
+                                 ctx->server_state.server_handshake_buffer, ctx->server_state.server_handshake_buffer_len, 0) < 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Server Finished message");
+        return -1;
+    }
+    ctx->server_state.server_handshake_buffer_len = 0; // Clear buffer after sending
+
     return 0;
 }
 
@@ -2757,68 +2842,6 @@ int32_t tls13_read(tls13_session_t* ctx, uint8_t* out_data, uint32_t max_len) {
     ctx->client_state.read_seq_num++;
     memory_free(plaintext);
     return to_copy + total_read;
-}
-
-static int8_t tls13_send_finished(tls13_session_t* ctx) {
-    uint8_t verify_data[SHA384_OUTPUT_SIZE];
-    uint8_t hlen = ctx->connection_state.handshake_hash_len;
-    size_t key_len = ctx->connection_state.handshake_key_len;
-
-    // Get the current Transcript Hash (includes ClientHello...CertificateVerify)
-    uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
-    if(tls13_hash_get_current(ctx, current_hash) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get current handshake hash for Server Finished");
-        return -1;
-    }
-
-    // Compute HMAC(finished_key, current_hash)
-    uint8_t* hmac_out;
-    if(tls13_hash_hmac(ctx->connection_state.selected_hash_algorithm,
-                       ctx->server_state.server_finished_key, hlen,
-                       current_hash, hlen,
-                       &hmac_out) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute HMAC for Server Finished");
-        return -1;
-    }
-    memory_memcopy(hmac_out, verify_data, hlen);
-    memory_free(hmac_out);
-
-    /* --- Build Handshake Message --- */
-    uint8_t plaintext[128];
-    uint8_t ciphertext[128 + 16];
-    int32_t p = 0;
-
-    plaintext[p++] = TLS13_HANDSHAKE_TYPE_FINISHED; // Type: Finished
-    plaintext[p++] = 0x00; plaintext[p++] = 0x00; plaintext[p++] = hlen; // Length
-    memory_memcopy(verify_data, &plaintext[p], hlen);
-    p += hlen;
-
-    /* --- Update Hash (The Finished message IS hashed for the next steps) --- */
-    tls13_hash_update(ctx, plaintext, p);
-
-    /* --- Wrap in Encrypted Record --- */
-    plaintext[p++] = TLS13_CONTENT_TYPE_HANDSHAKE; // Inner Type: Handshake
-
-    uint8_t nonce[12];
-    tls13_make_nonce(ctx->server_state.server_handshake_iv, ctx->server_state.write_seq_num, nonce);
-
-    uint16_t encrypted_len = p + 16;
-    uint8_t aad[5] = {
-        TLS13_CONTENT_TYPE_APPLICATION_DATA,
-        0x03, 0x03,
-        (encrypted_len >> 8), (encrypted_len & 0xFF)
-    };
-
-    aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
-                                      ctx->server_state.server_handshake_key, key_len,
-                                      nonce, 12, aad, 5, ciphertext + p, 16);
-
-    ctx->config->network_send(ctx->connection_state.network_client_identifier, aad, 5, 0);
-    ctx->config->network_send(ctx->connection_state.network_client_identifier, ciphertext, encrypted_len, 0);
-
-    ctx->server_state.write_seq_num++;
-
-    return 0;
 }
 
 static int8_t tls13_read_client_handshake_message(tls13_session_t* ctx, uint8_t** out_buffer, uint16_t* out_len) {
