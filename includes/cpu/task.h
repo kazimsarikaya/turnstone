@@ -11,6 +11,7 @@
 
 #include <cpu/descriptor.h>
 #include <cpu/interrupt.h>
+#include <cpu/cpu_registers.h>
 #include <memory.h>
 #include <memory/paging.h>
 #include <list.h>
@@ -63,8 +64,8 @@ typedef struct descriptor_tss_t {
             tss->dpl = DPL; \
             tss->segment_limit1 = limit & 0xFFFF; \
             tss->segment_limit2 = (limit >> 16) & 0xF; \
-            tss->base_address1 = base & 0xFFFFFF; \
-            tss->base_address2 = (base >> 24); \
+            tss->base_address1  = base & 0xFFFFFF; \
+            tss->base_address2  = (base >> 24); \
 }
 
 /**
@@ -112,36 +113,9 @@ typedef enum task_state_t {
  * @brief task attributes
  */
 typedef enum task_attribute_t {
-    TASK_ATTRIBUTE_NONE = 0x0, ///< no attribute
+    TASK_ATTRIBUTE_NONE          = 0x0, ///< no attribute
     TASK_ATTRIBUTE_INTERRUPTIBLE = 0x1, ///< task is interruptible
 } task_attribute_t; ///< short hand for enum
-
-typedef struct task_registers_t {
-    uint64_t rax; ///< register
-    uint64_t rbx; ///< register
-    uint64_t rcx; ///< register
-    uint64_t rdx; ///< register
-    uint64_t r8; ///< register
-    uint64_t r9; ///< register
-    uint64_t r10; ///< register
-    uint64_t r11; ///< register
-    uint64_t r12; ///< register
-    uint64_t r13; ///< register
-    uint64_t r14; ///< register
-    uint64_t r15; ///< register
-    uint64_t rsi; ///< register
-    uint64_t rdi; ///< register
-    uint64_t rsp; ///< register
-    uint64_t rbp; ///< register
-    uint64_t rflags; ///< register
-    uint64_t cr3; ///< register
-    uint32_t xsave_mask_lo; ///< xsave mask low
-    uint32_t xsave_mask_hi; ///< xsave mask high
-    uint8_t  avx512f[0x2000] __attribute__((aligned(0x40))); ///< register
-} task_registers_t;
-
-_Static_assert(sizeof(task_registers_t) == 0x20c0, "task_registers_t size must be 0x20c0");
-_Static_assert((offsetof_field(task_registers_t, avx512f) % 0x40) == 0x0, "task_registers_t avx512f offset must be aligned 0x40");
 
 /** @brief function prototype for custom message availability check function
  * @param[in] args arguments for custom function
@@ -179,7 +153,7 @@ typedef struct task_t {
     uint64_t                       vmcs_physical_address; ///< vmcs physical address
     void*                          vm; ///< vm
     int32_t                        exit_code; ///< task exit code
-    task_registers_t*              registers; ///< task registers
+    cpu_registers_t*               registers; ///< task registers
 } task_t; ///< short hand for struct
 
 _Static_assert(offsetof_field(task_t, registers) == 0xE0, "task_t registers offset is at 0xE0");

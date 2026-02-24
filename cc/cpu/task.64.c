@@ -74,8 +74,8 @@ uint64_t task_max_tick_count_limit = 0;
 extern int8_t kmain64(void);
 
 int8_t                                          task_task_switch_isr(interrupt_frame_ext_t* frame);
-__attribute__((naked, no_stack_protector)) void task_save_registers(task_registers_t* registers);
-__attribute__((naked, no_stack_protector)) void task_load_registers(task_registers_t* registers);
+__attribute__((naked, no_stack_protector)) void task_save_registers(cpu_registers_t* registers);
+__attribute__((naked, no_stack_protector)) void task_load_registers(cpu_registers_t* registers);
 void                                            task_cleanup(void);
 task_t*                                         task_find_next_task(void);
 
@@ -160,7 +160,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
     uint64_t stack_size = kernel->program_stack_size;
-    uint64_t stack_top = kernel->program_stack_virtual_address;
+    uint64_t stack_top  = kernel->program_stack_virtual_address;
 
     PRINTLOG(TASKING, LOG_INFO, "stack top 0x%llx size 0x%llx", stack_top, stack_size);
 
@@ -206,7 +206,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     task_queue_and_cleanup_heaps = memory_malloc_ext(heap, sizeof(memory_heap_t*) * cpu_count, 0x0);
     task_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
     task_sleep_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
-    task_wait_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
+    task_wait_queues  = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
     task_cleanup_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
 
 
@@ -307,7 +307,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     current_cpu_state->task_queue = task_queues[0];
     current_cpu_state->task_sleep_queue = task_sleep_queues[0];
-    current_cpu_state->task_wait_queue = task_wait_queues[0];
+    current_cpu_state->task_wait_queue  = task_wait_queues[0];
     current_cpu_state->task_cleanup_queue = task_cleanup_queues[0];
 
     interrupt_irq_set_handler(0xde, &task_task_switch_isr);
@@ -326,8 +326,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     kernel_task->task_id = cpu_count + 1;
     kernel_task->state = TASK_STATE_RUNNING;
     kernel_task->entry_point = kmain64;
-    kernel_task->page_table = memory_paging_get_table();
-    kernel_task->registers = memory_malloc_ext(task_map_heap, sizeof(task_registers_t), 0x40);
+    kernel_task->page_table  = memory_paging_get_table();
+    kernel_task->registers = memory_malloc_ext(task_map_heap, sizeof(cpu_registers_t), 0x40);
 
     if(kernel_task->registers == NULL) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for kernel task fx registers");
@@ -341,9 +341,9 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     kernel_task->stack = (void*)(stack_top);
     kernel_task->stack_size = stack_size;
-    kernel_task->input_buffer = stdbufs_default_input_buffer;
+    kernel_task->input_buffer  = stdbufs_default_input_buffer;
     kernel_task->output_buffer = stdbufs_default_output_buffer;
-    kernel_task->error_buffer = stdbufs_default_error_buffer;
+    kernel_task->error_buffer  = stdbufs_default_error_buffer;
 
     cpu_cpuid_regs_t query = {0};
     cpu_cpuid_regs_t result;
@@ -411,9 +411,9 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     lock_get_current_task_getter = &task_get_current_task;
     lock_task_yielder = &task_yield;
 
-    stdbufs_task_get_input_buffer = &task_get_input_buffer;
+    stdbufs_task_get_input_buffer  = &task_get_input_buffer;
     stdbufs_task_get_output_buffer = &task_get_output_buffer;
-    stdbufs_task_get_error_buffer = &task_get_error_buffer;
+    stdbufs_task_get_error_buffer  = &task_get_error_buffer;
 
     future_task_wait_toggler_func = &task_toggle_wait_for_future;
 
@@ -439,7 +439,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     cpu_state->task_queue = task_queues[apic_id];
     cpu_state->task_sleep_queue = task_sleep_queues[apic_id];
-    cpu_state->task_wait_queue = task_wait_queues[apic_id];
+    cpu_state->task_wait_queue  = task_wait_queues[apic_id];
     cpu_state->task_cleanup_queue = task_cleanup_queues[apic_id];
 
     task_t* current_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
@@ -467,8 +467,8 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
     current_task->heap_size = kernel->program_heap_size;
     current_task->state = TASK_STATE_RUNNING;
     current_task->entry_point = entry_point;
-    current_task->page_table = memory_paging_get_table();
-    current_task->registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x40);
+    current_task->page_table  = memory_paging_get_table();
+    current_task->registers = memory_malloc_ext(heap, sizeof(cpu_registers_t), 0x40);
 
     if(current_task->registers == NULL) {
         memory_free_ext(heap, current_task);
@@ -480,14 +480,14 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
     current_task->registers->xsave_mask_lo = task_xsave_mask & 0xFFFFFFFF;
     current_task->registers->xsave_mask_hi = task_xsave_mask >> 32;
 
-    *(uint16_t*)&current_task->registers->avx512f[0] = 0x37F;
+    *(uint16_t*)&current_task->registers->avx512f[0]  = 0x37F;
     *(uint32_t*)&current_task->registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     memory_heap_t* sheap = spool_get_heap();
 
-    current_task->input_buffer = buffer_create_with_heap(sheap, 0x1000);
+    current_task->input_buffer  = buffer_create_with_heap(sheap, 0x1000);
     current_task->output_buffer = buffer_create_with_heap(sheap, 0x1000);
-    current_task->error_buffer = buffer_create_with_heap(sheap, 0x1000);
+    current_task->error_buffer  = buffer_create_with_heap(sheap, 0x1000);
 
     spool_add(current_task->task_name, 3, current_task->input_buffer, current_task->output_buffer, current_task->error_buffer);
 
@@ -511,7 +511,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
     return 0;
 }
 
-__attribute__((naked, no_stack_protector, noinline)) void task_save_registers(task_registers_t* registers) {
+__attribute__((naked, no_stack_protector, noinline)) void task_save_registers(cpu_registers_t* registers) {
     __asm__ __volatile__ (
         "mov %%rax, %[rax]\n"
         "mov %%rbx, %[rbx]\n"
@@ -573,7 +573,7 @@ __attribute__((naked, no_stack_protector, noinline)) void task_save_registers(ta
         );
 }
 
-__attribute__((naked, no_stack_protector, noinline)) void task_load_registers(task_registers_t* registers) {
+__attribute__((naked, no_stack_protector, noinline)) void task_load_registers(cpu_registers_t* registers) {
     __asm__ __volatile__ (
         "mov %[rcx],  %%rcx\n"
         "mov %[r8],  %%r8\n"
@@ -967,7 +967,8 @@ void task_end_task(void) {
         PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx on cpu 0x%llx",
                  current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
         ret = entry_point(current_task->arguments_count, current_task->arguments);
-    } if(current_task->state == TASK_STATE_RUNNING) {
+    }
+    if(current_task->state == TASK_STATE_RUNNING) {
         ret = current_task->exit_code;
     } else {
         PRINTLOG(TASKING, LOG_WARNING, "ending task %s with pid 0x%llx on cpu 0x%llx that is not in starting state but in state 0x%x",
@@ -1026,7 +1027,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     new_task->creator_heap = heap;
 
-    task_registers_t* registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x40);
+    cpu_registers_t* registers = memory_malloc_ext(heap, sizeof(cpu_registers_t), 0x40);
 
     if(registers == NULL) {
         memory_free_ext(heap, new_task);
@@ -1104,8 +1105,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     new_task->task_id = new_task_id;
     new_task->state = TASK_STATE_CREATED;
     new_task->entry_point = entry_point;
-    new_task->page_table = memory_paging_get_table();
-    new_task->registers = registers;
+    new_task->page_table  = memory_paging_get_table();
+    new_task->registers  = registers;
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
     new_task->task_name = strdup_at_heap(task_map_heap, task_name);
@@ -1123,7 +1124,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     registers->xsave_mask_lo = task_xsave_mask & 0xFFFFFFFF;
     registers->xsave_mask_hi = task_xsave_mask >> 32;
 
-    *(uint16_t*)&registers->avx512f[0] = 0x37F;
+    *(uint16_t*)&registers->avx512f[0]  = 0x37F;
     *(uint32_t*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)new_task->stack;
@@ -1139,9 +1140,9 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     memory_heap_t* sheap = spool_get_heap();
 
-    new_task->input_buffer = buffer_create_with_heap(sheap, 0x1000);
+    new_task->input_buffer  = buffer_create_with_heap(sheap, 0x1000);
     new_task->output_buffer = buffer_create_with_heap(sheap, 0x1000);
-    new_task->error_buffer = buffer_create_with_heap(sheap, 0x1000);
+    new_task->error_buffer  = buffer_create_with_heap(sheap, 0x1000);
 
     spool_add(new_task->task_name, 3, new_task->input_buffer, new_task->output_buffer, new_task->error_buffer);
 
@@ -1235,7 +1236,7 @@ int8_t task_create_idle_task(void) {
     new_task->heap = heap;
     new_task->heap_size = kernel->program_heap_size;
 
-    task_registers_t* registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x40);
+    cpu_registers_t* registers = memory_malloc_ext(heap, sizeof(cpu_registers_t), 0x40);
 
     if(registers == NULL) {
         memory_free_ext(heap, new_task);
@@ -1266,12 +1267,12 @@ int8_t task_create_idle_task(void) {
         cpu_hlt();
     }
     new_task->task_id = apic_get_local_apic_id() + 1;
-    new_task->cpu_id = apic_get_local_apic_id();
+    new_task->cpu_id  = apic_get_local_apic_id();
 
     new_task->state = TASK_STATE_CREATED;
     new_task->entry_point = task_idle_task;
-    new_task->page_table = memory_paging_get_table();
-    new_task->registers = registers;
+    new_task->page_table  = memory_paging_get_table();
+    new_task->registers  = registers;
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
 
@@ -1291,7 +1292,7 @@ int8_t task_create_idle_task(void) {
     registers->xsave_mask_lo = task_xsave_mask & 0xFFFFFFFF;
     registers->xsave_mask_hi = task_xsave_mask >> 32;
 
-    *(uint16_t*)&registers->avx512f[0] = 0x37F;
+    *(uint16_t*)&registers->avx512f[0]  = 0x37F;
     *(uint32_t*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)new_task->stack;
@@ -1310,7 +1311,7 @@ int8_t task_create_idle_task(void) {
     memory_heap_t* sheap = spool_get_heap();
 
     new_task->output_buffer = buffer_create_with_heap(sheap, 0x1000);
-    new_task->error_buffer = buffer_create_with_heap(sheap, 0x1000);
+    new_task->error_buffer  = buffer_create_with_heap(sheap, 0x1000);
 
     spool_add(new_task->task_name, 2, new_task->output_buffer, new_task->error_buffer);
 

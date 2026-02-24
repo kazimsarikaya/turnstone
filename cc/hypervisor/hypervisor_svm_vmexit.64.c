@@ -25,9 +25,9 @@
 MODULE("turnstone.hypervisor.svm");
 
 __attribute__((naked, no_stack_protector)) static void hypervisor_svm_vm_run_single(
-    task_registers_t* host_registers,
-    task_registers_t* guest_registers,
-    uint64_t          vmcb_frame_fa) {
+    cpu_registers_t* host_registers,
+    cpu_registers_t* guest_registers,
+    uint64_t         vmcb_frame_fa) {
     UNUSED(vmcb_frame_fa);
     asm volatile (
         "push %%rbp\n"
@@ -346,9 +346,9 @@ static int8_t hypervisor_svm_vmexit_handler_cpuid(hypervisor_vm_t* vm) { // cpui
     }
 
     vmcb->save_state_area.rax = result.eax;
-    vm->guest_registers->rbx = result.ebx;
-    vm->guest_registers->rcx = result.ecx;
-    vm->guest_registers->rdx = result.edx;
+    vm->guest_registers->rbx  = result.ebx;
+    vm->guest_registers->rcx  = result.ecx;
+    vm->guest_registers->rdx  = result.edx;
 
     hypervisor_svm_goto_next_instruction(vm);
 
@@ -411,7 +411,7 @@ static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
             vm->lapic.timer_current_value = value;
         } else {
             vmcb->save_state_area.rax = vm->lapic.timer_initial_value & 0xFFFFFFFF;
-            vm->guest_registers->rdx = (vm->lapic.timer_initial_value >> 32) & 0xFFFFFFFF;
+            vm->guest_registers->rdx  = (vm->lapic.timer_initial_value >> 32) & 0xFFFFFFFF;
         }
 
         ret = 0;
@@ -422,7 +422,7 @@ static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
             PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot write timer current current value");
         } else {
             vmcb->save_state_area.rax = vm->lapic.timer_current_value & 0xFFFFFFFF;
-            vm->guest_registers->rdx = (vm->lapic.timer_current_value >> 32) & 0xFFFFFFFF;
+            vm->guest_registers->rdx  = (vm->lapic.timer_current_value >> 32) & 0xFFFFFFFF;
             ret = 0;
         }
 
@@ -461,7 +461,7 @@ static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
 
         } else {
             vmcb->save_state_area.rax = vm->lapic.timer_divider & 0xFFFFFFFF;
-            vm->guest_registers->rdx = (vm->lapic.timer_divider >> 32) & 0xFFFFFFFF;
+            vm->guest_registers->rdx  = (vm->lapic.timer_divider >> 32) & 0xFFFFFFFF;
         }
 
         ret = 0;
@@ -473,7 +473,7 @@ static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
             vm->lapic.timer_masked = (value >> 16) & 0x1;
         } else {
             vmcb->save_state_area.rax = (vm->lapic.timer_periodic << 17) | (vm->lapic.timer_masked << 16) | (vm->lapic.timer_vector & 0xFF);
-            vm->guest_registers->rdx = 0;
+            vm->guest_registers->rdx  = 0;
         }
 
         ret = 0;
@@ -623,7 +623,7 @@ static int8_t hypervisor_svm_vmexit_handler_ioio(hypervisor_vm_t* vm) {
     uint64_t data_ptr_va = 0;
 
     if(ioio.fields.str) {
-        if(ioio.fields.type == 0){ // out from rsi
+        if(ioio.fields.type == 0) { // out from rsi
             data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, vm->guest_registers->rsi);
             data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
         } else {
@@ -632,7 +632,7 @@ static int8_t hypervisor_svm_vmexit_handler_ioio(hypervisor_vm_t* vm) {
         }
     }
 
-    if(list_contains(vm->mapped_io_ports, (void*)(uint64_t)(ioio.fields.port)) == 0){
+    if(list_contains(vm->mapped_io_ports, (void*)(uint64_t)(ioio.fields.port)) == 0) {
         for(uint64_t i = 0; i < count; i++) {
             if(ioio.fields.type == 0) {
                 if(ioio.fields.str) {
@@ -760,11 +760,11 @@ static int8_t hypervisor_svm_vmexit_handler_excp14(hypervisor_vm_t* vm) { // pag
 
 
 hypervisor_svm_vmexit_handler_f hypervisor_svm_vmexit_handlers[SVM_VMEXIT_REASON_ARRAY_SIZE] = {
-    [SVM_VMEXIT_REASON_INTR] = hypervisor_svm_vmexit_handler_intr,
-    [SVM_VMEXIT_REASON_HLT] = hypervisor_svm_vmexit_handler_hlt,
+    [SVM_VMEXIT_REASON_INTR]  = hypervisor_svm_vmexit_handler_intr,
+    [SVM_VMEXIT_REASON_HLT]   = hypervisor_svm_vmexit_handler_hlt,
     [SVM_VMEXIT_REASON_PAUSE] = hypervisor_svm_vmexit_handler_pause,
     [SVM_VMEXIT_REASON_CPUID] = hypervisor_svm_vmexit_handler_cpuid,
-    [SVM_VMEXIT_REASON_MSR] = hypervisor_svm_vmexit_handler_msr,
+    [SVM_VMEXIT_REASON_MSR]   = hypervisor_svm_vmexit_handler_msr,
     [SVM_VMEXIT_REASON_VMMCALL] = hypervisor_svm_vmexit_handler_vmmcall,
     [SVM_VMEXIT_REASON_IOIO] = hypervisor_svm_vmexit_handler_ioio,
     [SVM_VMEXIT_REASON_EXCP14] = hypervisor_svm_vmexit_handler_excp14,

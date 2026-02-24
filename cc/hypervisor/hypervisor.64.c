@@ -39,7 +39,7 @@ static int32_t hypervisor_vmx_vm_task(uint64_t argc, void** args) {
     }
 
     const char_t* entry_point_name = (const char_t*)args[0];
-    uint64_t heap_size = (uint64_t)args[1];
+    uint64_t heap_size  = (uint64_t)args[1];
     uint64_t stack_size = (uint64_t)args[2];
 
     if(strlen(entry_point_name) == 0) {
@@ -58,7 +58,7 @@ static int32_t hypervisor_vmx_vm_task(uint64_t argc, void** args) {
     }
 
     vm->entry_point_name = entry_point_name;
-    vm->guest_heap_size = heap_size;
+    vm->guest_heap_size  = heap_size;
     vm->guest_stack_size = stack_size;
 
     uint64_t vmcs_frame_fa = vm->vmcs_frame_fa;
@@ -115,7 +115,7 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
     }
 
     const char_t* entry_point_name = (const char_t*)args[0];
-    uint64_t heap_size = (uint64_t)args[1];
+    uint64_t heap_size  = (uint64_t)args[1];
     uint64_t stack_size = (uint64_t)args[2];
 
     if(strlen(entry_point_name) == 0) {
@@ -134,7 +134,7 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
     }
 
     vm->entry_point_name = entry_point_name;
-    vm->guest_heap_size = heap_size;
+    vm->guest_heap_size  = heap_size;
     vm->guest_stack_size = stack_size;
 
     uint64_t vmcb_frame_fa = vm->vmcb_frame_fa;
@@ -165,7 +165,7 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "entry point name: %s deployed", entry_point_name);
 
-    vm->host_registers = memory_malloc_ext(NULL, sizeof(task_registers_t), 0x40);
+    vm->host_registers = memory_malloc_ext(NULL, sizeof(cpu_registers_t), 0x40);
 
     if(vm->host_registers == NULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate host registers");
@@ -173,7 +173,7 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
         return -1;
     }
 
-    vm->guest_registers = memory_malloc_ext(NULL, sizeof(task_registers_t), 0x40);
+    vm->guest_registers = memory_malloc_ext(NULL, sizeof(cpu_registers_t), 0x40);
 
     if(vm->guest_registers == NULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate guest registers");
@@ -182,7 +182,7 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
         return -1;
     }
 
-    task_registers_t* registers = vm->guest_registers;
+    cpu_registers_t* registers = vm->guest_registers;
 
     uint64_t task_xsave_mask = task_get_task_xsave_mask();
 
@@ -191,7 +191,7 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
 
     uint32_t task_mxcsr_mask = task_get_task_mxcsr_mask();
 
-    *(uint16_t*)&registers->avx512f[0] = 0x37F;
+    *(uint16_t*)&registers->avx512f[0]  = 0x37F;
     *(uint32_t*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcb_frame_fa);
