@@ -189,7 +189,7 @@ size_t linkedlist_insert_at(list_t* list, const void* data, list_insert_delete_a
     if(list->head == NULL) { // if head is null insert both head and tail and return
         list->head = item;
         list->tail = item;
-        list->middle = item;
+        list->middle  = item;
         list->balance = 0;
         list->item_count++;
         lock_release(list->lock);
@@ -207,11 +207,11 @@ size_t linkedlist_insert_at(list_t* list, const void* data, list_insert_delete_a
         list->middle_position++;
 
         if(list->balance == -2) {
-            list->middle = list->middle->previous;
+            list->middle  = list->middle->previous;
             list->balance = 0;
             list->middle_position--;
         } else if (list->balance == 2) {
-            list->middle = list->middle->next;
+            list->middle  = list->middle->next;
             list->balance = 0;
             list->middle_position++;
         }
@@ -250,7 +250,7 @@ size_t linkedlist_insert_at(list_t* list, const void* data, list_insert_delete_a
             before_middle = true;
         } else {
             result = list->middle_position;
-            c_res = linkedlist_narrow(l, list->item_count - list->middle_position, item->data, &cur, &t, &result);
+            c_res  = linkedlist_narrow(l, list->item_count - list->middle_position, item->data, &cur, &t, &result);
         }
 
         if(c_res == 1) {
@@ -269,11 +269,11 @@ size_t linkedlist_insert_at(list_t* list, const void* data, list_insert_delete_a
 
             item->next = cur;
             item->previous = cur->previous;
-            cur->previous = item;
+            cur->previous  = item;
 
         } else {
             list->tail = item;
-            cur->next = item;
+            cur->next  = item;
             item->previous = cur;
             result = list->item_count;
         }
@@ -345,11 +345,11 @@ size_t linkedlist_insert_at(list_t* list, const void* data, list_insert_delete_a
         }
 
         if(list->balance == -2) {
-            list->middle = list->middle->previous;
+            list->middle  = list->middle->previous;
             list->balance = 0;
             list->middle_position--;
         } else if (list->balance == 2) {
-            list->middle = list->middle->next;
+            list->middle  = list->middle->next;
             list->balance = 0;
             list->middle_position++;
         }
@@ -423,11 +423,11 @@ const void* linkedlist_delete_at(list_t* list, const void* data, list_insert_del
 
         if(list->middle) {
             if(list->balance == -2) {
-                list->middle = list->middle->previous;
+                list->middle  = list->middle->previous;
                 list->balance = 0;
                 list->middle_position--;
             } else if (list->balance == 2) {
-                list->middle = list->middle->next;
+                list->middle  = list->middle->next;
                 list->balance = 0;
                 list->middle_position++;
             }
@@ -460,11 +460,11 @@ const void* linkedlist_delete_at(list_t* list, const void* data, list_insert_del
 
         if(list->middle) {
             if(list->balance == -2) {
-                list->middle = list->middle->previous;
+                list->middle  = list->middle->previous;
                 list->balance = 0;
                 list->middle_position--;
             } else if (list->balance == 2) {
-                list->middle = list->middle->next;
+                list->middle  = list->middle->next;
                 list->balance = 0;
                 list->middle_position++;
             }
@@ -615,11 +615,11 @@ const void* linkedlist_delete_at(list_t* list, const void* data, list_insert_del
         }
 
         if(list->balance == -2) {
-            list->middle = list->middle->previous;
+            list->middle  = list->middle->previous;
             list->balance = 0;
             list->middle_position--;
         } else if (list->balance == 2) {
-            list->middle = list->middle->next;
+            list->middle  = list->middle->next;
             list->balance = 0;
             list->middle_position++;
         }
@@ -667,7 +667,7 @@ int8_t linkedlist_narrow(list_t* list, size_t s, const void* data, list_item_t**
 
         if(c_res_t == 0) {
             t_pos += s - 1;
-            c_res = 0;
+            c_res  = 0;
             h = t;
 
             (*head) = h;
@@ -887,7 +887,7 @@ const void* linkedlist_get_data_at_position(list_t* list, size_t position){
 
             if(rem > rev_position) {
                 item = list->tail;
-                rem = rev_position;
+                rem  = rev_position;
                 to_left = true;
             }
 
@@ -896,7 +896,7 @@ const void* linkedlist_get_data_at_position(list_t* list, size_t position){
 
             if(rem > rev_position) {
                 item = list->middle;
-                rem = rev_position;
+                rem  = rev_position;
                 to_left = true;
             }
 
@@ -906,7 +906,7 @@ const void* linkedlist_get_data_at_position(list_t* list, size_t position){
 
         if(rem > rev_position) {
             item = list->tail;
-            rem = rev_position;
+            rem  = rev_position;
             to_left = true;
         }
     }
@@ -968,7 +968,7 @@ iterator_t* linkedlist_iterator_create(list_t* list) {
     iter->list = list;
     iter->current = list->head;
     iterator->metadata = iter;
-    iterator->destroy = &linkedlist_iterator_destroy;
+    iterator->destroy  = &linkedlist_iterator_destroy;
     iterator->next = &linkedlist_iterator_next;
     iterator->end_of_iterator = &linkedlist_iterator_end_of_list;
     iterator->get_item = &linkedlist_iterator_get_item;
@@ -1048,7 +1048,7 @@ const void* linkedlist_iterator_delete_item(iterator_t* iterator){
     }
 
     const void* data = iter->current->data;
-    list_item_t* current = iter->current;
+    list_item_t* current  = iter->current;
     list_item_t* previous = iter->current->previous;
     list_item_t* next = iter->current->next;
 
@@ -1089,11 +1089,11 @@ const void* linkedlist_iterator_delete_item(iterator_t* iterator){
     }
 
     if(iter->list->balance == -2) {
-        iter->list->middle = iter->list->middle->previous;
+        iter->list->middle  = iter->list->middle->previous;
         iter->list->balance = 0;
         iter->list->middle_position--;
     } else if (iter->list->balance == 2) {
-        iter->list->middle = iter->list->middle->next;
+        iter->list->middle  = iter->list->middle->next;
         iter->list->balance = 0;
         iter->list->middle_position++;
     }
