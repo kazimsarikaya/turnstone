@@ -164,8 +164,8 @@ int8_t http_response_add_header(http_response_t* response, const char_t* name, c
     return 0;
 }
 
-int8_t http_handle(http_application_context_t* app_ctx, http_request_t* request, http_response_t* response) {
-    if(!app_ctx || !request || !response) {
+int8_t http_handle(http_session_t* http_session, http_request_t* request, http_response_t* response) {
+    if(!http_session || !request || !response) {
         PRINTLOG(HTTP, LOG_ERROR, "Invalid arguments to http_handle");
         return -1;
     }
@@ -185,7 +185,7 @@ int8_t http_handle(http_application_context_t* app_ctx, http_request_t* request,
         return -1;
     }
 
-    http_handler_f handler = http_find_handler(app_ctx, request->method, request->path);
+    http_handler_f handler = http_find_handler(http_session->app_ctx, request->method, request->path);
 
     if(handler) {
         if(handler(request, response) != 0) {
@@ -431,15 +431,18 @@ int8_t http_application_handler(tls13_application_context_t* app_ctx, tls13_sess
 
     http_application_context_t* http_app_ctx = (http_application_context_t*)app_ctx;
 
-    http_app_ctx->tls13_session = tls13_session;
+    http_session_t http_session = {
+        .app_ctx = http_app_ctx,
+        .tls13_session = tls13_session,
+    };
 
     if(tls13_has_alpn_h2(tls13_session)) {
-        if(http2_handle_connection(http_app_ctx) != 0) {
+        if(http2_handle_connection(&http_session) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/2 connection handling failed");
             return -1;
         }
     } else {
-        if(http11_handle_connection(http_app_ctx) != 0) {
+        if(http11_handle_connection(&http_session) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/1.1 connection handling failed");
             return -1;
         }

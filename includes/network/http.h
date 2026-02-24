@@ -70,7 +70,7 @@ typedef struct http_query_param_t http_query_param_t;
 
 typedef int8_t (*http_handler_f)(http_request_t* request, http_response_t* response);
 
-#ifdef ___HTTP_IMPLEMENTATION
+#if defined(___HTTP_IMPLEMENTATION) || defined(___DEPEND_ANALYSIS)
 
 typedef struct http_request_t {
     http_version_t version;
@@ -193,18 +193,22 @@ typedef struct http2_context_t {
 } http2_context_t;
 
 typedef struct http_application_context_t {
-    const char_t*    server_host_port; // e.g., "example.com:443", used for generating redirect URLs in plaintext redirect handler
-    tls13_session_t* tls13_session; // Store TLS session for use in application handler
-    list_t*          http_handlers; // List of http_handler_f for handling different routes or methods
+    const char_t* server_host_port; // e.g., "example.com:443", used for generating redirect URLs in plaintext redirect handler
+    list_t*       http_handlers; // List of http_handler_f for handling different routes or methods
 } http_application_context_t;
 
-int8_t http_handle(http_application_context_t* app_ctx, http_request_t* request, http_response_t* response);
+typedef struct http_session_t {
+    http_application_context_t* app_ctx;
+    tls13_session_t*            tls13_session;
+} http_session_t;
+
+int8_t http_handle(http_session_t* http_session, http_request_t* request, http_response_t* response);
 
 void http_free_request(http_request_t* request);
 void http_free_response(http_response_t* response);
 
-int8_t http11_handle_connection(http_application_context_t* app_ctx);
-int8_t http2_handle_connection(http_application_context_t* app_ctx);
+int8_t http11_handle_connection(http_session_t* http_session);
+int8_t http2_handle_connection(http_session_t* http_session);
 
 #endif /* ___HTTP_IMPLEMENTATION */
 
