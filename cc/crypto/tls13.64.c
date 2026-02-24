@@ -2844,8 +2844,12 @@ int32_t tls13_read(tls13_session_t* tls13_session, uint8_t* out_data, uint32_t m
 
     // Buffer any excess data for future reads
     if (real_data_len > to_copy) {
-        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Buffering %d excess bytes for future reads", real_data_len - to_copy);
-        pipeline_write(tls13_session->client_state.read_buffer, real_data_len - to_copy, &plaintext[to_copy]);
+        size_t excess_len = real_data_len - to_copy;
+        if(pipeline_write(tls13_session->client_state.read_buffer, excess_len, &plaintext[to_copy]) != excess_len) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to buffer excess data into read buffer");
+            memory_free(plaintext);
+            return -1;
+        }
     }
 
     tls13_session->client_state.read_seq_num++;
