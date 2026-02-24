@@ -24,6 +24,7 @@
 #include <pipeline.h>
 #include <cpu/sync.h>
 #include <network/http.h>
+#include <cpu/coroutine.h>
 
 #define PORT 10443
 
@@ -906,33 +907,58 @@ static int8_t tls13_get_psk_encryption_keys(tls13_session_t* ctx,
 static int32_t recv_all(int64_t sockfd, uint8_t* buffer, int32_t length, int32_t flags) {
     int32_t total_received = 0;
     boolean_t once = flags & 0x80000000; // custom flag to indicate recv should be called only once
+
     while (total_received < length) {
         int32_t bytes_received = recv(sockfd, buffer + total_received, length - total_received, flags);
+
         if(bytes_received == 0) {
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Connection closed by peer. bytes_received: %d", bytes_received);
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Connection closed by peer(%lli). bytes_received: %d", sockfd, bytes_received);
             return total_received; // connection closed, return what we have
+        } else if (bytes_received == -1) {
+            if(errno == 0 || errno == EAGAIN || errno == EWOULDBLOCK) {
+                // no data available right now, but connection is still open. just continue and try again
+                coroutine_msleep(100); // sleep for 100ms to avoid busy waiting
+                continue;
+            }
+
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "recv failed. error code: %lli", errno);
+            return -1; // error
         }
-        if (bytes_received < 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "recv failed or connection closed. error code: %lli. bytes_received: %d", errno, bytes_received);
-            return -1; // error or connection closed
-        }
+
         total_received += bytes_received;
+
         if(once) {
             break;
         }
     }
+
     return total_received;
 }
 
 static int32_t send_all(int64_t sockfd, const uint8_t* buffer, int32_t length, int32_t flags) {
     int32_t total_sent = 0;
+
     while (total_sent < length) {
         int32_t bytes_sent = send(sockfd, buffer + total_sent, length - total_sent, flags);
-        if (bytes_sent <= 0) {
+
+        if(bytes_sent == 0) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Connection closed by peer (%lli) during send. bytes_sent: %d", sockfd, bytes_sent);
+            return total_sent; // connection closed, return what we have sent
+        } else if(bytes_sent == -1) {
+            if(errno == 0 || errno == EAGAIN || errno == EWOULDBLOCK) {
+                // socket not ready for sending right now, but connection is still open. just continue and try again
+                // coroutine_msleep(100); // sleep for 100ms to avoid busy waiting
+                // continue;
+            }
+
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "send failed(%lli). error code: %lli", sockfd, errno);
             return -1; // error
         }
+
+
         total_sent += bytes_sent;
     }
+
     return total_sent;
 }
 
@@ -954,8 +980,144 @@ static int8_t hello_world_handler(http_request_t* request, http_response_t* resp
     return 0;
 }
 
+typedef struct client_handler_args_t {
+    int32_t            client_fd;
+    struct sockaddr_in client_addr;
+    tls13_config_t*    tls13_config;
+} client_handler_args_t;
+
+static void* client_handle_coro(void* arg) {
+    client_handler_args_t* args = (client_handler_args_t*) arg;
+    int32_t client_fd = args->client_fd;
+    struct sockaddr_in client_addr = args->client_addr;
+    tls13_config_t* tls13_config = args->tls13_config;
+
+    char client_ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+
+    PRINTLOG(CRYPTOLIB, LOG_INFO, "New connection from %s:%d", client_ip, ntohs(client_addr.sin_port));
+
+    if(tls13_handle_connection(tls13_config, client_fd) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Error handling TLS connection with %s:%d", client_ip, ntohs(client_addr.sin_port));
+    } else {
+        PRINTLOG(CRYPTOLIB, LOG_INFO, "Connection with %s:%d handled successfully", client_ip, ntohs(client_addr.sin_port));
+    }
+
+    close(client_fd);
+
+    memory_free(args);
+
+    PRINTLOG(CRYPTOLIB, LOG_INFO, "Connection closed");
+
+    return NULL;
+}
+
+static void* server_accept_coro(void* arg) {
+    tls13_config_t* tls13_config = (tls13_config_t*) arg;
+
+    int32_t server_fd;
+    struct sockaddr_in server_addr;
+    int32_t opt = 1;
+
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd == -1) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "socket creation failed");
+        return NULL;
+    }
+
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "setsockopt SO_REUSEADDR failed");
+        close(server_fd);
+        return NULL;
+    }
+
+    // set server_fd to non-blocking mode to prevent accept from blocking indefinitely
+    if (fcntl(server_fd, F_SETFL, O_NONBLOCK) == -1) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set server socket to non-blocking mode");
+        close(server_fd);
+        return NULL;
+    }
+
+    memory_memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY; // listen on all interfaces
+    server_addr.sin_port = htons(PORT);
+
+    if (bind(server_fd, (struct sockaddr*) &server_addr, sizeof(server_addr)) == -1) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "bind failed. error code: %lli", errno);
+        close(server_fd);
+        return NULL;
+    }
+
+    if (listen(server_fd, 5) == -1) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "listen failed");
+        close(server_fd);
+        return NULL;
+    }
+
+
+    int32_t client_fd;
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+
+    PRINTLOG(CRYPTOLIB, LOG_INFO, "Server listening on port %d (SO_REUSEADDR enabled)", PORT);
+    PRINTLOG(CRYPTOLIB, LOG_INFO, "Waiting for connections...");
+
+    int32_t request_count = 0;
+
+    while (true && request_count < 10) {
+        // Accept incoming connection
+        client_fd = accept(server_fd, (struct sockaddr*) &client_addr, &client_len);
+        if (client_fd == -1) {
+            if(errno == 0 || errno == EAGAIN || errno == EWOULDBLOCK) {
+                // No pending connections, sleep briefly and continue
+                coroutine_msleep(100); // sleep for 100ms to avoid busy waiting
+                continue;
+            }
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "accept failed. error code: %lli", errno);
+            request_count++;
+            continue;
+        }
+
+        request_count++;
+
+        // set client_fd to non-blocking mode to prevent recv/send from blocking indefinitely
+        if (fcntl(client_fd, F_SETFL, O_NONBLOCK) == -1) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set client socket to non-blocking mode");
+            close(client_fd);
+            continue;
+        }
+
+        client_handler_args_t* handler_args = memory_malloc(sizeof(client_handler_args_t));
+        if(!handler_args) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for client handler arguments");
+            close(client_fd);
+            continue;
+        }
+        handler_args->client_fd = client_fd;
+        handler_args->client_addr  = client_addr;
+        handler_args->tls13_config = tls13_config;
+
+        coroutine_go(client_handle_coro,
+                     handler_args,
+                     .stack_size = 2 << 20);
+
+    }
+
+    PRINTLOG(CRYPTOLIB, LOG_INFO, "Server shutting down after handling %d requests", request_count);
+
+    close(server_fd);
+
+    return NULL;
+}
+
 int32_t main(int32_t argc, char_t** argv) {
     signal(SIGPIPE, SIG_IGN);
+
+    if(coroutine_init() != 0) {
+        print_error("Failed to initialize coroutines");
+        return -1;
+    }
 
     ellipticcurve_curve_type_t curve_type = ELLIPTICCURVE_CURVE_TYPE_NONE;
     boolean_t force_ca_regenerate = false;
@@ -983,50 +1145,11 @@ int32_t main(int32_t argc, char_t** argv) {
         return 1;
     }
 
-    int32_t server_fd, client_fd;
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t client_len = sizeof(client_addr);
-    int32_t opt = 1;
-
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd == -1) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "socket creation failed");
-        x509_certificate_free(ca_certificate);
-        return 1;
-    }
-
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "setsockopt SO_REUSEADDR failed");
-        close(server_fd);
-        x509_certificate_free(ca_certificate);
-        return 1;
-    }
-
-    memory_memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY; // listen on all interfaces
-    server_addr.sin_port = htons(PORT);
-
-    if (bind(server_fd, (struct sockaddr*) &server_addr, sizeof(server_addr)) == -1) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "bind failed. error code: %lli", errno);
-        close(server_fd);
-        x509_certificate_free(ca_certificate);
-        return 1;
-    }
-
-    if (listen(server_fd, 5) == -1) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "listen failed");
-        close(server_fd);
-        x509_certificate_free(ca_certificate);
-        return 1;
-    }
-
     http_application_context_t* http_application_ctx = NULL;
     http_application_ctx = http_create_application_context("localhost:10443");
 
     if(http_application_ctx == NULL) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to create HTTP application context");
-        close(server_fd);
         x509_certificate_free(ca_certificate);
         return 1;
     }
@@ -1043,7 +1166,6 @@ int32_t main(int32_t argc, char_t** argv) {
 
     if(tls13_config == NULL) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to create TLS 1.3 configuration");
-        close(server_fd);
         x509_certificate_free(ca_certificate);
         http_destroy_application_context(http_application_ctx);
         return 1;
@@ -1052,7 +1174,6 @@ int32_t main(int32_t argc, char_t** argv) {
     if(tls13_config_set_network_callbacks(tls13_config, send_all, recv_all) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set TLS 1.3 network callbacks");
         tls13_destroy_config(tls13_config);
-        close(server_fd);
         x509_certificate_free(ca_certificate);
         http_destroy_application_context(http_application_ctx);
         return 1;
@@ -1066,45 +1187,21 @@ int32_t main(int32_t argc, char_t** argv) {
                                               http_application_handler) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set TLS 1.3 application data callback");
         tls13_destroy_config(tls13_config);
-        close(server_fd);
         x509_certificate_free(ca_certificate);
         http_destroy_application_context(http_application_ctx);
         return 1;
     }
 
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Server listening on port %d (SO_REUSEADDR enabled)", PORT);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Waiting for connections...");
+    coroutine_go(server_accept_coro,
+                 tls13_config,
+                 .stack_size = 2 << 20);
 
-    int32_t request_count = 0;
+    coroutine_loop();
 
-    while (true && request_count < 10) {
-        request_count++;
-        // Accept incoming connection
-        client_fd = accept(server_fd, (struct sockaddr*) &client_addr, &client_len);
-        if (client_fd == -1) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "accept failed");
-            continue;
-        }
-
-        char client_ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
-
-        PRINTLOG(CRYPTOLIB, LOG_INFO, "New connection from %s:%d", client_ip, ntohs(client_addr.sin_port));
-
-        if(tls13_handle_connection(tls13_config, client_fd) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Error handling TLS connection with %s:%d", client_ip, ntohs(client_addr.sin_port));
-        } else {
-            PRINTLOG(CRYPTOLIB, LOG_INFO, "Connection with %s:%d handled successfully", client_ip, ntohs(client_addr.sin_port));
-        }
-
-        close(client_fd);
-        PRINTLOG(CRYPTOLIB, LOG_INFO, "Connection closed");
-    }
+    coroutine_deinit();
 
     tls13_destroy_config(tls13_config);
     http_destroy_application_context(http_application_ctx);
-
-    close(server_fd);
     x509_certificate_free(ca_certificate);
 
     return 0;
