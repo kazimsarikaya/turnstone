@@ -38,7 +38,7 @@ pipeline_t* pipeline_create_with_heap(memory_heap_t* heap, uint64_t capacity) {
 
     pipeline->heap = heap;
     pipeline->capacity = capacity;
-    pipeline->read_index = 0;
+    pipeline->read_index  = 0;
     pipeline->write_index = 0;
     pipeline->buffer = memory_malloc_ext(heap, capacity, 0x80);
     if(!pipeline->buffer) {
@@ -80,7 +80,7 @@ int8_t pipeline_clear(pipeline_t* pipeline) {
 
     lock_acquire(pipeline->lock);
 
-    pipeline->read_index = 0;
+    pipeline->read_index  = 0;
     pipeline->write_index = 0;
     memory_memclean(pipeline->buffer, pipeline->capacity);
 
@@ -181,8 +181,12 @@ uint64_t pipeline_write_blocked(pipeline_t* pipeline, uint64_t size, const uint8
 }
 
 uint64_t pipeline_read(pipeline_t* pipeline, uint64_t size, uint8_t* data) {
-    if(!pipeline || !data || size == 0) {
+    if(!pipeline || !data) {
         return -1;
+    }
+
+    if(size == 0) {
+        return 0;
     }
 
     lock_acquire(pipeline->lock);
@@ -222,8 +226,12 @@ uint64_t pipeline_read(pipeline_t* pipeline, uint64_t size, uint8_t* data) {
 }
 
 uint64_t pipeline_read_blocked(pipeline_t* pipeline, uint64_t size, uint8_t* data) {
-    if(!pipeline || !data || size == 0) {
+    if(!pipeline || !data) {
         return -1;
+    }
+
+    if(size == 0) {
+        return 0;
     }
 
     lock_acquire(pipeline->lock);
