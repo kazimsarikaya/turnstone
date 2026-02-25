@@ -75,9 +75,9 @@ typedef uint16_t sa_family_t;
 typedef uint32_t socklen_t;
 
 enum {
-    AF_INET = 2,
-    SOCK_STREAM = 1,
-    SOL_SOCKET = 1,
+    AF_INET      = 2,
+    SOCK_STREAM  = 1,
+    SOL_SOCKET   = 1,
     SO_REUSEADDR = 2,
     SO_REUSEPORT = 15,
 };
@@ -111,6 +111,16 @@ int32_t     recv(int32_t sockfd, void * buf, size_t len, int32_t flags);
 const char* inet_ntop(int32_t af, const void * src, char_t * dst, socklen_t size);
 int32_t     htons(uint16_t hostshort);
 int32_t     ntohs(uint16_t netshort);
+
+#define F_SETFL 4
+#define O_NONBLOCK 0x800
+int32_t fcntl(int32_t fd, int32_t cmd, ...);
+
+#define EWOULDBLOCK 11
+#define EAGAIN 11
+
+typedef uint32_t useconds_t;
+int32_t usleep(useconds_t usec);
 
 #ifdef __cplusplus
 }
