@@ -16,6 +16,7 @@
 #include <strings.h>
 #include <efi.h>
 #include <list.h>
+#include <assert.h>
 
 MODULE("turnstone.lib.linker");
 
@@ -26,18 +27,41 @@ buffer_t* linker_build_relocation_table_buffer(linker_context_t* ctx);
 buffer_t* linker_build_metadata_buffer(linker_context_t* ctx);
 
 const char_t*const linker_section_type_names[LINKER_SECTION_TYPE_NR_SECTIONS] = {
-    [LINKER_SECTION_TYPE_TEXT] = ".text",
-    [LINKER_SECTION_TYPE_DATA] = ".data",
+    [LINKER_SECTION_TYPE_TEXT]  = ".text",
+    [LINKER_SECTION_TYPE_DATA]  = ".data",
+    [LINKER_SECTION_TYPE_TDATA] = ".tdata",
     [LINKER_SECTION_TYPE_DATARELOC] = ".datareloc",
     [LINKER_SECTION_TYPE_RODATA] = ".rodata",
     [LINKER_SECTION_TYPE_RODATARELOC] = ".rodatareloc",
-    [LINKER_SECTION_TYPE_BSS] = ".bss",
-    [LINKER_SECTION_TYPE_PLT] = ".plt",
+    [LINKER_SECTION_TYPE_BSS]   = ".bss",
+    [LINKER_SECTION_TYPE_TBSS]  = ".tbss",
+    [LINKER_SECTION_TYPE_PLT]   = ".plt",
+    [LINKER_SECTION_TYPE_TLSGD] = ".tlsgd",
     [LINKER_SECTION_TYPE_RELOCATION_TABLE] = ".reloc",
     [LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE] = ".gotrel",
     [LINKER_SECTION_TYPE_GOT] = ".got",
     [LINKER_SECTION_TYPE_STACK] = ".stack",
-    [LINKER_SECTION_TYPE_HEAP] = ".heap",
+    [LINKER_SECTION_TYPE_HEAP]  = ".heap",
+};
+
+const char_t*const linker_relocation_type_names[LINKER_RELOCATION_TYPE_NR_TYPES] = {
+    [ LINKER_RELOCATION_TYPE_32_16]  = "R_386_16",
+    [LINKER_RELOCATION_TYPE_32_32]   = "R_386_32",
+    [LINKER_RELOCATION_TYPE_32_PC16] = "R_386_PC16",
+    [LINKER_RELOCATION_TYPE_32_PC32] = "R_386_PC32",
+    [LINKER_RELOCATION_TYPE_64_8]     = "R_X86_64_8",
+    [LINKER_RELOCATION_TYPE_64_16]    = "R_X86_64_16",
+    [LINKER_RELOCATION_TYPE_64_32]    = "R_X86_64_32",
+    [LINKER_RELOCATION_TYPE_64_32S]   = "R_X86_64_32S",
+    [LINKER_RELOCATION_TYPE_64_64]    = "R_X86_64_64",
+    [LINKER_RELOCATION_TYPE_64_PC32]  = "R_X86_64_PC32",
+    [LINKER_RELOCATION_TYPE_64_PC64]  = "R_X86_64_PC64",
+    [LINKER_RELOCATION_TYPE_64_GOT64] = "R_X86_64_GOT64",
+    [LINKER_RELOCATION_TYPE_64_GOTOFF64] = "R_X86_64_GOTOFF64",
+    [LINKER_RELOCATION_TYPE_64_GOTPC64]  = "R_X86_64_GOTPC64",
+    [LINKER_RELOCATION_TYPE_64_PLTOFF64] = "R_X86_64_PLTOFF64",
+    [LINKER_RELOCATION_TYPE_64_TLSGD] = "R_X86_64_TLSGD",
+    [LINKER_RELOCATION_TYPE_64_GOT64_ABSOLUTE] = "R_X86_64_GOT64_ABS",
 };
 
 int8_t linker_efi_image_relocation_entry_cmp(const void* a, const void* b) {
@@ -95,6 +119,10 @@ int8_t linker_destroy_context(linker_context_t* ctx) {
             hashmap_destroy(module->plt_offsets);
         }
 
+        if(module->tlsgd_offsets) {
+            hashmap_destroy(module->tlsgd_offsets);
+        }
+
         memory_free(module);
 
         it = it->next(it);
@@ -109,12 +137,20 @@ int8_t linker_destroy_context(linker_context_t* ctx) {
     return 0;
 }
 
+uint64_t linker_get_tls_addr(linker_global_offset_table_entry_t** got_entry_pointer){
+    assert(got_entry_pointer && "got entry pointer is null.");
+    linker_global_offset_table_entry_t* got_entry = *got_entry_pointer;
+    assert(got_entry && "we cannot find got entry for the symbol.");
+    assert(got_entry->resolved && "got entry for the symbol is not resolved.");
+    // TODO: we should support multiple threads. currently we only support one thread.
+    return got_entry->entry_value;
+}
 
 int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t section_id, uint8_t section_type, uint64_t section_offset) {
     int8_t res = 0;
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(ctx->tdb, "system");
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_symbols  = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
 
     tosdb_record_t* s_sym_rec = tosdb_table_create_record(tbl_symbols);
 
@@ -144,12 +180,12 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
     PRINTLOG(LINKER, LOG_DEBUG, "found %llu symbols for section id 0x%llx", list_size(symbols), section_id);
 
     linker_global_offset_table_entry_t got_entry = {0};
-    uint64_t symbol_id = 0;
-    uint8_t symbol_type = 0;
-    uint8_t symbol_scope = 0;
+    uint64_t symbol_id    = 0;
+    uint8_t symbol_type   = 0;
+    uint8_t symbol_scope  = 0;
     uint64_t symbol_value = 0;
-    uint64_t symbol_size = 0;
-    char_t* symbol_name = NULL;
+    uint64_t symbol_size  = 0;
+    char_t* symbol_name   = NULL;
 
     size_t sym_idx = 0;
 
@@ -198,6 +234,14 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
             goto clean_symbols_iter;
         }
 
+        if(!symbol_id) {
+            PRINTLOG(LINKER, LOG_ERROR, "invalid symbol id 0 for symbol %s", symbol_name);
+
+            memory_free(symbol_name);
+
+            goto clean_symbols_iter;
+        }
+
         PRINTLOG(LINKER, LOG_DEBUG, "found symbol %s with id 0x%llx size 0x%llx, at section 0x%llx", symbol_name, symbol_id, symbol_size, section_id);
 
         uint64_t got_entry_index = (uint64_t)hashmap_get(ctx->got_symbol_index_map, (void*)symbol_id);
@@ -220,22 +264,22 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
             }
 
             existing_got_entry->resolved = true;
-            existing_got_entry->symbol_type = symbol_type;
+            existing_got_entry->symbol_type  = symbol_type;
             existing_got_entry->symbol_scope = symbol_scope;
             existing_got_entry->symbol_value = symbol_value + section_offset;
-            existing_got_entry->symbol_size = symbol_size;
+            existing_got_entry->symbol_size  = symbol_size;
             existing_got_entry->section_type = section_type;
 
         } else {
             memory_memclean(&got_entry, sizeof(linker_global_offset_table_entry_t));
 
-            got_entry.resolved = true;
+            got_entry.resolved  = true;
             got_entry.module_id = module_id;
             got_entry.symbol_id = symbol_id;
-            got_entry.symbol_type = symbol_type;
+            got_entry.symbol_type  = symbol_type;
             got_entry.symbol_scope = symbol_scope;
             got_entry.symbol_value = symbol_value + section_offset;
-            got_entry.symbol_size = symbol_size;
+            got_entry.symbol_size  = symbol_size;
             got_entry.section_type = section_type;
 
             if(ctx->symbol_table_buffer) {
@@ -424,7 +468,7 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
     int8_t reloc_type = 0;
     int64_t reloc_offset = 0;
     int64_t reloc_addend = 0;
-    char_t* symbol_name = NULL;
+    char_t* symbol_name  = NULL;
     int64_t module_id = 0;
 
     if(!reloc_section->section_data) {
@@ -552,6 +596,60 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
             PRINTLOG(LINKER, LOG_DEBUG, "relocation 0x%llx source symbol section id 0x%llx", reloc_id, symbol_section_id);
         }
 
+        if(reloc_type == LINKER_RELOCATION_TYPE_64_TLSGD) {
+            PRINTLOG(LINKER, LOG_TRACE, "relocation 0x%llx is TLSGD", reloc_id);
+            linker_section_t* tlsgd_section = &module->sections[LINKER_SECTION_TYPE_TLSGD];
+
+            if(!tlsgd_section->section_data) {
+                PRINTLOG(LINKER, LOG_TRACE, "module 0x%llx needs TLS GD section", module->id);
+                tlsgd_section->section_data = buffer_new();
+
+                if(!tlsgd_section->section_data) {
+                    PRINTLOG(LINKER, LOG_ERROR, "cannot create tls gd section data buffer");
+
+                    goto clean_relocs_iter;
+                }
+
+                // entry 0 is 8 bytes of zeros for null tls symbol.
+                uint64_t zero_qword = 0;
+                buffer_append_bytes(tlsgd_section->section_data, (uint8_t*)&zero_qword, sizeof(uint64_t));
+                tlsgd_section->size = buffer_get_length(tlsgd_section->section_data);
+            }
+
+            if(!module->tlsgd_offsets) {
+                module->tlsgd_offsets = hashmap_integer(128);
+
+                if(!module->tlsgd_offsets) {
+                    PRINTLOG(LINKER, LOG_ERROR, "cannot create tlsgd offsets hashmap");
+
+                    goto clean_relocs_iter;
+                }
+            }
+
+            uint64_t tlsgd_offset = buffer_get_length(tlsgd_section->section_data);
+
+            hashmap_put(module->tlsgd_offsets, (void*)symbol_id, (void*)tlsgd_offset);
+
+            // append 8 zero bytes, then add relocation for the symbol at these 8 bytes with addend
+            uint64_t zero_qword = 0;
+            buffer_append_bytes(tlsgd_section->section_data, (uint8_t*)&zero_qword, sizeof(uint64_t));
+
+            tlsgd_section->size = buffer_get_length(tlsgd_section->section_data);
+
+            memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
+
+            relocation.symbol_id = symbol_id;
+            relocation.section_type = LINKER_SECTION_TYPE_TLSGD;
+            relocation.relocation_type = LINKER_RELOCATION_TYPE_64_GOT64_ABSOLUTE;
+            relocation.offset = tlsgd_offset;
+            relocation.addend = 0;
+
+            buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
+            reloc_section->size += sizeof(linker_relocation_entry_t);
+
+            PRINTLOG(LINKER, LOG_VERBOSE, "added GOT64 relocation for symbol id 0x%llx at offset 0x%llx in TLSGD section for relocation id 0x%llx", symbol_id, tlsgd_offset, reloc_id);
+        }
+
         if(reloc_type == LINKER_RELOCATION_TYPE_64_PLTOFF64) {
             PRINTLOG(LINKER, LOG_TRACE, "relocation 0x%llx is PLTOFF64", reloc_id);
             linker_section_t* plt_section = &module->sections[LINKER_SECTION_TYPE_PLT];
@@ -589,7 +687,7 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
                 } else {
                     uint32_t nopl = 0x041f0f;
 
-                    // fill first 64 bytes with nopl 0x0(%rax,%rax,1)
+                    // fill first 128 bytes with nopl 0x0(%rax,%rax,1)
                     for(int64_t idx = 0; idx < 32; idx++) {
                         buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopl, sizeof(uint32_t));
                     }
@@ -601,13 +699,13 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
                 uint64_t plt_symbol_id = module->id << 32; // may be we have over 0x100000000 symbols ???
 
-                got_entry.resolved = true;
+                got_entry.resolved  = true;
                 got_entry.module_id = module->id;
                 got_entry.symbol_id = plt_symbol_id;
-                got_entry.symbol_type = LINKER_SYMBOL_TYPE_FUNCTION;
+                got_entry.symbol_type  = LINKER_SYMBOL_TYPE_FUNCTION;
                 got_entry.symbol_scope = LINKER_SYMBOL_SCOPE_LOCAL;
                 got_entry.symbol_value = 0;
-                got_entry.symbol_size = 4;
+                got_entry.symbol_size  = 4;
                 got_entry.section_type = LINKER_SECTION_TYPE_PLT;
 
                 uint64_t got_entry_index = buffer_get_length(ctx->got_table_buffer) / sizeof(linker_global_offset_table_entry_t);
@@ -667,7 +765,7 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
             buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
             reloc_section->size += sizeof(linker_relocation_entry_t);
 
-            PRINTLOG(LINKER, LOG_TRACE, "added PLT entry for symbol 0x%llx at offset 0x%llx for module id 0x%llx", symbol_id, plt_offset, module->id);
+            PRINTLOG(LINKER, LOG_VERBOSE, "added PLT entry for symbol 0x%llx at offset 0x%llx for module id 0x%llx", symbol_id, plt_offset, module->id);
         }
 
         memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
@@ -850,8 +948,8 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
     PRINTLOG(LINKER, LOG_DEBUG, "module 0x%llx sections count: %llu", module_id, list_size(sections));
 
 
-    uint64_t section_id = 0;
-    uint8_t section_type = 0;
+    uint64_t section_id   = 0;
+    uint8_t section_type  = 0;
     uint8_t* section_data = NULL;
     uint64_t section_size = 0;
     uint64_t tmp_section_size = 0;
@@ -903,11 +1001,19 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
         module->sections[section_type].size += padding;
 
-        if(section_type != LINKER_SECTION_TYPE_BSS) {
+        if(!sec_rec->get_string(sec_rec, "name", &section_name)) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot get section name");
+
+            goto clean_secs_iter;
+        }
+
+        // bss and tbss sections are zero data.
+        if(section_type != LINKER_SECTION_TYPE_BSS && section_type != LINKER_SECTION_TYPE_TBSS) {
             section_data = NULL;
 
             if(!sec_rec->get_bytearray(sec_rec, "value", &tmp_section_size, &section_data)) {
-                PRINTLOG(LINKER, LOG_ERROR, "cannot get section data");
+                PRINTLOG(LINKER, LOG_ERROR, "section(%s/%s) cannot get section data",
+                         section_name, linker_section_type_names[section_type]);
 
                 goto clean_secs_iter;
             }
@@ -970,12 +1076,6 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
             memory_free(section_data);
         } else {
             section_offset = module->sections[section_type].size;
-        }
-
-        if(!sec_rec->get_string(sec_rec, "name", &section_name)) {
-            PRINTLOG(LINKER, LOG_ERROR, "cannot get section name");
-
-            goto clean_secs_iter;
         }
 
         PRINTLOG(LINKER, LOG_DEBUG, "module id 0x%llx section id: 0x%llx, type: %u, name: %s offset 0x%llx alignment 0x%llx size 0x%llx, padding 0x%llx",
@@ -1108,7 +1208,7 @@ int8_t linker_bind_linear_addresses(linker_context_t* ctx) {
     }
 
     uint64_t offset_pyhsical = ctx->program_start_physical;
-    uint64_t offset_virtual = ctx->program_start_virtual;
+    uint64_t offset_virtual  = ctx->program_start_virtual;
 
     iterator_t* it = hashmap_iterator_create(ctx->modules);
 
@@ -1122,19 +1222,19 @@ int8_t linker_bind_linear_addresses(linker_context_t* ctx) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
 
         module->physical_start = offset_pyhsical;
-        module->virtual_start = offset_virtual;
+        module->virtual_start  = offset_virtual;
 
         for(int32_t i = 0; i < LINKER_SECTION_TYPE_RELOCATION_TABLE; i++) {
             if(module->sections[i].size) {
                 module->sections[i].physical_start = offset_pyhsical;
-                module->sections[i].virtual_start = offset_virtual;
+                module->sections[i].virtual_start  = offset_virtual;
 
                 offset_pyhsical += module->sections[i].size;
-                offset_virtual += module->sections[i].size;
+                offset_virtual  += module->sections[i].size;
 
                 if(offset_pyhsical % 0x1000) {
                     offset_pyhsical += 0x1000 - (offset_pyhsical % 0x1000);
-                    offset_virtual += 0x1000 - (offset_virtual % 0x1000);
+                    offset_virtual  += 0x1000 - (offset_virtual % 0x1000);
                 }
             }
         }
@@ -1340,7 +1440,6 @@ int8_t linker_link_module(linker_context_t* ctx, linker_module_t* module) {
             uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
             *value = ctx->got_address_virtual + reloc_entries[reloc_id].addend - (module->sections[reloc_entries[reloc_id].section_type].virtual_start + reloc_entries[reloc_id].offset);
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_PLTOFF64) {
-            // do nothing
             uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
             uint64_t plt_offset = (uint64_t)hashmap_get(module->plt_offsets, (void*)reloc_entries[reloc_id].symbol_id);
 
@@ -1352,8 +1451,31 @@ int8_t linker_link_module(linker_context_t* ctx, linker_module_t* module) {
 
             uint64_t plt_virtual = module->sections[LINKER_SECTION_TYPE_PLT].virtual_start + plt_offset;
             *value = plt_virtual - ctx->got_address_virtual;
-        }else {
-            PRINTLOG(LINKER, LOG_ERROR, "invalid relocation type");
+        } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_TLSGD) {
+            uint32_t* value = (uint32_t*)(section_data + reloc_entries[reloc_id].offset);
+
+            uint64_t tlsgd_offset = (uint64_t)hashmap_get(module->tlsgd_offsets, (void*)reloc_entries[reloc_id].symbol_id);
+
+            if(!tlsgd_offset) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot get tlsgd offset for symbol 0x%llx", reloc_entries[reloc_id].symbol_id);
+
+                return -1;
+            }
+
+            uint32_t relative_addr = reloc_entries[reloc_id].addend + tlsgd_offset - (uint32_t)(module->sections[reloc_entries[reloc_id].section_type].virtual_start + reloc_entries[reloc_id].offset - module->sections[LINKER_SECTION_TYPE_TLSGD].virtual_start);
+
+            PRINTLOG(LINKER, LOG_VERBOSE, "binding TLSGD relocation for symbol 0x%llx at section type %u offset 0x%llx with addend 0x%llx, tlsgd offset 0x%llx, relative address 0x%x",
+                     reloc_entries[reloc_id].symbol_id, reloc_entries[reloc_id].section_type, reloc_entries[reloc_id].offset, reloc_entries[reloc_id].addend, tlsgd_offset, relative_addr);
+
+            *value = relative_addr;
+        } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_GOT64_ABSOLUTE) {
+            uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint64_t got_virtual = ctx->got_address_virtual + got_idx * sizeof(linker_global_offset_table_entry_t) + reloc_entries[reloc_id].addend;
+            PRINTLOG(LINKER, LOG_VERBOSE, "binding GOT64_ABSOLUTE relocation for symbol 0x%llx at section type %u offset 0x%llx with addend 0x%llx, got index 0x%llx, got virtual address 0x%llx",
+                     reloc_entries[reloc_id].symbol_id, reloc_entries[reloc_id].section_type, reloc_entries[reloc_id].offset, reloc_entries[reloc_id].addend, got_idx, got_virtual);
+            *value = got_virtual;
+        } else {
+            PRINTLOG(LINKER, LOG_ERROR, "invalid relocation type: %s(%d)", linker_relocation_type_names[reloc_entries[reloc_id].relocation_type], reloc_entries[reloc_id].relocation_type);
 
             return -1;
         }
@@ -1431,7 +1553,7 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
             continue;
         }
 
-        uint64_t reloc_entries_size = module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size;
+        uint64_t reloc_entries_size  = module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size;
         uint64_t reloc_entries_count = reloc_entries_size / sizeof(linker_relocation_entry_t);
 
         linker_relocation_entry_t* reloc_entries = (linker_relocation_entry_t*)buffer_get_view_at_position(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data, 0, reloc_entries_size);
@@ -1592,7 +1714,7 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
             }
 
             efi_section_header->virtual_size = section_size;
-            efi_section_header->virtual_address = module->sections[i].virtual_start;
+            efi_section_header->virtual_address  = module->sections[i].virtual_start;
             efi_section_header->size_of_raw_data = section_size;
             efi_section_header->pointer_to_raw_data = module->sections[i].physical_start;
 
@@ -1705,7 +1827,7 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
     efi_image_section_header_t reloc_section = {
         .name = ".reloc",
         .virtual_size = relocation_size,
-        .virtual_address = ctx->program_size + ctx->program_start_virtual,
+        .virtual_address  = ctx->program_size + ctx->program_start_virtual,
         .size_of_raw_data = relocation_size,
         .pointer_to_raw_data = ctx->program_size + ctx->program_start_physical,
         .characteristics = EFI_IMAGE_SECTION_FLAGS_RELOC,
@@ -1948,10 +2070,10 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         strcopy(TOS_EXECUTABLE_OR_LIBRARY_MAGIC, (char_t*)program_header->magic);
 
         program_header->header_physical_address = ctx->program_start_physical - 0x1000;
-        program_header->header_virtual_address = ctx->program_start_virtual - 0x1000;
+        program_header->header_virtual_address  = ctx->program_start_virtual - 0x1000;
         program_header->program_offset = 0x1000;
         program_header->total_size += 0x1000 + ctx->program_size;
-        program_header->program_size = ctx->program_size;
+        program_header->program_size  = ctx->program_size;
         program_header->program_entry = ctx->entrypoint_address_virtual;
 
         program_target_offset += 0x1000;
@@ -2055,7 +2177,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                         page_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;
                     }
 
-                    if(i == LINKER_SECTION_TYPE_RODATARELOC || i == LINKER_SECTION_TYPE_RODATA) {
+                    if(i == LINKER_SECTION_TYPE_RODATARELOC || i == LINKER_SECTION_TYPE_RODATA || i == LINKER_SECTION_TYPE_TLSGD) {
                         page_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
                     }
 
@@ -2099,7 +2221,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
             program_header->got_offset = program_target_offset;
             program_header->got_size = ctx->global_offset_table_size;
-            program_header->got_virtual_address = ctx->got_address_virtual; // program_header->header_virtual_address + program_target_offset;
+            program_header->got_virtual_address  = ctx->got_address_virtual; // program_header->header_virtual_address + program_target_offset;
             program_header->got_physical_address = program_header->header_physical_address + program_target_offset;
 
             program_header->total_size += ctx->global_offset_table_size;
@@ -2147,7 +2269,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
             program_header->relocation_table_offset = program_target_offset;
             program_header->relocation_table_size = ctx->relocation_table_size;
-            program_header->relocation_table_virtual_address = program_header->header_virtual_address + program_target_offset;
+            program_header->relocation_table_virtual_address  = program_header->header_virtual_address + program_target_offset;
             program_header->relocation_table_physical_address = program_header->header_physical_address + program_target_offset;
 
             program_header->total_size += ctx->relocation_table_size;
@@ -2191,14 +2313,14 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         buffer_destroy(metadata_buf);
 
         ctx->metadata_address_physical = ctx->program_start_physical + program_target_offset;
-        ctx->metadata_address_virtual = ctx->program_start_virtual + program_target_offset;
+        ctx->metadata_address_virtual  = ctx->program_start_virtual + program_target_offset;
 
         if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
             program_header_t* program_header = (program_header_t*)array;
 
             program_header->metadata_offset = program_target_offset;
             program_header->metadata_size = ctx->metadata_size;
-            program_header->metadata_virtual_address = program_header->header_virtual_address + program_target_offset;
+            program_header->metadata_virtual_address  = program_header->header_virtual_address + program_target_offset;
             program_header->metadata_physical_address = program_header->header_physical_address + program_target_offset;
 
             program_header->total_size += ctx->metadata_size;
@@ -2245,7 +2367,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
             program_header->symbol_table_offset = program_target_offset;
             program_header->symbol_table_size = ctx->symbol_table_size;
-            program_header->symbol_table_virtual_address = program_header->header_virtual_address + program_target_offset;
+            program_header->symbol_table_virtual_address  = program_header->header_virtual_address + program_target_offset;
             program_header->symbol_table_physical_address = program_header->header_physical_address + program_target_offset;
 
             program_header->total_size += ctx->symbol_table_size;

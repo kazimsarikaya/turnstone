@@ -42,6 +42,8 @@ static const char_t* debug_get_symbol_name_by_symbol_name_offset(uint64_t symbol
 
 
 int8_t debug_init(void) {
+    PRINTLOG(KERNEL, LOG_INFO, "Initializing debug");
+
     debug_location_map = hashmap_integer(128);
 
     if(!debug_location_map) {

@@ -141,7 +141,7 @@ linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity) {
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 8 << 20;
-    cc.index_data_size = 32 << 20;
+    cc.index_data_size  = 32 << 20;
     cc.valuelog_size = 32 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {
@@ -173,7 +173,7 @@ linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity) {
     ldb->backend = bend;
     ldb->backend_buffer = buf;
     ldb->capacity = capacity;
-    ldb->db_file = fp;
+    ldb->db_file  = fp;
     ldb->fd = fd;
     ldb->mmap_res = mmap_res;
     ldb->tdb = tdb;
@@ -661,7 +661,7 @@ static boolean_t linkerdb_clear_relocation_references_at_section(linkerdb_t* ldb
 
 static boolean_t linkerdb_clear_symbol_references(linkerdb_t* ldb, int64_t section_id) {
     tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_symbols  = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
 
     tosdb_record_t* s_sym_rec = tosdb_table_create_record(tbl_symbols);
 
@@ -919,7 +919,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
                                      linkerdb_stats_t* is){
 
     hashmap_t* section_ids = hashmap_integer(128);
-    hashmap_t* symbol_ids = hashmap_integer(128);
+    hashmap_t* symbol_ids  = hashmap_integer(128);
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
 
@@ -948,7 +948,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     fread(&e_indent, sizeof(elf_indent_t), 1, fp);
     fseek(fp, 0, SEEK_SET);
 
-    uint8_t e_class = e_indent.class;
+    uint8_t e_class  = e_indent.class;
     uint16_t e_shnum = 0;
     uint64_t e_shoff = 0;
     uint16_t e_shstrndx = 0;
@@ -992,7 +992,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
         return false;
     }
 
-    uint8_t* sections  = memory_malloc(e_shsize);
+    uint8_t* sections = memory_malloc(e_shsize);
 
     if(!sections) {
         PRINTLOG(LINKER, LOG_INFO, "cannot allocate sections for file %s", filename);
@@ -1031,11 +1031,11 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     uint64_t symbol_count = 0;
 
     tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
-    tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_modules  = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
 
 
     tosdb_sequence_t* seq_sections = tosdb_sequence_create_or_open(db_system, "sections_section_id", 1, 10);
-    tosdb_sequence_t* seq_modules = tosdb_sequence_create_or_open(db_system, "modules_module_id", 1, 10);
+    tosdb_sequence_t* seq_modules  = tosdb_sequence_create_or_open(db_system, "modules_module_id", 1, 10);
 
 
     boolean_t error = false;
@@ -1156,13 +1156,19 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
             sec_type = LINKER_SECTION_TYPE_RODATA;
         } else if(strstarts(sec_name, ".bss") == 0) {
             sec_type = LINKER_SECTION_TYPE_BSS;
+        } else if(strstarts(sec_name, ".tdata") == 0) {
+            sec_type = LINKER_SECTION_TYPE_TDATA;
+        } else if(strstarts(sec_name, ".tbss") == 0) {
+            sec_type = LINKER_SECTION_TYPE_TBSS;
         }
 
         if(sec_size &&   (
                strstarts(sec_name, ".text") == 0 ||
                strstarts(sec_name, ".data") == 0 ||
                strstarts(sec_name, ".rodata") == 0 ||
-               strstarts(sec_name, ".bss") == 0
+               strstarts(sec_name, ".bss") == 0 ||
+               strstarts(sec_name, ".tdata") == 0 ||
+               strstarts(sec_name, ".tbss") == 0
                )) {
             tosdb_record_t* rec = tosdb_table_create_record(tbl_sections);
 
@@ -1186,7 +1192,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
             rec->set_int64(rec, "size", sec_size);
             rec->set_int8(rec, "type", sec_type);
 
-            if(strstarts(sec_name, ".bss") != 0) {
+            if(sec_type != LINKER_SECTION_TYPE_BSS && sec_type != LINKER_SECTION_TYPE_TBSS) {
                 uint8_t* sec_data = memory_malloc(sec_size);
 
                 if(!sec_data) {
@@ -1234,7 +1240,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     for(uint16_t sym_idx = 0; sym_idx < symbol_count; sym_idx++) {
         uint8_t sym_type = ELF_SYMBOL_TYPE(e_class, symbols, sym_idx);
 
-        if(sym_type > STT_SECTION) {
+        // reject sym type greater than section but allow stt_tls
+        if(sym_type > STT_SECTION && sym_type != STT_TLS) {
             continue;
         }
 
@@ -1246,9 +1253,9 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
 
         char_t* sym_name = strtab + ELF_SYMBOL_NAME(e_class, symbols, sym_idx);
         uint64_t sym_sec_id = (int64_t)hashmap_get(section_ids, (void*)sym_shndx);
-        uint8_t sym_scope = ELF_SYMBOL_SCOPE(e_class, symbols, sym_idx);
+        uint8_t sym_scope  = ELF_SYMBOL_SCOPE(e_class, symbols, sym_idx);
         uint64_t sym_value = ELF_SYMBOL_VALUE(e_class, symbols, sym_idx);
-        uint64_t sym_size = ELF_SYMBOL_SIZE(e_class, symbols, sym_idx);
+        uint64_t sym_size  = ELF_SYMBOL_SIZE(e_class, symbols, sym_idx);
 
         if(sym_type == STT_SECTION) {
             sym_name = shstrtab + ELF_SECTION_NAME(e_class, sections, sym_shndx);
@@ -1277,12 +1284,18 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
             break;
         }
 
+        if(strcmp(sym_name, "__tls_get_addr") == 0) {
+            sym_name = (char_t*)"linker_get_tls_addr";
+        }
+
         boolean_t free_sym_name = false;
 
         if(sym_scope == STB_LOCAL) {
             sym_name = strcat(shstrtab + ELF_SECTION_NAME(e_class, sections, sym_shndx), sym_name);
             free_sym_name = true;
         }
+
+        PRINTLOG(LINKER, LOG_DEBUG, "symbol '%s' at section %llx with type %i and scope %i", sym_name, sym_shndx, sym_type, sym_scope);
 
         tosdb_record_t* rec = tosdb_table_create_record(tbl_symbols);
 
@@ -1373,7 +1386,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
         for(uint64_t reloc_idx = 0; reloc_idx < reloc_count; reloc_idx++) {
 
             uint64_t reloc_offset = ELF_RELOC_OFFSET(e_class, is_rela, relocs, reloc_idx);
-            uint32_t reloc_type = ELF_RELOC_TYPE(e_class, is_rela, relocs, reloc_idx);
+            uint32_t reloc_type  = ELF_RELOC_TYPE(e_class, is_rela, relocs, reloc_idx);
             int64_t reloc_symidx = ELF_RELOC_SYMIDX(e_class, is_rela, relocs, reloc_idx);
             int64_t reloc_sym_sec_id = ELF_SYMBOL_SHNDX(e_class, symbols, reloc_symidx);
 
@@ -1383,6 +1396,10 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
 
             if(reloc_sym_type == STT_SECTION) {
                 reloc_sym_name = shstrtab + ELF_SECTION_NAME(e_class, sections, reloc_sym_sec_id);
+            }
+
+            if(strcmp(reloc_sym_name, "__tls_get_addr") == 0) {
+                reloc_sym_name = (char_t*)"linker_get_tls_addr";
             }
 
             boolean_t free_reloc_sym_name = false;
@@ -1460,6 +1477,9 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
                     break;
                 case R_X86_64_PLTOFF64:
                     reloc_type = LINKER_RELOCATION_TYPE_64_PLTOFF64;
+                    break;
+                case R_X86_64_TLSGD:
+                    reloc_type = LINKER_RELOCATION_TYPE_64_TLSGD;
                     break;
                 default:
                     PRINTLOG(LINKER, LOG_ERROR, "unknown 64 bit reloc type 0x%x at file %s",

@@ -101,17 +101,19 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
 
     if(res != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "kmain64 returned with error %i", res);
-        while(true){
+        while(true) {
             cpu_hlt();
         }
     }
 
     task_exit(0);
 
-    while(true){ // should not reach here
+    while(true) { // should not reach here
         cpu_hlt();
     }
 }
+
+_Thread_local uint64_t test_tls = 0x123456789abcdef0ULL;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
@@ -294,6 +296,8 @@ int8_t kmain64(size_t entry_point) {
     printf("address 0x%p %s\n", test_data, test_data);
 
     printf("random data 0x%x\n", rand());
+
+    printf("test tls data 0x%llx\n", test_tls);
 
     frame_get_allocator()->cleanup(frame_get_allocator());
 

@@ -52,7 +52,7 @@ void linker_build_modules_at_memory(void) {
         hashmap_put(linker_modules_at_memory, (void*)module_or_section->module.id, module_or_section);
         module_or_section++;
 
-        while(module_or_section->section.size){
+        while(module_or_section->section.size) {
             module_or_section++;
         }
 
@@ -63,7 +63,7 @@ void linker_build_modules_at_memory(void) {
             break;
         }
     }
-    PRINTLOG(LINKER, LOG_DEBUG, "Linker modules at memory built");
+    PRINTLOG(LINKER, LOG_INFO, "Linker modules at memory built");
 }
 
 void linker_print_modules_at_memory(void) {
@@ -82,7 +82,7 @@ void linker_print_modules_at_memory(void) {
         return;
     }
 
-    while(iter->end_of_iterator(iter) != 0){
+    while(iter->end_of_iterator(iter) != 0) {
         const linker_metadata_at_memory_t* module_or_section = iter->get_item(iter);
 
         if(!module_or_section) {
@@ -139,7 +139,7 @@ void linker_print_module_info_at_memory(uint64_t module_id) {
 
     printf("\tSection locations:\n");
 
-    while(module_or_section->section.size){
+    while(module_or_section->section.size) {
         printf("\t\tVirtual start: 0x%llx ", module_or_section->section.virtual_start);
         printf("Physical start: 0x%llx ", module_or_section->section.physical_start);
         printf("Size: 0x%llx ", module_or_section->section.size);

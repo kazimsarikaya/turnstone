@@ -80,6 +80,8 @@
 #define STT_FUNC     2
 #define STT_SECTION  3
 #define STT_FILE     4
+#define STT_COMMON   5
+#define STT_TLS      6
 #define STT_LOOS     10
 #define STT_HIOS     12
 #define STT_LOPROC   13
@@ -145,6 +147,8 @@
  * P: current offset
  * S: symbol value
  * L: plt entry offset
+ * TLSGD: a second table address
+ * GOFF: offset at TLSGD table
  * R_X86_64_32 S+A
  * R_X86_64_32S S+A
  * R_X86_64_64 S+A
@@ -155,7 +159,8 @@
  * R_X86_64_GOTPC64 GOT-P+A
  * R_X86_64_GOTPCREL G+GOT+A-P
  * R_X86_64_GOTPCRELX G+GOT+A-P
- * R_X8664_REX_GOTPCRELX G+GOT+A-P
+ * R_X86_64_REX_GOTPCRELX G+GOT+A-P
+ * R_X86_64_TLSGD ??
  **/
 
 #define R_X86_64_NONE            0 /* No reloc */

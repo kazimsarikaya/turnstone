@@ -169,7 +169,7 @@ int8_t linker_print_context(linker_context_t* ctx) {
 
         printf("\nrelocations:\n");
 
-        uint64_t relocation_size = buffer_get_length(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data);
+        uint64_t relocation_size  = buffer_get_length(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data);
         uint64_t relocation_count = relocation_size / sizeof(linker_relocation_entry_t);
         linker_relocation_entry_t* relocations = (linker_relocation_entry_t*)buffer_get_view_at_position(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data, 0, relocation_size);
 
@@ -294,7 +294,7 @@ linkerdb_t* linkerdb_open(const char_t* file) {
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
-    cc.index_data_size = 8 << 20;
+    cc.index_data_size  = 8 << 20;
     cc.valuelog_size = 16 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {
@@ -326,7 +326,7 @@ linkerdb_t* linkerdb_open(const char_t* file) {
     ldb->backend = bend;
     ldb->backend_buffer = buf;
     ldb->capacity = capacity;
-    ldb->db_file = fp;
+    ldb->db_file  = fp;
     ldb->fd = fd;
     ldb->mmap_res = mmap_res;
     ldb->tdb = tdb;
@@ -382,10 +382,10 @@ int32_t main(int32_t argc, char_t** argv) {
     char_t* db_file = NULL;
     char_t* entrypoint_symbol = NULL;
     uint64_t program_start_physical = 0;
-    uint64_t program_start_virtual = 0;
+    uint64_t program_start_virtual  = 0;
     boolean_t recursive = false;
     boolean_t for_efi = false;
-    boolean_t for_vm = false;
+    boolean_t for_vm  = false;
     boolean_t print_context = false;
     char_t* output_file = NULL;
 
@@ -571,8 +571,8 @@ int32_t main(int32_t argc, char_t** argv) {
     }
 
     tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
-    tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_modules  = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_symbols  = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
     tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 8 << 10, 1 << 20, 8);
 
 
@@ -697,7 +697,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
     ctx->entrypoint_symbol_id = sym_id;
     ctx->program_start_physical = program_start_physical;
-    ctx->program_start_virtual = program_start_virtual;
+    ctx->program_start_virtual  = program_start_virtual;
     ctx->tdb = ldb->tdb;
     ctx->modules = hashmap_integer(16);
     ctx->got_table_buffer = buffer_new();

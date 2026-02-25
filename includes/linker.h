@@ -27,11 +27,14 @@ extern "C" {
 typedef enum linker_section_type_t {
     LINKER_SECTION_TYPE_TEXT, ///< executable (text) section
     LINKER_SECTION_TYPE_DATA, ///< read-write data section
+    LINKER_SECTION_TYPE_TDATA, ///< thread local data section
     LINKER_SECTION_TYPE_DATARELOC, ///< read-write relocation data section
     LINKER_SECTION_TYPE_RODATA, ///< readonly data section
     LINKER_SECTION_TYPE_RODATARELOC, ///< readonly relocation data section
     LINKER_SECTION_TYPE_BSS, ///< bss section
+    LINKER_SECTION_TYPE_TBSS, ///< thread local bss section
     LINKER_SECTION_TYPE_PLT, ///< procedure linkage table section
+    LINKER_SECTION_TYPE_TLSGD, ///< thread local storage general dynamic section
     LINKER_SECTION_TYPE_RELOCATION_TABLE, ///< relocation table section
     LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE, ///< got relative relocation table section
     LINKER_SECTION_TYPE_GOT, ///< global offset table section
@@ -66,6 +69,9 @@ typedef enum linker_relocation_type_t {
     LINKER_RELOCATION_TYPE_64_GOTOFF64, ///< 64 bit width 64 bit got offset relocation
     LINKER_RELOCATION_TYPE_64_GOTPC64, ///< 64 bit width 64 bit got pc relative relocation
     LINKER_RELOCATION_TYPE_64_PLTOFF64, ///< 64 bit width 64 bit plt offset relocation
+    LINKER_RELOCATION_TYPE_64_TLSGD, ///< 64 bit width 64 bit TLS GD relocation
+    LINKER_RELOCATION_TYPE_64_GOT64_ABSOLUTE, ///< 64 bit width 64 bit got direct absolute (like R_X86_64_GOT64 but with adding GOT base address)
+    LINKER_RELOCATION_TYPE_NR_TYPES, ///< hack for enum item count
 } linker_relocation_type_t; ///< shorthand for enum
 
 
@@ -193,6 +199,7 @@ typedef struct linker_module_t {
     uint64_t         virtual_start;
     uint64_t         physical_start;
     hashmap_t*       plt_offsets;
+    hashmap_t*       tlsgd_offsets;
     linker_section_t sections[LINKER_SECTION_TYPE_NR_SECTIONS];
 } linker_module_t;
 
@@ -222,16 +229,16 @@ typedef struct linker_context_t {
 } linker_context_t;
 
 typedef enum linker_program_dump_type_t {
-    LINKER_PROGRAM_DUMP_TYPE_NONE = 0,
-    LINKER_PROGRAM_DUMP_TYPE_CODE = 1,
-    LINKER_PROGRAM_DUMP_TYPE_GOT = 2,
-    LINKER_PROGRAM_DUMP_TYPE_RELOCATIONS = 4,
-    LINKER_PROGRAM_DUMP_TYPE_METADATA = 8,
-    LINKER_PROGRAM_DUMP_TYPE_HEADER = 0x10,
+    LINKER_PROGRAM_DUMP_TYPE_NONE                   = 0,
+    LINKER_PROGRAM_DUMP_TYPE_CODE                   = 1,
+    LINKER_PROGRAM_DUMP_TYPE_GOT                    = 2,
+    LINKER_PROGRAM_DUMP_TYPE_RELOCATIONS            = 4,
+    LINKER_PROGRAM_DUMP_TYPE_METADATA               = 8,
+    LINKER_PROGRAM_DUMP_TYPE_HEADER                 = 0x10,
     LINKER_PROGRAM_DUMP_TYPE_ALL_WITHOUT_PAGE_TABLE = 0x1f,
-    LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE = 0x20,
-    LINKER_PROGRAM_DUMP_TYPE_SYMBOLS = 0x40,
-    LINKER_PROGRAM_DUMP_TYPE_ALL = 0x7f,
+    LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE       = 0x20,
+    LINKER_PROGRAM_DUMP_TYPE_SYMBOLS                = 0x40,
+    LINKER_PROGRAM_DUMP_TYPE_ALL                    = 0x7f,
 } linker_program_dump_type_t;
 
 
@@ -253,6 +260,9 @@ int8_t    linker_dump_program_to_array(linker_context_t* ctx, linker_program_dum
 void linker_build_modules_at_memory(void);
 void linker_print_modules_at_memory(void);
 void linker_print_module_info_at_memory(uint64_t module_id);
+
+__attribute__((no_caller_saved_registers, target("general-regs-only")))
+uint64_t linker_get_tls_addr(linker_global_offset_table_entry_t** got_entry_pointer);
 
 #ifdef __cplusplus
 }
