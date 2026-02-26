@@ -127,7 +127,10 @@ int8_t tpm2_init(void) {
 static int8_t tpm2_wait_for_status_bit(uint32_t bit_mask, boolean_t set, int32_t timeout) {
     volatile uint32_t* sts = (uint32_t*)TPM_ADDR(TPM_REG_STS);
 
-    while (((*sts & bit_mask) != 0) != set && --timeout) {;}
+    boolean_t current_bit_state = (*sts & bit_mask) != 0;
+    while (current_bit_state != set && --timeout) {
+        current_bit_state = (*sts & bit_mask) != 0; // Re-read status
+    }
 
     if(timeout == 0) {
         PRINTLOG(TPM, LOG_ERROR, "timeout while waiting for TPM status bit 0x%08x to be %s. current status 0x%08x",
@@ -194,7 +197,7 @@ static int8_t tpm2_read_fifo(uint8_t* buffer, size_t size) {
             PRINTLOG(TPM, LOG_ERROR, "timeout while waiting for TPM data to be available");
             return -1;
         }
-        buffer[i] = fifo[i];
+        buffer[i] = *fifo;
     }
 
     return 0;
@@ -236,7 +239,23 @@ static int8_t tpm2_send_command(uint16_t tag, uint32_t cc_code, const uint8_t* c
     return 0;
 }
 
-static int8_t tpm2_read_response(uint8_t* buffer, size_t buffer_size) {
+static int8_t tpm2_read_response(size_t expected_size, uint8_t** buffer, size_t* buffer_size) {
+    if(tpm2_device == NULL) {
+        PRINTLOG(TPM, LOG_ERROR, "tpm2 device not initialized");
+        return -1; // TPM not initialized
+    }
+
+    if(expected_size && (!buffer || !buffer_size)) {
+        PRINTLOG(TPM, LOG_ERROR, "invalid buffer or buffer size provided");
+        return -1; // invalid arguments
+    }
+
+    // Wait for the TPM to be ready and data to be available
+    if (tpm2_wait_for_status_bit(TPM_STS_DATA_AVAIL, true, 100000) != 0) {
+        PRINTLOG(TPM, LOG_ERROR, "timeout while waiting for TPM response data to be available");
+        return -1;
+    }
+
     tpm2_command_header_t header;
 
     if (tpm2_read_fifo((uint8_t*)&header, sizeof(header)) != 0) {
@@ -258,13 +277,31 @@ static int8_t tpm2_read_response(uint8_t* buffer, size_t buffer_size) {
         return -1;
     }
 
-    if (header.size - sizeof(header) > buffer_size) {
-        PRINTLOG(TPM, LOG_ERROR, "response size exceeds buffer size");
-        return -1;
+    size_t resp_size = header.size - sizeof(header);
+
+    // when not expected_size -1ULL, resp_size should be same as expected_size
+    if(expected_size && expected_size != -1ULL && resp_size != expected_size) {
+        PRINTLOG(TPM, LOG_ERROR, "unexpected TPM response size. Expected %llu, got %llu", expected_size, resp_size);
+        return -1; // unexpected response size
     }
 
-    if (tpm2_read_fifo(buffer, header.size - sizeof(header)) != 0) {
+    if(expected_size == 0) {
+        PRINTLOG(TPM, LOG_DEBUG, "TPM response size is 0, no data to read");
+        *buffer = NULL;
+        *buffer_size = 0;
+        return 0;
+    }
+
+    *buffer = memory_malloc(resp_size);
+    if (!*buffer) {
+        PRINTLOG(TPM, LOG_ERROR, "failed to allocate memory for TPM response");
+        return -1; // allocation failed
+    }
+    *buffer_size = resp_size;
+
+    if (tpm2_read_fifo(*buffer, header.size - sizeof(header)) != 0) {
         PRINTLOG(TPM, LOG_ERROR, "failed to read TPM response data");
+        memory_free(*buffer);
         return -1;
     }
 
@@ -294,10 +331,11 @@ int8_t tpm2_get_random(uint8_t* buffer, uint16_t requested_sz) {
         return -1; // failed to send command
     }
 
-    uint8_t response_data[sizeof(uint16_t) + requested_sz];
-    uint16_t response_size = sizeof(response_data);
+    size_t expected_size = sizeof(uint16_t) + requested_sz;
+    uint8_t* response_data = NULL;
+    size_t response_size = 0;
 
-    if (tpm2_read_response(response_data, response_size) != 0) {
+    if (tpm2_read_response(expected_size, &response_data, &response_size) != 0) {
         PRINTLOG(TPM, LOG_ERROR, "failed to read TPM GetRandom response");
         return -1;
     }
@@ -307,10 +345,13 @@ int8_t tpm2_get_random(uint8_t* buffer, uint16_t requested_sz) {
 
     if (response_size > requested_sz) {
         PRINTLOG(TPM, LOG_ERROR, "TPM returned more data than requested");
+        memory_free(response_data);
         return -1;
     }
 
     memory_memcopy(response_data + sizeof(uint16_t), buffer, response_size);
+
+    memory_free(response_data);
 
     return 0;
 }
