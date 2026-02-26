@@ -50,6 +50,7 @@
 #include <spool.h>
 #include <graphics/screen.h>
 #include <driver/video.h>
+#include <device/tpm.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -374,6 +375,27 @@ int8_t kmain64(size_t entry_point) {
     if(smp_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
         cpu_hlt();
+    }
+
+    int8_t tpm_res = tpm2_init();
+
+    if(tpm_res == -2) {
+        PRINTLOG(KERNEL, LOG_WARNING, "tpm2 device not found. TPM related functions will not work");
+    } else if(tpm_res == -1) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot init tpm2 device. TPM related functions will not work");
+    } else {
+        PRINTLOG(KERNEL, LOG_INFO, "tpm2 device initialized");
+        uint8_t random_data[16];
+
+        if(tpm2_get_random(random_data, sizeof(random_data)) == 0) {
+            PRINTLOG(KERNEL, LOG_INFO, "tpm2 random data:");
+            for(size_t i = 0; i < sizeof(random_data); i++) {
+                printf("%02x ", random_data[i]);
+            }
+            printf("\n");
+        } else {
+            PRINTLOG(KERNEL, LOG_ERROR, "cannot get random data from tpm2 device");
+        }
     }
 
     if(video_display_init(NULL, pci_get_context()->display_controllers) != 0) {

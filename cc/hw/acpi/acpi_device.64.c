@@ -486,7 +486,7 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
 }
 #pragma GCC diagnostic pop
 
-const acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* dev_name, uint64_t address) {
+const acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, const char_t* dev_name, uint64_t address) {
     iterator_t* iter = list_iterator_create(ctx->devices);
     const acpi_aml_device_t* res = NULL;
 
@@ -582,7 +582,7 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
         PRINTLOG(ACPI, LOG_DEBUG, "device %s controlling for init and crs", d->name);
 
         boolean_t need_ini = 1;
-        int64_t sta_value = 0;
+        int64_t sta_value  = 0;
 
         if(d->sta) {
             PRINTLOG(ACPI, LOG_TRACE, "device %s has sta method, reading...", d->name);

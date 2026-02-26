@@ -59,6 +59,7 @@ typedef enum logging_modules_t {
     PNG,
     CRYPTOLIB,
     HTTP,
+    TPM,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -66,14 +67,14 @@ typedef enum logging_modules_t {
  * @brief loggging levels
  */
 typedef enum logging_level_t {
-    LOG_PANIC=0,
-    LOG_FATAL=1,
-    LOG_ERROR=2,
-    LOG_WARNING=3,
-    LOG_INFO=4,
-    LOG_DEBUG=5,
-    LOG_VERBOSE=7,
-    LOG_TRACE=9,
+    LOG_PANIC   = 0,
+    LOG_FATAL   = 1,
+    LOG_ERROR   = 2,
+    LOG_WARNING = 3,
+    LOG_INFO    = 4,
+    LOG_DEBUG   = 5,
+    LOG_VERBOSE = 7,
+    LOG_TRACE   = 9,
 } logging_level_t; ///< type short hand for enum @ref logging_level_e
 
 #if 0
@@ -263,6 +264,11 @@ extern logging_level_t logging_module_levels[];
 #ifndef LOG_LEVEL_HTTP
 /*! default log level for http module */
 #define LOG_LEVEL_HTTP LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_TPM
+/*! default log level for tpm module */
+#define LOG_LEVEL_TPM LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION

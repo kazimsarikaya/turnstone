@@ -233,7 +233,7 @@ int8_t                   acpi_device_build(acpi_aml_parser_context_t*);
 int8_t                   acpi_device_init(acpi_aml_parser_context_t*);
 void                     acpi_device_print_all(acpi_aml_parser_context_t* ctx);
 void                     acpi_device_print(acpi_aml_parser_context_t* ctx, const acpi_aml_device_t* d);
-const acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* dev_name, uint64_t address);
+const acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, const char_t* dev_name, uint64_t address);
 #define acpi_device_lookup_by_address(c, a) acpi_device_lookup(c, NULL, a)
 #define acpi_device_lookup_by_name(c, n) acpi_device_lookup(c, n, 0)
 int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx);

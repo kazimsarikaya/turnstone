@@ -50,6 +50,7 @@ const char_t*const logging_module_names[] = {
     "PNG",
     "CRYPTOLIB",
     "HTTP",
+    "TPM",
 };
 
 
@@ -102,6 +103,7 @@ logging_level_t logging_module_levels[] = {
     LOG_LEVEL_PNG,
     LOG_LEVEL_CRYPTOLIB,
     LOG_LEVEL_HTTP,
+    LOG_LEVEL_TPM,
 };
 
 boolean_t logging_need_logging(logging_modules_t module, logging_level_t level) {
@@ -155,7 +157,7 @@ int8_t logging_set_level_by_string_values(const char_t* module, const char_t* le
     char_t* lvl = struppercopy(level);
 
     int32_t module_index = -1;
-    int32_t level_index = -1;
+    int32_t level_index  = -1;
 
     for(uint32_t i = 0; i < sizeof(logging_module_names) / sizeof(logging_module_names[0]); i++) {
         if(strcmp(mnu, logging_module_names[i]) == 0) {

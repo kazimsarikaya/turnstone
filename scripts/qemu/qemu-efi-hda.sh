@@ -6,6 +6,7 @@
 CURRENTDIR=`dirname $0`
 BASEDIR="${CURRENTDIR}/../../"
 OUTPUTDIR="${BASEDIR}/build"
+OUTPUTDIR=`readlink -f ${OUTPUTDIR}`
 
 ACCEL="kvm"
 UEFIBIOSCODESRC="/usr/share/OVMF/OVMF_CODE.fd"
@@ -33,11 +34,11 @@ if [[ "${DEBUG}x" == "pausedx" ]]; then
   ACCEL="${ACCEL} -S"
 fi
 
-if [ ! -f $CURRENTDIR/edk2-x86_64-code.fd ]; then
+if [ ! -f $OUTPUTDIR/edk2-x86_64-code.fd ]; then
   cp $UEFIBIOSCODESRC $OUTPUTDIR/edk2-x86_64-code.fd
 fi
 
-if [ ! -f $CURRENTDIR/edk2-i386-vars.fd ]; then
+if [ ! -f $OUTPUTDIR/edk2-i386-vars.fd ]; then
   cp $UEFIBIOSVARSSRC $OUTPUTDIR/edk2-i386-vars.fd
 fi
 
@@ -51,6 +52,97 @@ fi
 
 if [ ! -f ${OUTPUTDIR}/qemu-usb-uas ]; then
   dd if=/dev/zero of=${OUTPUTDIR}/qemu-usb-uas bs=1 count=0 seek=$((1024*1024*1024)) >/dev/null 2>&1
+fi
+
+# check swtpm is installed
+if ! command -v swtpm &> /dev/null; then
+    echo "swtpm could not be found. Please install swtpm to use TPM features."
+    exit 1
+fi
+
+# check tpm2_startup is installed
+if ! command -v tpm2_startup &> /dev/null; then
+    echo "tpm2_startup could not be found. Please install tpm2-tools to use TPM features."
+    exit 1
+fi
+
+TPM_DIR="${OUTPUTDIR}/tpm"
+
+kill -9 $(cat ${TPM_DIR}/swtpm.pid 2>/dev/null) 2>/dev/null || true
+rm -f ${TPM_DIR}/swtpm.pid ${TPM_DIR}/swtpm ${TPM_DIR}/swtpm.ctrl
+truncate -s 0 ${TPM_DIR}/swtpm.log || true
+
+export TPM2TOOLS_TCTI="swtpm:path=${TPM_DIR}/swtpm"
+
+if [ ! -d ${TPM_DIR} ]; then
+  mkdir -p ${TPM_DIR}/config ${TPM_DIR}/swtpm-localca ${TPM_DIR}/swtpm-state
+  cat > ${TPM_DIR}/config/swtpm_setup.conf <<EOF
+# Program invoked for creating certificates
+create_certs_tool= /usr/bin/swtpm_localca
+create_certs_tool_config = ${TPM_DIR}/config/swtpm-localca.conf
+create_certs_tool_options = ${TPM_DIR}/config/swtpm-localca.options
+# Comma-separated list (no spaces) of PCR banks to activate by default
+active_pcr_banks = sha384
+rsa_keysize = 2048
+profile = {"Name": "default-v1"}
+# profile_file =
+local_profiles_dir = /etc/swtpm/profiles/
+EOF
+  cat > ${TPM_DIR}/config/swtpm-localca.conf <<EOF
+statedir = ${TPM_DIR}/swtpm-localca
+signingkey = ${TPM_DIR}/swtpm-localca/signkey.pem
+issuercert = ${TPM_DIR}/swtpm-localca/issuercert.pem
+certserial = ${TPM_DIR}/swtpm-localca/certserial
+EOF
+  cat > ${TPM_DIR}/config/swtpm-localca.options <<EOF
+--platform-manufacturer Fedora
+--platform-version 2.1
+--platform-model QEMU
+EOF
+
+  swtpm_setup --tpm2 \
+      --tpm-state ${TPM_DIR}/swtpm-state  \
+      --ecc \
+      --create-ek-cert \
+      --create-platform-cert \
+      --lock-nvram \
+      --config ${TPM_DIR}/config/swtpm_setup.conf
+
+  swtpm socket \
+      --tpmstate dir=${TPM_DIR}/swtpm-state \
+      --ctrl type=unixio,path=${TPM_DIR}/swtpm.ctrl \
+      --server type=unixio,path=${TPM_DIR}/swtpm \
+      --tpm2 \
+      --log file=${TPM_DIR}/swtpm.log,level=20 \
+      --flags not-need-init \
+      --pid file=${TPM_DIR}/swtpm.pid \
+      --daemon
+
+  while ! [ -S ${TPM_DIR}/swtpm ]; do
+    sleep 0.1
+  done
+
+  tpm2_startup -c
+
+  tpm2_createprimary -C o -G ecc -G ecc384 -g sha384 -c ${TPM_DIR}/primary.ctx --autoflush
+  tpm2_import -C ${TPM_DIR}/primary.ctx -G ecc384 -g sha384 -i build/ca.key -u ${TPM_DIR}/ca.pub -r ${TPM_DIR}/ca.priv --autoflush
+  tpm2_load -C ${TPM_DIR}/primary.ctx  -u ${TPM_DIR}/ca.pub -r ${TPM_DIR}/ca.priv -c ${TPM_DIR}/ca.ctx --autoflush
+else
+  swtpm socket \
+      --tpmstate dir=${TPM_DIR}/swtpm-state \
+      --ctrl type=unixio,path=${TPM_DIR}/swtpm.ctrl \
+      --server type=unixio,path=${TPM_DIR}/swtpm \
+      --tpm2 \
+      --log file=${TPM_DIR}/swtpm.log,level=20 \
+      --flags not-need-init \
+      --pid file=${TPM_DIR}/swtpm.pid \
+      --daemon
+
+  while ! [ -S ${TPM_DIR}/swtpm ]; do
+    sleep 0.1
+  done
+
+  tpm2_startup -c
 fi
 
 NUMCPUS=4
@@ -136,6 +228,9 @@ qemu-system-x86_64 \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
   $SERIALS \
+  -chardev socket,id=chrtpm,path=${TPM_DIR}/swtpm.ctrl \
+  -tpmdev emulator,id=tpm0,chardev=chrtpm \
+  -device tpm-tis,tpmdev=tpm0 \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
   -monitor stdio \
   -audio pipewire \

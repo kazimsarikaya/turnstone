@@ -160,7 +160,7 @@ int8_t acpi_build_register(acpi_aml_object_t** reg, uint64_t address, uint8_t ad
     }
 
     opreg->type = ACPI_AML_OT_OPREGION;
-    opreg->opregion.region_space = address_space;
+    opreg->opregion.region_space  = address_space;
     opreg->opregion.region_offset = address;
     opreg->opregion.region_len = bit_width / 8;
 
@@ -418,7 +418,7 @@ list_t* acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_head
     data += sizeof(acpi_sdt_header_t);
     e = memory_malloc_ext(heap, sizeof(acpi_table_madt_entry_t), 0x0);
     e->local_apic_address.type = ACPI_MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS;
-    e->local_apic_address.length = 10;
+    e->local_apic_address.length  = 10;
     e->local_apic_address.address = (uint32_t)(*((uint32_t*)data));
     data += sizeof(uint32_t);
     e->local_apic_address.flags = (uint32_t)(*((uint32_t*)data));
@@ -489,7 +489,7 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
         acpi_build_register(&ACPI_PM1B_CONTROL_REGISTER, fadt->pm_1b_control_block_address_32bit, 1, 16, 0);
     }
 
-    uint16_t pm_1a_port = fadt->pm_1a_control_block_address_64bit.address;
+    uint16_t pm_1a_port  = fadt->pm_1a_control_block_address_64bit.address;
     uint32_t pm_1a_value = 0;
 
     if((pm_1a_value & 0x1) == 0x1) {
@@ -500,7 +500,7 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
     if(acpi_enabled != 0) {
         outb(fadt->smi_command_port, fadt->acpi_enable);
 
-        while((inw(pm_1a_port) & 0x1) != 0x1);
+        while((inw(pm_1a_port) & 0x1) != 0x1) {;}
     }
 
     uint16_t pm_1b_port = fadt->pm_1b_control_block_address_64bit.address;
