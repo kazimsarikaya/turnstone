@@ -61,7 +61,7 @@ __attribute__((noreturn)) void ___kstart64(system_info_t* sysinfo);
 // code for generating linker trampoline. not neccecery for now.
 void trampoline_code(system_info_t* sysinfo);
 void trampoline_code(system_info_t* sysinfo) {
-    program_header_t* kernel = (program_header_t*)sysinfo->program_header_physical_start;
+    program_header_t* kernel                       = (program_header_t*)sysinfo->program_header_physical_start;
     memory_page_table_context_t* kernel_page_table = (memory_page_table_context_t*)kernel->page_table_context_address;
 
     uint64_t stack_top = kernel->program_stack_virtual_address + kernel->program_stack_size;
@@ -171,7 +171,7 @@ int8_t kmain64(size_t entry_point) {
     memory_memcopy(SYSTEM_INFO, new_system_info, sizeof(system_info_t));
 
     new_system_info->frame_buffer = new_vfb;
-    new_system_info->mmap_data = new_mmap_data;
+    new_system_info->mmap_data    = new_mmap_data;
 
     SYSTEM_INFO = new_system_info;
 
@@ -385,17 +385,6 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot init tpm2 device. TPM related functions will not work");
     } else {
         PRINTLOG(KERNEL, LOG_INFO, "tpm2 device initialized");
-        uint8_t random_data[16];
-
-        if(tpm2_get_random(random_data, sizeof(random_data)) == 0) {
-            PRINTLOG(KERNEL, LOG_INFO, "tpm2 random data:");
-            for(size_t i = 0; i < sizeof(random_data); i++) {
-                printf("%02x ", random_data[i]);
-            }
-            printf("\n");
-        } else {
-            PRINTLOG(KERNEL, LOG_ERROR, "cannot get random data from tpm2 device");
-        }
     }
 
     if(video_display_init(NULL, pci_get_context()->display_controllers) != 0) {
@@ -463,9 +452,9 @@ int8_t kmain64(size_t entry_point) {
     PRINTLOG(KERNEL, LOG_INFO, "system table %p %li %li", SYSTEM_INFO->efi_system_table, sizeof(efi_system_table_t), sizeof(efi_table_header_t));
 
     char16_t* var_name_boot_current = char_to_wchar("BootCurrent");
-    efi_guid_t var_global = EFI_GLOBAL_VARIABLE;
-    uint32_t var_attrs = 0;
-    uint64_t buffer_size = sizeof(uint16_t);
+    efi_guid_t var_global           = EFI_GLOBAL_VARIABLE;
+    uint32_t var_attrs              = 0;
+    uint64_t buffer_size            = sizeof(uint16_t);
     uint16_t boot_order_idx;
 
     efi_runtime_services_t * RS = SYSTEM_INFO->efi_system_table->runtime_services;

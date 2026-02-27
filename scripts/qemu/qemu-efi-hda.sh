@@ -124,9 +124,11 @@ EOF
 
   tpm2_startup -c
 
-  tpm2_createprimary -C o -G ecc -G ecc384 -g sha384 -c ${TPM_DIR}/primary.ctx --autoflush
+  tpm2_createprimary -C o -G ecc384:aes256cfb -g sha384 -c ${TPM_DIR}/primary.ctx --autoflush
+  tpm2_evictcontrol -C o -c ${TPM_DIR}/primary.ctx
   tpm2_import -C ${TPM_DIR}/primary.ctx -G ecc384 -g sha384 -i build/ca.key -u ${TPM_DIR}/ca.pub -r ${TPM_DIR}/ca.priv --autoflush
   tpm2_load -C ${TPM_DIR}/primary.ctx  -u ${TPM_DIR}/ca.pub -r ${TPM_DIR}/ca.priv -c ${TPM_DIR}/ca.ctx --autoflush
+  tpm2_evictcontrol -C o -c ${TPM_DIR}/ca.ctx
 else
   swtpm socket \
       --tpmstate dir=${TPM_DIR}/swtpm-state \
