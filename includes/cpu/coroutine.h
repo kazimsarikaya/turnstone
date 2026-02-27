@@ -36,14 +36,15 @@ typedef struct coroutine_go_args_t {
     coroutine_wait_handle_t** wait_handle;
 } coroutine_go_args_t;
 
-void coroutine_go_internal(coroutine_go_args_t args);
+int8_t coroutine_go_internal(coroutine_go_args_t args);
 
-#define coroutine_go(f, ...) { \
-            _Pragma("GCC diagnostic push") \
-            _Pragma("GCC diagnostic ignored \"-Woverride-init\"") \
-            coroutine_go_internal((coroutine_go_args_t){ .arg = nullptr, .stack_size = 16 << 10, .wait_handle=NULL, .function = (f) ,##__VA_ARGS__}); \
-            _Pragma("GCC diagnostic pop") \
-            }
+#define coroutine_go(f, ...) ({ \
+        _Pragma("GCC diagnostic push") \
+        _Pragma("GCC diagnostic ignored \"-Woverride-init\"") \
+        int8_t __rc = coroutine_go_internal((coroutine_go_args_t){ .arg = nullptr, .stack_size = 16 << 10, .wait_handle=NULL, .function = (f) ,##__VA_ARGS__}); \
+        _Pragma("GCC diagnostic pop") \
+        __rc; \
+        })
 
 
 #ifdef __cplusplus

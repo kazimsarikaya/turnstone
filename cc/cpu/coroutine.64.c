@@ -148,16 +148,16 @@ _Thread_local boolean_t coroutine_initialized = false;
 
 _Thread_local uint64_t coroutine_id_counter = 0;
 
-_Thread_local list_t* coroutine_list = NULL;
-_Thread_local list_t* coroutine_sleeping_list = NULL; // list of sleeping coroutines, sorted by wake_at
-_Thread_local list_t* coroutine_finished_list = NULL; // list of finished coroutines, sorted by yield_count to ensure they are cleaned up in order of finishing
+_Thread_local list_t* coroutine_list                    = NULL;
+_Thread_local list_t* coroutine_sleeping_list           = NULL; // list of sleeping coroutines, sorted by wake_at
+_Thread_local list_t* coroutine_finished_list           = NULL; // list of finished coroutines, sorted by yield_count to ensure they are cleaned up in order of finishing
 _Thread_local list_t* coroutine_waiting_for_result_list = NULL; // list of coroutines waiting for result
 
 _Thread_local uint64_t coroutine_xsave_mask = 0;
 _Thread_local uint32_t coroutine_mxcsr_mask = 0;
 
 _Thread_local coroutine_t* coroutine_current = NULL;
-_Thread_local coroutine_t* coroutine_main = NULL;
+_Thread_local coroutine_t* coroutine_main    = NULL;
 
 static int8_t coroutine_sleep_comparator(const void* item1, const void* item2) {
     const coroutine_t* c1 = (const coroutine_t*)item1;
@@ -228,12 +228,12 @@ void coroutine_yield(void) {
 
     if(list_size(coroutine_sleeping_list) > 0) {
         const coroutine_t* sleeping_coroutine = list_get_data_at_position(coroutine_sleeping_list, 0);
-        uint64_t current_time = time_ns(NULL);
+        uint64_t current_time                 = time_ns(NULL);
 
         if(sleeping_coroutine->wake_at <= current_time) {
             list_delete_at_position(coroutine_sleeping_list, 0);
             // reset wake_at to 0 to indicate not sleeping
-            next = (coroutine_t*)sleeping_coroutine;
+            next          = (coroutine_t*)sleeping_coroutine;
             next->wake_at = 0;
         }
     }
@@ -347,33 +347,33 @@ uint64_t coroutine_get_id(void) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-void coroutine_go_internal(coroutine_go_args_t args) {
+int8_t coroutine_go_internal(coroutine_go_args_t args) {
     if(!coroutine_initialized) {
         PRINTLOG(TASKING, LOG_ERROR, "Coroutines not initialized");
-        return;
+        return -1;
     }
 
     if(!args.function) {
         PRINTLOG(TASKING, LOG_ERROR, "Coroutine function cannot be null");
-        return;
+        return -1;
     }
 
     if(args.stack_size < 0x1000) {
         PRINTLOG(TASKING, LOG_ERROR, "Coroutine stack size must be at least 0x1000");
-        return;
+        return -1;
     }
 
     coroutine_t* co = memory_malloc(sizeof(coroutine_t));
     if(!co) {
         PRINTLOG(TASKING, LOG_ERROR, "Failed to allocate memory for coroutine");
-        return;
+        return -1;
     }
 
     co->registers = memory_malloc_ext(NULL, sizeof(cpu_registers_t), 0x40);
     if(!co->registers) {
         PRINTLOG(TASKING, LOG_ERROR, "Failed to allocate memory for coroutine registers");
         memory_free(co);
-        return;
+        return -1;
     }
 
     co->stack = memory_malloc_ext(NULL, args.stack_size, 0x1000);
@@ -381,15 +381,15 @@ void coroutine_go_internal(coroutine_go_args_t args) {
         PRINTLOG(TASKING, LOG_ERROR, "Failed to allocate memory for coroutine stack");
         memory_free(co->registers);
         memory_free(co);
-        return;
+        return -1;
     }
 
-    co->id = ++coroutine_id_counter;
-    co->finished = false;
-    co->function = args.function;
-    co->arg = args.arg;
+    co->id              = ++coroutine_id_counter;
+    co->finished        = false;
+    co->function        = args.function;
+    co->arg             = args.arg;
     co->wait_for_result = args.wait_handle != NULL;
-    co->yield_count = coroutine_current->yield_count; // set initial yield count to current coroutine's yield count to ensure fair scheduling
+    co->yield_count     = coroutine_current->yield_count; // set initial yield count to current coroutine's yield count to ensure fair scheduling
 
     co->registers->xsave_mask_lo = (uint32_t)(coroutine_xsave_mask & 0xFFFFFFFF);
     co->registers->xsave_mask_hi = (uint32_t)(coroutine_xsave_mask >> 32);
@@ -398,7 +398,7 @@ void coroutine_go_internal(coroutine_go_args_t args) {
     *(uint32_t*)&co->registers->avx512f[24] = 0x1F80 & coroutine_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)co->stack;
-    rbp += args.stack_size - 16; // safeguard for return address, we will set it to a function that ends the coroutine, this should never be returned to
+    rbp               += args.stack_size - 16; // safeguard for return address, we will set it to a function that ends the coroutine, this should never be returned to
     co->registers->rbp = rbp;
     co->registers->rsp = rbp - 16; // reserve space for return address defined below
 
@@ -412,7 +412,7 @@ void coroutine_go_internal(coroutine_go_args_t args) {
         memory_free(co->stack);
         memory_free(co->registers);
         memory_free(co);
-        return;
+        return -1;
     }
 
     if(co->wait_for_result) {
@@ -420,6 +420,8 @@ void coroutine_go_internal(coroutine_go_args_t args) {
     }
 
     coroutine_yield(); // yield to start the coroutine
+
+    return 0;
 }
 #pragma GCC diagnostic pop
 
@@ -492,7 +494,7 @@ int8_t coroutine_init(void) {
         return -1;
     }
 
-    coroutine_main = main_co;
+    coroutine_main    = main_co;
     coroutine_current = main_co;
 
     coroutine_initialized = true;
@@ -534,7 +536,7 @@ void coroutine_deinit(void) {
 
     memory_free(coroutine_main->registers);
     memory_free(coroutine_main);
-    coroutine_main = NULL;
+    coroutine_main    = NULL;
     coroutine_current = NULL;
 
     coroutine_initialized = false;
@@ -556,7 +558,7 @@ void coroutine_loop(void) {
            list_size(coroutine_finished_list) == 0 &&
            list_size(coroutine_sleeping_list) > 0) {
             const coroutine_t* sleeping_coroutine = list_get_data_at_position(coroutine_sleeping_list, 0);
-            uint64_t current_time = time_ns(NULL);
+            uint64_t current_time                 = time_ns(NULL);
 
             if(sleeping_coroutine->wake_at > current_time) {
                 uint64_t sleep_time_us = (sleeping_coroutine->wake_at - current_time) / 1000; // convert ns to us for usleep
