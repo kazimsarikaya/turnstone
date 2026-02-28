@@ -403,9 +403,11 @@ $(EFIOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.cpp
 	$(CPP64) $(EFICPP64FLAGS) -o $@ $<
 
 $(ASSETOBJDIR)/%.data.o.dep: $(ASSETSDIR)/%
+	mkdir -p $(dir $@)
 	echo $(ASSETOBJDIR)/$*.data.o: $< > $@
 
 $(ASSETGENOBJDIR)/%.data.o.dep: $(ASSETSGENDIR)/%
+	mkdir -p $(dir $@)
 	echo $(ASSETOBJDIR)/$*.data.o: $< > $@
 
 $(ASSETOBJDIR)/%.data.o: $(ASSETSDIR)/% scripts/assets/build.sh

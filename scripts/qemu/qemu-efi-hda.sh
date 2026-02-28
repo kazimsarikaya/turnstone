@@ -5,8 +5,10 @@
 
 CURRENTDIR=`dirname $0`
 BASEDIR="${CURRENTDIR}/../../"
+BASEDIR=`readlink -f ${BASEDIR}`
 OUTPUTDIR="${BASEDIR}/build"
-OUTPUTDIR=`readlink -f ${OUTPUTDIR}`
+TPM_ASSETS_DIR="${BASEDIR}/assets-gen/turnstone/kernel/hw/tpm"
+HTTP_ASSETS_DIR="${BASEDIR}/assets-gen/turnstone/kernel/network/http"
 
 ACCEL="kvm"
 UEFIBIOSCODESRC="/usr/share/OVMF/OVMF_CODE.fd"
@@ -75,7 +77,7 @@ truncate -s 0 ${TPM_DIR}/swtpm.log || true
 export TPM2TOOLS_TCTI="swtpm:path=${TPM_DIR}/swtpm"
 
 if [ ! -d ${TPM_DIR} ]; then
-  mkdir -p ${TPM_DIR}/config ${TPM_DIR}/swtpm-localca ${TPM_DIR}/swtpm-state
+  mkdir -p ${TPM_DIR}/config ${TPM_DIR}/swtpm-localca ${TPM_DIR}/swtpm-state ${TPM_ASSETS_DIR} ${HTTP_ASSETS_DIR}
   cat > ${TPM_DIR}/config/swtpm_setup.conf <<EOF
 # Program invoked for creating certificates
 create_certs_tool= /usr/bin/swtpm_localca
@@ -124,11 +126,15 @@ EOF
 
   tpm2_startup -c
 
-  tpm2_createprimary -C o -G ecc384:aes256cfb -g sha384 -c ${TPM_DIR}/primary.ctx --autoflush
-  tpm2_evictcontrol -C o -c ${TPM_DIR}/primary.ctx
-  tpm2_import -C ${TPM_DIR}/primary.ctx -G ecc384 -g sha384 -i build/ca.key -u ${TPM_DIR}/ca.pub -r ${TPM_DIR}/ca.priv --autoflush
-  tpm2_load -C ${TPM_DIR}/primary.ctx  -u ${TPM_DIR}/ca.pub -r ${TPM_DIR}/ca.priv -c ${TPM_DIR}/ca.ctx --autoflush
-  tpm2_evictcontrol -C o -c ${TPM_DIR}/ca.ctx
+  tpm2_createprimary -C o -G ecc384:aes256cfb -g sha384 -c ${TPM_DIR}/primary.ctx 
+  tpm2_evictcontrol -C o -c ${TPM_DIR}/primary.ctx | awk '{print $2}'|xxd -r -p|xxd -p -c1|tac|xxd -r -p > ${TPM_ASSETS_DIR}/tpm2_primary_handle
+  tpm2_import -C ${TPM_DIR}/primary.ctx -G ecc384 -g sha384 \
+      -i ${OUTPUTDIR}/ca.key -u ${TPM_DIR}/ca.pub \
+      -r ${TPM_DIR}/ca.priv --autoflush
+  cp ${TPM_DIR}/ca.pub ${HTTP_ASSETS_DIR}/http_ca_pub
+  cp ${TPM_DIR}/ca.priv ${HTTP_ASSETS_DIR}/http_ca_priv
+  openssl pkey -in ${OUTPUTDIR}/ca.key -pubout -out ${HTTP_ASSETS_DIR}/http_ca_pem_pub
+  make -C ${BASEDIR} qemu
 else
   swtpm socket \
       --tpmstate dir=${TPM_DIR}/swtpm-state \

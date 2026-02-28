@@ -30,7 +30,21 @@ typedef enum tpm_alg_t : uint16_t {
     TPM_ALG_SHA512    = 0x000D,
     TPM_ALG_NULL      = 0x0010,
     TPM_ALG_ECDSA     = 0x0018,
+    TPM_ALG_ECDH      = 0x0019,
+    TPM_ALG_ECDAA     = 0x001A,
+    TPM_ALG_SM2       = 0x001B,
+    TPM_ALG_ECSCHNORR = 0x001C,
+    TPM_ALG_KDF2      = 0x0021,
     TPM_ALG_ECC       = 0x0023,
+    TPM_ALG_SYMCIPHER = 0x0025,
+    TPM_ALG_SHA3_256  = 0x0027,
+    TPM_ALG_SHA3_384  = 0x0028,
+    TPM_ALG_SHA3_512  = 0x0029,
+    TPM_ALG_CTR       = 0x0040,
+    TPM_ALG_OFB       = 0x0041,
+    TPM_ALG_CBC       = 0x0042,
+    TPM_ALG_CFB       = 0x0043,
+    TPM_ALG_ECB       = 0x0044,
 } tpm_alg_t;
 
 typedef enum tpm_ecc_curve_t : uint16_t {
@@ -47,11 +61,18 @@ typedef enum tpm_ecc_curve_t : uint16_t {
 
 int8_t tpm2_init(void);
 
+int8_t tpm2_flush_context(uint32_t handle);
+
 int8_t tpm2_start_auth_session(uint32_t* session_handle);
 int8_t tpm2_get_random(uint8_t* buffer, uint16_t requested_sz);
 
 int8_t tpm2_find_ecc_key_with_point(tpm_ecc_curve_t curve_id, const uint8_t* point, uint32_t* handle);
 int8_t tpm2_sign_ecc_with_hash(uint32_t handle, tpm_alg_t digest_alg, const uint8_t* digest, uint8_t** sig, size_t* sig_len);
+
+int8_t tpm2_load_key(uint32_t parent_handle,
+                     const uint8_t* private_key, size_t private_len,
+                     const uint8_t* public_key, size_t public_len,
+                     uint32_t* loaded_handle);
 
 #ifdef __cplusplus
 }

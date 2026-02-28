@@ -14,8 +14,11 @@
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <utils.h>
+#include <random.h>
 
 MODULE("turnstone.kernel.hw.tpm");
+
+#define TPM2_NONCE_SIZE 0x20
 
 typedef enum tpm_registers_t {
     TPM_REG_ACCESS    = 0x00,
@@ -32,13 +35,6 @@ typedef enum tpm_status_bits_t {
     TPM_STS_VALID      = 0x80, // Bit 7: Status register is valid
 } tpm_status_bits_t;
 
-#define TPM_ADDR(reg) (tpm2_device->base_address + (reg))
-
-struct tpm2_device_t {
-    uint64_t base_address;
-    uint64_t size;
-};
-
 typedef enum tpm2_capabilities_t : uint32_t {
     TPM_CAP_ALGS            = 0x00,
     TPM_CAP_HANDLES         = 0x01,
@@ -51,20 +47,23 @@ typedef enum tpm2_capabilities_t : uint32_t {
     TPM_CAP_VENDOR_PROPERTY = 0x09,
 } tpm2_capabilities_t;
 
-#define TPM2_HANDLE_PCRS 0x40000000
-#define TPM2_HANDLE_TRANSIENT 0x80000000
-#define TPM2_HANDLE_PERMANENT 0x81000000
+typedef enum tpm2_handle_range_t : uint32_t {
+    TPM2_HANDLE_PERMANENT_FIRST  = 0x40000000,
+    TPM2_HANDLE_PERMANENT_LAST   = 0x4000010F,
+    TPM2_HANDLE_TRANSIENT_FIRST  = 0x80000000,
+    TPM2_HANDLE_TRANSIENT_LAST   = 0x80FFFFFF,
+    TPM2_HANDLE_PERSISTENT_FIRST = 0x81000000,
+    TPM2_HANDLE_PERSISTENT_LAST  = 0x81FFFFFF,
+} tpm2_handle_range_t;
 
-#define TPM2_NONCE_SIZE 0x20
-
-typedef enum tpm2_handes_t : uint32_t {
+typedef enum tpm2_handle_t : uint32_t {
     TPM_RH_OWNER       = 0x40000001,
     TPM_RH_NULL        = 0x40000007,
     TPM_RS_PW          = 0x40000009,
     TPM_RH_LOCKOUT     = 0x4000000A,
     TPM_RH_ENDORSEMENT = 0x4000000B,
     TPM_RH_PLATFORM    = 0x4000000C,
-} tpm2_handes_t;
+} tpm2_handle_t;
 
 typedef enum tpm2_startup_types : uint16_t {
     TPM2_SU_CLEAR = 0x0000,
@@ -78,21 +77,26 @@ typedef enum tpm2_command_tags_t : uint16_t {
 } tpm2_command_tags_t;
 
 typedef enum tpm2_command_code_t : uint32_t {
+    TPM2_CC_EVICT_CONTROL      = 0x0120,
     TPM2_CC_CLEAR              = 0x0126,
     TPM2_CC_CLEARCONTROL       = 0x0127,
     TPM2_CC_HIERCHANGEAUTH     = 0x0129,
     TPM2_CC_PCR_SETAUTHPOL     = 0x012C,
+    TPM2_CC_CRATE_PRIMARY      = 0x0131,
     TPM2_CC_DAM_RESET          = 0x0139,
     TPM2_CC_DAM_PARAMETERS     = 0x013A,
     TPM2_CC_SELF_TEST          = 0x0143,
     TPM2_CC_STARTUP            = 0x0144,
     TPM2_CC_SHUTDOWN           = 0x0145,
     TPM2_CC_NV_READ            = 0x014E,
-    TPM2_CC_SIGN               = 0x15D,
-    TPM2_CC_READ_PUBLIC        = 0x173,
-    TPM2_CC_START_AUTH_SESSION = 0x176,
-    TPM2_CC_GET_CAPABILITIES   = 0x17A,
-    TPM2_CC_GET_RANDOM         = 0x17B,
+    TPM2_CC_CREATE             = 0x0153,
+    TPM2_CC_LOAD               = 0x0157,
+    TPM2_CC_SIGN               = 0x015D,
+    TPM2_CC_FLUSH_CONTEXT      = 0x0165,
+    TPM2_CC_READ_PUBLIC        = 0x0173,
+    TPM2_CC_START_AUTH_SESSION = 0x0176,
+    TPM2_CC_GET_CAPABILITIES   = 0x017A,
+    TPM2_CC_GET_RANDOM         = 0x017B,
     TPM2_CC_PCR_READ           = 0x017E,
     TPM2_CC_PCR_EXTEND         = 0x0182,
     TPM2_CC_PCR_SETAUTHVAL     = 0x0183,
@@ -122,6 +126,35 @@ typedef enum tpm2_return_code_t : uint32_t {
     TPM2_RC_LOCKOUT      = TPM2_RC_WARN + 0x0021,
 } tpm2_return_code_t;
 
+typedef enum tpm2_key_property_t : uint32_t {
+    TPM2_KEY_PROP_FIXED_TPM            = 0x00000002,
+    TPM2_KEY_PROP_STCLEAR              = 0x00000004,
+    TPM2_KEY_PROP_FIXED_PARENT         = 0x00000010,
+    TPM2_KEY_PROP_SENSITIVEDATAORIGIN  = 0x00000020,
+    TPM2_KEY_PROP_USERWITHAUTH         = 0x00000040,
+    TPM2_KEY_PROP_ADMINWITHPOLICY      = 0x00000080,
+    TPM2_KEY_PROP_NODA                 = 0x00000400,
+    TPM2_KEY_PROP_ENCRYPTEDDUPLICATION = 0x00000400,
+    TPM2_KEY_PROP_RESTRICTED           = 0x00010000,
+    TPM2_KEY_PROP_DECRYPT              = 0x00020000,
+    TPM2_KEY_PROP_SIGN                 = 0x00040000,
+
+    TPM2_KEY_SEAL_DEFAULT = TPM2_KEY_PROP_FIXED_TPM |
+                            TPM2_KEY_PROP_FIXED_PARENT,
+    TPM2_KEY_SIGNER_DEFAULT = TPM2_KEY_PROP_FIXED_TPM |
+                              TPM2_KEY_PROP_FIXED_PARENT |
+                              TPM2_KEY_PROP_SENSITIVEDATAORIGIN |
+                              TPM2_KEY_PROP_USERWITHAUTH |
+                              TPM2_KEY_PROP_RESTRICTED |
+                              TPM2_KEY_PROP_SIGN,
+    TPM2_KEY_STORAGE_DEFAULT = TPM2_KEY_PROP_FIXED_TPM |
+                               TPM2_KEY_PROP_FIXED_PARENT |
+                               TPM2_KEY_PROP_SENSITIVEDATAORIGIN |
+                               TPM2_KEY_PROP_USERWITHAUTH |
+                               TPM2_KEY_PROP_RESTRICTED |
+                               TPM2_KEY_PROP_DECRYPT,
+} tpm2_key_property_t;
+
 typedef struct tpm2_command_header_t {
     tpm2_command_tags_t tag;
     uint32_t            size;
@@ -138,7 +171,14 @@ typedef struct tpm2_response_header_t {
 
 _Static_assert(sizeof(tpm2_response_header_t) == 10, "tpm2_response_header_t must be 10 bytes");
 
+struct tpm2_device_t {
+    uint64_t base_address;
+    uint64_t size;
+};
+
 tpm2_device_t* tpm2_device = NULL;
+
+#define TPM_ADDR(reg) (tpm2_device->base_address + (reg))
 
 static int8_t tpm2_wait_for_status_bit(uint32_t bit_mask, boolean_t set, int32_t timeout) {
     volatile uint32_t* sts = (uint32_t*)TPM_ADDR(TPM_REG_STS);
@@ -330,6 +370,16 @@ static int8_t tpm2_read_response_internal(tpm2_read_response_args_t args) {
     header.code = BYTE_SWAP32(header.code);
 
     if(header.tag != args.tag) {
+        if(header.tag == TPM_ST_NO_SESSIONS && args.tag == TPM_ST_SESSIONS) {
+            if(args.return_code) {
+                *args.return_code = header.code;
+            }
+
+            PRINTLOG(TPM, LOG_ERROR, "TPM command failed. TPM return code 0x%08x", header.code);
+
+            return -1; // TPM returned response with no sessions when sessions were expected, header.code contains error code.
+        }
+
         PRINTLOG(TPM, LOG_ERROR, "unexpected TPM response tag 0x%04x", header.tag);
         return -1;
     }
@@ -454,7 +504,7 @@ static int8_t tpm2_get_permanent_handles (uint32_t ** handles, size_t* handle_co
 
     tpm2_get_capabilities_cmd_t cmd_data = {
         .capability     = BYTE_SWAP32(TPM_CAP_HANDLES),
-        .property       = BYTE_SWAP32(TPM2_HANDLE_PERMANENT),
+        .property       = BYTE_SWAP32(TPM2_HANDLE_PERSISTENT_FIRST), // Start from the first persistent handle
         .property_count = BYTE_SWAP32(8), // Request 8 handles at a time
     };
 
@@ -833,10 +883,7 @@ int8_t tpm2_start_auth_session (uint32_t * session_handle) {
         .authHash    = BYTE_SWAP16(TPM_ALG_SHA256), // Use SHA-256 for HMAC
     };
 
-    if(tpm2_get_random(cmd_data.nonce, sizeof(cmd_data.nonce)) != 0) {
-        PRINTLOG(TPM, LOG_ERROR, "failed to get random nonce for TPM StartAuthSession command");
-        return -1; // failed to get random data
-    }
+    get_random_bytes(cmd_data.nonce, sizeof(cmd_data.nonce));
 
     if(tpm2_send_command(TPM_ST_NO_SESSIONS, TPM2_CC_START_AUTH_SESSION, (uint8_t*) &cmd_data, sizeof(cmd_data)) != 0) {
         PRINTLOG(TPM, LOG_ERROR, "failed to send TPM StartAuthSession command");
@@ -920,7 +967,7 @@ int8_t tpm2_sign_ecc_with_hash (uint32_t handle, tpm_alg_t digest_alg,
 
     typedef struct tpm_auth_nonce_t {
         uint16_t size;
-        uint8_t  data[]; // Flexible array member for nonce data
+        uint8_t  data[TPM2_NONCE_SIZE]; // Flexible array member for nonce data
     } __attribute__((packed)) tpm_auth_nonce_t;
 
     typedef struct tpm_auth_session_attributes_t {
@@ -950,7 +997,7 @@ int8_t tpm2_sign_ecc_with_hash (uint32_t handle, tpm_alg_t digest_alg,
     } __attribute__((packed)) tpm_tk_hashcheck_t;
 
     uint32_t auth_area_size =  sizeof(tpm_auth_header_t) +
-                              sizeof(tpm_auth_nonce_t) + 32 +
+                              sizeof(tpm_auth_nonce_t) +
                               sizeof(tpm_auth_session_attributes_t) +
                               sizeof(tpm_auth_hmac_t) -
                               sizeof(uint32_t);
@@ -982,13 +1029,9 @@ int8_t tpm2_sign_ecc_with_hash (uint32_t handle, tpm_alg_t digest_alg,
     tpm_auth_nonce_t* auth_nonce = (tpm_auth_nonce_t*) current_ptr;
     auth_nonce->size = BYTE_SWAP16(TPM2_NONCE_SIZE); // 32 bytes nonce for TPM2.0
 
-    if(tpm2_get_random(auth_nonce->data, TPM2_NONCE_SIZE) != 0) {
-        PRINTLOG(TPM, LOG_ERROR, "failed to get random nonce for TPM Sign command");
-        memory_free(cmd_buffer);
-        return -1; // failed to get random data
-    }
+    get_random_bytes(auth_nonce->data, TPM2_NONCE_SIZE);
 
-    current_ptr += sizeof(tpm_auth_nonce_t) + 32;
+    current_ptr += sizeof(tpm_auth_nonce_t);
 
     tpm_auth_session_attributes_t* auth_attrs = (tpm_auth_session_attributes_t*) current_ptr;
     auth_attrs->attributes = 0x01; // ContinueSession attribute set, no encryption or audit
@@ -1106,6 +1149,182 @@ int8_t tpm2_sign_ecc_with_hash (uint32_t handle, tpm_alg_t digest_alg,
     return 0;
 }
 
+int8_t tpm2_load_key(uint32_t parent_handle,
+                     const uint8_t* private_key, size_t private_len,
+                     const uint8_t* public_key, size_t public_len,
+                     uint32_t* loaded_handle) {
+    if(!tpm2_device) {
+        PRINTLOG(TPM, LOG_ERROR, "tpm2 device not initialized");
+        return -1; // TPM not initialized
+    }
+
+    if(!private_key || !public_key || !loaded_handle) {
+        PRINTLOG(TPM, LOG_ERROR, "invalid private, public or loaded_handle provided");
+        return -1; // invalid arguments
+    }
+
+    if(private_len == 0 || public_len == 0) {
+        PRINTLOG(TPM, LOG_ERROR, "private or public data length cannot be zero");
+        return -1; // invalid arguments
+    }
+
+    if(tpm2_set_locality(true) != 0) {
+        PRINTLOG(TPM, LOG_ERROR, "failed to set TPM locality");
+        return -1; // failed to set locality
+    }
+
+    uint32_t session_handle;
+    if (tpm2_start_auth_session(&session_handle) != 0) {
+        PRINTLOG(TPM, LOG_ERROR, "failed to start auth session for TPM test load");
+        return -1; // failed to start auth session
+    }
+
+    typedef struct tpm_load_header_t {
+        uint32_t primary_handle;
+    } __attribute__((packed)) tpm_load_header_t;
+
+    typedef struct tpm_auth_header_t {
+        uint32_t auth_area_size;
+        uint32_t session_handle;
+    } __attribute__((packed)) tpm_auth_header_t;
+
+    typedef struct tpm_auth_nonce_t {
+        uint16_t size;
+        uint8_t  data[TPM2_NONCE_SIZE]; // Flexible array member for nonce data
+    } __attribute__((packed)) tpm_auth_nonce_t;
+
+    typedef struct tpm_auth_session_attributes_t {
+        uint8_t attributes;
+    } __attribute__((packed)) tpm_auth_session_attributes_t;
+
+    typedef struct tpm_auth_hmac_t {
+        uint16_t hmac_size;
+        uint8_t  hmac[]; // Flexible array member for HMAC data
+    } __attribute__((packed)) tpm_auth_hmac_t;
+
+    typedef struct tpm_load_private_t {
+        uint16_t size;
+        uint8_t  buffer[]; // Flexible array member for private area data
+    } __attribute__((packed)) tpm_load_private_t;
+
+    typedef struct tpm_load_public_t {
+        uint16_t size;
+        uint8_t  buffer[]; // Flexible array member for public area data
+    } __attribute__((packed)) tpm_load_public_t;
+
+    uint32_t auth_area_size =  sizeof(tpm_auth_header_t) +
+                              sizeof(tpm_auth_nonce_t) +
+                              sizeof(tpm_auth_session_attributes_t) +
+                              sizeof(tpm_auth_hmac_t) -
+                              sizeof(uint32_t);
+
+    size_t cmd_size = sizeof(tpm_load_header_t) +
+                      sizeof(tpm_auth_header_t) + auth_area_size - sizeof(uint32_t) +
+                      sizeof(tpm_load_private_t) + private_len +
+                      sizeof(tpm_load_public_t) + public_len;
+
+    uint8_t* cmd_buffer = memory_malloc(cmd_size);
+    if (!cmd_buffer) {
+        PRINTLOG(TPM, LOG_ERROR, "failed to allocate memory for TPM Load command");
+        return -1;
+    }
+
+    uint8_t* current_ptr = cmd_buffer;
+
+    tpm_load_header_t* load_header = (tpm_load_header_t*) current_ptr;
+    load_header->primary_handle = BYTE_SWAP32(parent_handle);
+
+    current_ptr += sizeof(tpm_load_header_t);
+
+    tpm_auth_header_t* auth_header = (tpm_auth_header_t*) current_ptr;
+    auth_header->auth_area_size = BYTE_SWAP32(auth_area_size);
+    auth_header->session_handle = BYTE_SWAP32(session_handle);
+
+    current_ptr += sizeof(tpm_auth_header_t);
+
+    tpm_auth_nonce_t* auth_nonce = (tpm_auth_nonce_t*) current_ptr;
+    auth_nonce->size = BYTE_SWAP16(TPM2_NONCE_SIZE); // 32 bytes nonce for TPM2.0
+    get_random_bytes(auth_nonce->data, TPM2_NONCE_SIZE);
+
+    current_ptr += sizeof(tpm_auth_nonce_t);
+
+    tpm_auth_session_attributes_t* auth_attrs = (tpm_auth_session_attributes_t*) current_ptr;
+    auth_attrs->attributes = 0x01; // ContinueSession attribute set, no encryption
+
+    current_ptr += sizeof(tpm_auth_session_attributes_t);
+
+    tpm_auth_hmac_t* auth_hmac = (tpm_auth_hmac_t*) current_ptr;
+    auth_hmac->hmac_size = BYTE_SWAP16(0); // No HMAC
+
+    current_ptr += sizeof(tpm_auth_hmac_t);
+
+    tpm_load_private_t* load_private = (tpm_load_private_t*) current_ptr;
+
+    load_private->size = BYTE_SWAP16(private_len);
+    memory_memcopy(private_key, load_private->buffer, private_len);
+
+    current_ptr += sizeof(tpm_load_private_t) + private_len;
+
+    tpm_load_public_t* load_public = (tpm_load_public_t*) current_ptr;
+    load_public->size = BYTE_SWAP16(public_len);
+    memory_memcopy(public_key, load_public->buffer, public_len);
+
+    if(tpm2_send_command(TPM_ST_SESSIONS, TPM2_CC_LOAD, cmd_buffer, cmd_size) != 0) {
+        PRINTLOG(TPM, LOG_ERROR, "failed to send TPM Load command");
+        memory_free(cmd_buffer);
+        return -1;
+    }
+
+    memory_free(cmd_buffer);
+
+    uint8_t* response_data = NULL;
+    size_t response_size   = 0;
+
+    if (tpm2_read_response(-1ULL, TPM_ST_SESSIONS, &response_data, &response_size) != 0) {
+        PRINTLOG(TPM, LOG_ERROR, "failed to read TPM Load response");
+        return -1;
+    }
+
+    if(response_size < sizeof(uint32_t)) {
+        PRINTLOG(TPM, LOG_ERROR, "TPM Load response too small to contain object handle");
+        memory_free(response_data);
+        return -1;
+    }
+
+    *loaded_handle = BYTE_SWAP32(*(uint32_t*)(void*)response_data);
+
+    PRINTLOG(TPM, LOG_DEBUG, "key loaded into TPM with handle 0x%08x", *loaded_handle);
+
+    // TODO: we could parse private, public and name data from the response here if needed for further verification.
+    // For now, the handle is enough to use the loaded key like signing with it and verifying the signature externally.
+
+    memory_free(response_data);
+
+    return 0;
+}
+
+int8_t tpm2_flush_context(uint32_t handle) {
+    if(!tpm2_device) {
+        PRINTLOG(TPM, LOG_ERROR, "tpm2 device not initialized");
+        return -1; // TPM not initialized
+    }
+
+    if(tpm2_set_locality(true) != 0) {
+        PRINTLOG(TPM, LOG_ERROR, "failed to set TPM locality");
+        return -1; // failed to set locality
+    }
+
+    uint32_t handle_be = BYTE_SWAP32(handle);
+
+    if(tpm2_send_command(TPM_ST_NO_SESSIONS, TPM2_CC_FLUSH_CONTEXT, (uint8_t*) &handle_be, sizeof(handle_be)) != 0) {
+        PRINTLOG(TPM, LOG_ERROR, "failed to send TPM FlushContext command for handle 0x%08x", handle);
+        return -1; // failed to send command
+    }
+
+    // No response data expected for FlushContext, just check for success
+    return 0;
+}
+
 static int8_t tpm2_self_test (void) {
     if(!tpm2_device) {
         PRINTLOG(TPM, LOG_ERROR, "tpm2 device not initialized");
@@ -1175,6 +1394,8 @@ static int8_t tpm2_startup (tpm2_startup_types startup_type) {
 
     return 0;
 }
+
+extern const uint32_t tpm2_primary_handle_data_start[];
 
 int8_t tpm2_init(void) {
     acpi_sdt_header_t* tpm2 = acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "TPM2");
@@ -1248,6 +1469,8 @@ int8_t tpm2_init(void) {
         PRINTLOG(TPM, LOG_ERROR, "failed to perform TPM self test");
         return -1;
     }
+
+    PRINTLOG(TPM, LOG_INFO, "TPM 2.0 initialized successfully.");
 
     return 0;
 }
