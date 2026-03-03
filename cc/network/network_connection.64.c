@@ -162,7 +162,7 @@ static void network_arp_cache_cleanup(void) {
             if(entry) {
                 // remove entries that are older than 5 minutes
                 if(now - entry->timestamp > 5 * 60 * 1000000000ULL) {
-                    hashmap_delete(network_arp_cache, (void*)(uintptr_t)entry->ip.as_dword);
+                    it->delete_item(it);
                     memory_free_ext(network_packet_heap, entry);
                 }
             }

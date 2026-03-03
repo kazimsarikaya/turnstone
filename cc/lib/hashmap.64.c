@@ -129,7 +129,7 @@ hashmap_t*  hashmap_new_with_hkg_with_hkc(memory_heap_t* heap, uint64_t capacity
 
     hm->lock = lock_create_with_heap(heap);
 
-    hm->total_capacity = capacity;
+    hm->total_capacity   = capacity;
     hm->segment_capacity = capacity;
 
     hm->hkg = hkg?hkg:hashmap_default_kg;
@@ -242,8 +242,8 @@ const void* hashmap_put(hashmap_t* hm, const void* key, const void* item) {
             if(hm->hkc(key, seg->items[h_key].key) == 0) {
                 const void* old_item = seg->items[h_key].value;
 
-                seg->items[h_key].key = key;
-                seg->items[h_key].value = item;
+                seg->items[h_key].key    = key;
+                seg->items[h_key].value  = item;
                 seg->items[h_key].exists = true;
 
                 lock_release(hm->lock);
@@ -257,8 +257,8 @@ const void* hashmap_put(hashmap_t* hm, const void* key, const void* item) {
                 if(hm->hkc(key, seg->items[t_h_key].key) == 0) {
                     const void* old_item = seg->items[t_h_key].value;
 
-                    seg->items[t_h_key].key = key;
-                    seg->items[t_h_key].value = item;
+                    seg->items[t_h_key].key    = key;
+                    seg->items[t_h_key].value  = item;
                     seg->items[t_h_key].exists = true;
 
                     lock_release(hm->lock);
@@ -290,8 +290,8 @@ const void* hashmap_put(hashmap_t* hm, const void* key, const void* item) {
         }
     }
 
-    seg->items[h_key].key = key;
-    seg->items[h_key].value = item;
+    seg->items[h_key].key    = key;
+    seg->items[h_key].value  = item;
     seg->items[h_key].exists = true;
     seg->size++;
     hm->total_size++;
@@ -406,8 +406,8 @@ boolean_t hashmap_delete(hashmap_t* hm, const void* key) {
     while(seg) {
         if(seg->items[h_key].exists) {
             if(hm->hkc(key, seg->items[h_key].key) == 0) {
-                seg->items[h_key].key = NULL;
-                seg->items[h_key].value = NULL;
+                seg->items[h_key].key    = NULL;
+                seg->items[h_key].value  = NULL;
                 seg->items[h_key].exists = false;
                 seg->size--;
                 hm->total_size--;
@@ -421,8 +421,8 @@ boolean_t hashmap_delete(hashmap_t* hm, const void* key) {
 
             if(seg->items[t_h_key].exists) {
                 if(hm->hkc(key, seg->items[t_h_key].key) == 0) {
-                    seg->items[t_h_key].key = NULL;
-                    seg->items[t_h_key].value = NULL;
+                    seg->items[t_h_key].key    = NULL;
+                    seg->items[t_h_key].value  = NULL;
                     seg->items[t_h_key].exists = false;
                     seg->size--;
                     hm->total_size--;
@@ -457,6 +457,7 @@ uint64_t hashmap_size(hashmap_t* hm) {
  */
 typedef struct hashmap_iterator_metadata_t {
     memory_heap_t*     heap; ///< Heap
+    hashmap_t*         hm; ///< Hashmap
     hashmap_segment_t* current_segment; ///< Current segment
     uint64_t           segment_capacity; ///< Segment capacity
     uint64_t           current_index; ///< Current index
@@ -467,37 +468,7 @@ typedef struct hashmap_iterator_metadata_t {
  * @param[in] iter iterator
  * @return current item at iterator
  */
-const void* hashmap_iterator_get_item(iterator_t* iter);
-
-/**
- * @brief returns current key at iterator
- * @param[in] iter iterator
- * @return current key at iterator
- */
-const void* hashmap_iterator_get_extra_data(iterator_t* iter);
-
-/**
- * @brief advances iterator to next item
- * @param[in] iter iterator
- * @return iterator itself
- */
-iterator_t* hashmap_iterator_next(iterator_t* iter);
-
-/**
- * @brief destroys iterator
- * @param[in] iter iterator
- * @return 0 on success, -1 on failure
- */
-int8_t hashmap_iterator_destroy(iterator_t* iter);
-
-/**
- * @brief checks if iterator is at end
- * @param[in] iter iterator
- * @return 0 if iterator is at end, 1 otherwise
- */
-int8_t hashmap_iterator_end_of_iterator(iterator_t* iter);
-
-const void* hashmap_iterator_get_item(iterator_t* iter) {
+static const void* hashmap_iterator_get_item(iterator_t* iter) {
     if(!iter) {
         return NULL;
     }
@@ -507,7 +478,12 @@ const void* hashmap_iterator_get_item(iterator_t* iter) {
     return iter_md->current_segment->items[iter_md->current_index].value;
 }
 
-const void* hashmap_iterator_get_extra_data(iterator_t* iter) {
+/**
+ * @brief returns current key at iterator
+ * @param[in] iter iterator
+ * @return current key at iterator
+ */
+static const void* hashmap_iterator_get_extra_data(iterator_t* iter) {
     if(!iter) {
         return NULL;
     }
@@ -517,7 +493,12 @@ const void* hashmap_iterator_get_extra_data(iterator_t* iter) {
     return iter_md->current_segment->items[iter_md->current_index].key;
 }
 
-iterator_t* hashmap_iterator_next(iterator_t* iter) {
+/**
+ * @brief advances iterator to next item
+ * @param[in] iter iterator
+ * @return iterator itself
+ */
+static iterator_t* hashmap_iterator_next(iterator_t* iter) {
     if(!iter) {
         return NULL;
     }
@@ -532,7 +513,7 @@ iterator_t* hashmap_iterator_next(iterator_t* iter) {
         iter_md->current_index++;
 
         if(iter_md->current_index == iter_md->segment_capacity) {
-            iter_md->current_index = 0;
+            iter_md->current_index   = 0;
             iter_md->current_segment = iter_md->current_segment->next;
         }
 
@@ -549,7 +530,12 @@ iterator_t* hashmap_iterator_next(iterator_t* iter) {
     return iter;
 }
 
-int8_t hashmap_iterator_destroy(iterator_t* iter) {
+/**
+ * @brief destroys iterator
+ * @param[in] iter iterator
+ * @return 0 on success, -1 on failure
+ */
+static int8_t hashmap_iterator_destroy(iterator_t* iter) {
     if(!iter) {
         return -1;
     }
@@ -562,7 +548,12 @@ int8_t hashmap_iterator_destroy(iterator_t* iter) {
     return 0;
 }
 
-int8_t hashmap_iterator_end_of_iterator(iterator_t* iter) {
+/**
+ * @brief checks if iterator is at end
+ * @param[in] iter iterator
+ * @return 0 if iterator is at end, 1 otherwise
+ */
+static int8_t hashmap_iterator_end_of_iterator(iterator_t* iter) {
     if(!iter) {
         return NULL;
     }
@@ -570,6 +561,28 @@ int8_t hashmap_iterator_end_of_iterator(iterator_t* iter) {
     hashmap_iterator_metadata_t* iter_md = iter->metadata;
 
     return iter_md->current_segment == NULL?0:1;
+}
+
+static const void* hashmap_iterator_delete_item(iterator_t* iter) {
+    if(!iter) {
+        return NULL;
+    }
+
+    hashmap_iterator_metadata_t* iter_md = iter->metadata;
+
+    if(!iter_md->current_segment) {
+        return NULL;
+    }
+
+    const void* old_value = iter_md->current_segment->items[iter_md->current_index].value;
+
+    iter_md->current_segment->items[iter_md->current_index].key    = NULL;
+    iter_md->current_segment->items[iter_md->current_index].value  = NULL;
+    iter_md->current_segment->items[iter_md->current_index].exists = false;
+    iter_md->current_segment->size--;
+    iter_md->hm->total_size--;
+
+    return old_value;
 }
 
 iterator_t* hashmap_iterator_create(hashmap_t* hm) {
@@ -583,8 +596,9 @@ iterator_t* hashmap_iterator_create(hashmap_t* hm) {
         return NULL;
     }
 
-    iter_md->heap = hm->heap;
-    iter_md->current_segment = hm->segments;
+    iter_md->heap             = hm->heap;
+    iter_md->hm               = hm;
+    iter_md->current_segment  = hm->segments;
     iter_md->segment_capacity = hm->segment_capacity;
 
     iterator_t* iter = memory_malloc_ext(hm->heap, sizeof(iterator_t), 0);
@@ -595,12 +609,13 @@ iterator_t* hashmap_iterator_create(hashmap_t* hm) {
         return NULL;
     }
 
-    iter->metadata = iter_md;
-    iter->get_item = hashmap_iterator_get_item;
+    iter->metadata        = iter_md;
+    iter->get_item        = hashmap_iterator_get_item;
     iter->end_of_iterator = hashmap_iterator_end_of_iterator;
-    iter->destroy = hashmap_iterator_destroy;
-    iter->get_extra_data = hashmap_iterator_get_extra_data;
-    iter->next = hashmap_iterator_next;
+    iter->destroy         = hashmap_iterator_destroy;
+    iter->get_extra_data  = hashmap_iterator_get_extra_data;
+    iter->next            = hashmap_iterator_next;
+    iter->delete_item     = hashmap_iterator_delete_item;
 
     if(hm->total_size == 0) {
         iter_md->current_segment = NULL;
