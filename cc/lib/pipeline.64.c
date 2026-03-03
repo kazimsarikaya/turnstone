@@ -36,11 +36,11 @@ pipeline_t* pipeline_create_with_heap(memory_heap_t* heap, uint64_t capacity) {
         return NULL;
     }
 
-    pipeline->heap = heap;
-    pipeline->capacity = capacity;
+    pipeline->heap        = heap;
+    pipeline->capacity    = capacity;
     pipeline->read_index  = 0;
     pipeline->write_index = 0;
-    pipeline->buffer = memory_malloc_ext(heap, capacity, 0x80);
+    pipeline->buffer      = memory_malloc_ext(heap, capacity, 0x80);
     if(!pipeline->buffer) {
         memory_free_ext(heap, pipeline);
         return NULL;

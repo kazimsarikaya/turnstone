@@ -10,9 +10,7 @@
 #include <logging.h>
 #include <time/timer.h>
 #include <pipeline.h>
-#include <network/network_arp.h>
-#include <network/network_ethernet.h>
-#include <network/network_dhcpv4.h>
+#include <network.h>
 #include <cpu/task.h>
 #include <strings.h>
 
@@ -24,6 +22,7 @@ typedef struct usb_driver_t {
     uint16_t              ocp_base;
     list_t*               return_queue;
     network_mac_address_t mac;
+    uint16_t              mtu;
     usb_endpoint_t*       bulk_in;
     usb_endpoint_t*       bulk_out;
     usb_endpoint_t*       intr;
@@ -93,7 +92,7 @@ static int8_t usb_rtl815x_read_reg(usb_driver_t* drv, uint16_t type, uint16_t in
 
         len   -= chunk;
         index += chunk;
-        buf   = (uint8_t*)buf + chunk;
+        buf    = (uint8_t*)buf + chunk;
     }
 
     return 0;
@@ -154,8 +153,8 @@ static int8_t usb_rtl815x_read_reg64(usb_driver_t* drv, uint16_t type, uint16_t 
 static int8_t usb_rtl815x_write_reg(usb_driver_t* drv, uint16_t byteen, uint16_t type, uint16_t index, void* buf, uint16_t len) {
     uint16_t byteen_start, byteen_end, byen;
     uint16_t limit = 512;
-    int8_t ret = 0;
-    uint8_t* data = (uint8_t*)buf;
+    int8_t ret     = 0;
+    uint8_t* data  = (uint8_t*)buf;
 
     if ((len & 3) || !len || (index & 3) || !buf) {
         PRINTLOG(USB, LOG_ERROR, "invalid parameters");
@@ -168,7 +167,7 @@ static int8_t usb_rtl815x_write_reg(usb_driver_t* drv, uint16_t byteen, uint16_t
     }
 
     byteen_start = byteen & RTL815X_BYTE_EN_START_MASK;
-    byteen_end = byteen & RTL815X_BYTE_EN_END_MASK;
+    byteen_end   = byteen & RTL815X_BYTE_EN_END_MASK;
 
     byen = byteen_start | (byteen_start << 4);
 
@@ -180,8 +179,8 @@ static int8_t usb_rtl815x_write_reg(usb_driver_t* drv, uint16_t byteen, uint16_t
         }
 
         index += 4;
-        data += 4;
-        len -= 4;
+        data  += 4;
+        len   -= 4;
     }
 
     if(!len) {
@@ -222,9 +221,9 @@ static int8_t usb_rtl815x_write_reg8(usb_driver_t* drv, uint16_t type, uint16_t 
     uint8_t shift = index & 3;
 
     if(index & 3) {
-        byen <<= shift;
+        byen  <<= shift;
         input <<= (shift * 8);
-        index &= ~3;
+        index  &= ~3;
     }
 
     return usb_rtl815x_write_reg(drv, byen, type, index, &input, sizeof(uint32_t));
@@ -237,9 +236,9 @@ static int8_t usb_rtl815x_write_reg16(usb_driver_t* drv, uint16_t type, uint16_t
     uint8_t shift = index & 2;
 
     if(index & 2) {
-        byen <<= shift;
+        byen  <<= shift;
         input <<= (shift * 8);
-        index &= ~3;
+        index  &= ~3;
     }
 
     return usb_rtl815x_write_reg(drv, byen, type, index, &input, sizeof(uint32_t));
@@ -251,7 +250,7 @@ static int8_t usb_rtl815x_write_reg32(usb_driver_t* drv, uint16_t type, uint16_t
 
 #if 0
 static int8_t usb_rtl815x_write_reg64(usb_driver_t* drv, uint16_t type, uint16_t index, uint64_t data) {
-    uint32_t low = (uint32_t)(data & 0xFFFFFFFF);
+    uint32_t low  = (uint32_t)(data & 0xFFFFFFFF);
     uint32_t high = (uint32_t)((data >> 32) & 0xFFFFFFFF);
 
     int8_t ret = usb_rtl815x_write_reg32(drv, type, index, low);
@@ -386,7 +385,7 @@ static int8_t usb_rtl815x_eee_disable(usb_driver_t* drv) {
     }
 
     ocp_data &= ~(RTL815X_EEE_RX_EN | RTL815X_EEE_TX_EN);
-    config &= ~RTL815X_EEE10_EN;
+    config   &= ~RTL815X_EEE10_EN;
 
     if(usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EEE_CR, ocp_data) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot read PLA_EEE_CR");
@@ -407,9 +406,9 @@ static int8_t usb_rtl815x_eee_disable(usb_driver_t* drv) {
 }
 
 static int8_t usb_rtl815x_wait_reset_clear(usb_driver_t* drv, uint32_t timeout_ms) {
-    uint8_t cr = 0;
+    uint8_t cr                 = 0;
     const uint32_t interval_us = 1000; // 1 ms polling
-    uint32_t elapsed = 0;
+    uint32_t elapsed           = 0;
 
     while (elapsed < timeout_ms) {
         if (usb_rtl815x_read_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_CR, &cr) != 0) {
@@ -477,6 +476,8 @@ static int8_t usb_rtl815x_set_mtu(usb_driver_t* drv, uint16_t mtu) {
         PRINTLOG(USB, LOG_ERROR, "cannot set MTU");
         return -1;
     }
+
+    drv->mtu = mtu;
 
     PRINTLOG(USB, LOG_INFO, "MTU set to %d", mtu);
     return 0;
@@ -1022,6 +1023,14 @@ extern uint64_t network_rx_task_id;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static int8_t usb_rtl815x_pipeline_callback(const usb_driver_t* driver, uint8_t endpoint, pipeline_t* pipeline) {
+    if(driver == NULL || pipeline == NULL) {
+        PRINTLOG(USB, LOG_ERROR, "invalid arguments to pipeline callback");
+        return -1;
+    }
+
+    if(!driver->return_queue) {
+        return -1;
+    }
 
     if(endpoint == driver->intr->desc->endpoint_address) {
         usb_driver_t* drv = (usb_driver_t*)driver;
@@ -1096,7 +1105,7 @@ static int8_t usb_rtl815x_pipeline_callback(const usb_driver_t* driver, uint8_t 
         }
 
         boolean_t is_vlan_tagged = (rx_hdr.flags1 & BIT(16)) != 0;
-        uint16_t vlan_id = rx_hdr.flags1 & 0x0FFFU;
+        uint16_t vlan_id         = rx_hdr.flags1 & 0x0FFFU;
         vlan_id = BYTE_SWAP16(vlan_id);
 
         network_received_packet_t* packet = memory_malloc_ext(list_get_heap(network_received_packets), sizeof(network_received_packet_t), 0);
@@ -1106,13 +1115,14 @@ static int8_t usb_rtl815x_pipeline_callback(const usb_driver_t* driver, uint8_t 
             continue;
         }
 
-        packet->packet_len = pktlen;
-        packet->return_queue = driver->return_queue;
-        packet->network_info = (void*)driver->mac;
-        packet->network_type = NETWORK_TYPE_ETHERNET;
+        packet->packet_len     = pktlen;
+        packet->return_queue   = driver->return_queue;
+        packet->network_type   = NETWORK_TYPE_ETHERNET;
         packet->is_vlan_tagged = is_vlan_tagged;
-        packet->vlan_id = vlan_id;
-        packet->tx_task_id = driver->tx_task_id;
+        packet->vlan_id        = vlan_id;
+        packet->tx_task_id     = driver->tx_task_id;
+
+        memory_memcopy(driver->mac, packet->mac, sizeof(network_mac_address_t));
 
         packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), pktlen, 0);
 
@@ -1171,7 +1181,7 @@ static boolean_t usb_rtl815x_write(usb_driver_t* usb_driver, usb_rtl815x_tx_t* t
     usb_transfer_t ut = {0};
 
 
-    ut.driver = usb_driver;
+    ut.driver   = usb_driver;
     ut.endpoint = usb_driver->bulk_out;
     ut.is_async = false;
 
@@ -1207,14 +1217,14 @@ static int8_t usb_rtl815x_process_tx(uint64_t arg_cnt, void** args) {
     drv->return_queue = list_create_queue_with_heap(NULL);
     task_add_message_queue(drv->return_queue);
 
-    network_info_t ni_reg = {0};
-    memory_memcopy(&drv->mac, &ni_reg.mac, 6);
-    ni_reg.has_hw_vlan_support = true;
-    ni_reg.is_vlan_tagged = true;
-    ni_reg.vlan_id = 12;
-    ni_reg.return_queue = drv->return_queue;
+    if(network_register_network_info(drv->mac, drv->mtu, drv->return_queue,
+                                     true, true, 12) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot register network info");
+        memory_free(drv->return_queue);
+        return -1;
+    }
 
-    network_register_network_info(&ni_reg);
+    const network_info_t* ni = network_get_network_info(drv->mac);
 
     void** dhcp_args = memory_malloc(sizeof(void*) * 2);
 
@@ -1237,15 +1247,12 @@ static int8_t usb_rtl815x_process_tx(uint64_t arg_cnt, void** args) {
         PRINTLOG(USB, LOG_ERROR, "cannot create dhcp task");
         memory_free(dhcp_args);
         memory_free(drv->return_queue);
-        network_unregister_network_info(&ni_reg);
+        network_unregister_network_info((network_info_t*)ni);
         return -1;
     }
 
     while(true) {
         boolean_t packet_exists = false;
-
-
-        const network_info_t* ni = map_get(network_info_map, &drv->mac);
 
         while(list_size(drv->return_queue)) {
             const network_transmit_packet_t* packet = list_queue_pop(drv->return_queue);
@@ -1265,7 +1272,7 @@ static int8_t usb_rtl815x_process_tx(uint64_t arg_cnt, void** args) {
                 }
 
                 tx->length = BIT(31) | BIT(30) | packet_len;
-                tx->flags = 0;
+                tx->flags  = 0;
 
                 if(ni->has_hw_vlan_support && packet->is_vlan_tagged) {
                     tx->flags |= BIT(16) | BYTE_SWAP16(packet->vlan_id & 0x0FFFU);
@@ -1331,10 +1338,9 @@ static int8_t usb_device_rtl815x_free(usb_driver_t* drv) {
         list_destroy_with_type(drv->return_queue, LIST_DESTROY_WITH_DATA, usb_device_rtl815x_free_returned_packet);
     }
 
-    network_info_t ni = {0};
-    memory_memcopy(&drv->mac, &ni.mac, sizeof(ni.mac));
+    const network_info_t* ni = network_get_network_info(drv->mac);
 
-    network_unregister_network_info(&ni);
+    network_unregister_network_info((network_info_t*)ni);
 
     memory_free(drv);
 
@@ -1356,10 +1362,10 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
         return -1;
     }
 
-    drv->usb_device = device;
-    drv->interface = interface;
+    drv->usb_device        = device;
+    drv->interface         = interface;
     drv->pipeline_callback = NULL;
-    drv->free = usb_device_rtl815x_free;
+    drv->free              = usb_device_rtl815x_free;
 
     interface->driver = drv;
 
@@ -1416,7 +1422,7 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
 
 
     drv->expected_packet_size = rx_ep_size;
-    drv->pipeline_callback = usb_rtl815x_pipeline_callback;
+    drv->pipeline_callback    = usb_rtl815x_pipeline_callback;
 
     uint8_t rx_ep_address = drv->bulk_in->desc->endpoint_address;
 
@@ -1436,7 +1442,7 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
     }
 
     uint8_t int_ep_address = drv->intr->desc->endpoint_address;
-    uint16_t int_ep_size = drv->intr->desc->max_packet_size;
+    uint16_t int_ep_size   = drv->intr->desc->max_packet_size;
 
     pipeline_t* int_pipeline = pipeline_create(int_ep_size * 32);
 

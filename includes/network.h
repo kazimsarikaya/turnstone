@@ -11,6 +11,7 @@
 
 #include <types.h>
 #include <list.h>
+#include <network/network_info.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,18 +25,18 @@ extern "C" {
 #define NETWORK_DEVICE_DEVICE_ID_IGB  0x10C9
 
 typedef enum network_type_t {
-    NETWORK_TYPE_ETHERNET=0
+    NETWORK_TYPE_ETHERNET = 0,
 } network_type_t;
 
 typedef struct network_received_packet_t {
-    uint64_t       packet_len;
-    uint8_t*       packet_data;
-    list_t*        return_queue;
-    network_type_t network_type;
-    void*          network_info;
-    boolean_t      is_vlan_tagged;
-    uint16_t       vlan_id;
-    uint64_t       tx_task_id;
+    uint64_t              packet_len;
+    uint8_t*              packet_data;
+    list_t*               return_queue;
+    network_mac_address_t mac;
+    network_type_t        network_type;
+    boolean_t             is_vlan_tagged;
+    uint16_t              vlan_id;
+    uint64_t              tx_task_id;
 } network_received_packet_t;
 
 typedef struct network_transmit_packet_t {
@@ -47,7 +48,7 @@ typedef struct network_transmit_packet_t {
 
 extern list_t* network_received_packets;
 
-int8_t network_transmit_packet_destroyer(memory_heap_t* heap, void* data);
+int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args);
 
 int8_t network_init(void);
 

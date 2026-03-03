@@ -11,8 +11,7 @@
 
 #include <types.h>
 #include <pci.h>
-#include <network/network_protocols.h>
-#include <network/network_ethernet.h>
+#include <network.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,6 +68,8 @@ extern "C" {
 #define NETWORK_IGB_REG_SWSM          0x5B50
 #define NETWORK_IGB_REG_FWSM          0x5B54
 #define NETWORK_IGB_REG_SWFWSYNC      0x5B5C
+
+#define NETWORK_IGB_REG_RLPML        0x5004
 
 // endof mmio register offsets at bar0
 
@@ -190,6 +191,7 @@ typedef struct network_igb_dev_t {
     const pci_dev_t*       pci_netdev;
     pci_capability_msix_t* msix_cap;
     network_mac_address_t  mac;
+    uint16_t               mtu;
     list_t*                return_queue;
     uint8_t                rx_isr;
     uint8_t                tx_isr;

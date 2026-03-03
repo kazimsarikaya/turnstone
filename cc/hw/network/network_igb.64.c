@@ -12,8 +12,6 @@
 #include <logging.h>
 #include <time/timer.h>
 #include <network.h>
-#include <network/network_ethernet.h>
-#include <network/network_dhcpv4.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
 #include <acpi.h>
@@ -24,20 +22,21 @@
 #include <utils.h>
 #include <cpu/task.h>
 #include <strings.h>
+#include <device/mmio.h>
 
 MODULE("turnstone.kernel.hw.network.igb");
 
 list_t* igb_net_devs = NULL;
 
-static uint32_t network_igb_read_mmio(const network_igb_dev_t* dev, uint32_t offset) {
-    return *((volatile uint32_t*)(dev->mmio_va + offset));
+static inline uint32_t network_igb_read_mmio(const network_igb_dev_t* dev, uint32_t offset) {
+    return mmio_read(dev->mmio_va + offset, sizeof(uint32_t));
 }
 
-static void network_igb_write_mmio(const network_igb_dev_t* dev, uint32_t offset, uint32_t value) {
-    *((volatile uint32_t*)(dev->mmio_va + offset)) = value;
+static inline void network_igb_write_mmio(const network_igb_dev_t* dev, uint32_t offset, uint32_t value) {
+    mmio_write(dev->mmio_va + offset, value, sizeof(uint32_t));
 }
 
-static void network_igb_reset(const network_igb_dev_t* dev) {
+static inline void network_igb_reset(const network_igb_dev_t* dev) {
     network_igb_write_mmio(dev, NETWORK_IGB_REG_CTRL, NETWORK_IGB_CTRL_RST);
     time_timer_spinsleep(1000);
 
@@ -46,7 +45,7 @@ static void network_igb_reset(const network_igb_dev_t* dev) {
     }
 }
 
-static void network_igb_read_mac_address(const network_igb_dev_t* dev, network_mac_address_t* mac) {
+static inline void network_igb_read_mac_address(const network_igb_dev_t* dev, network_mac_address_t* mac) {
     uint32_t ral = network_igb_read_mmio(dev, NETWORK_IGB_REG_RAL);
     uint32_t rah = network_igb_read_mmio(dev, NETWORK_IGB_REG_RAH);
 
@@ -61,11 +60,23 @@ static void network_igb_read_mac_address(const network_igb_dev_t* dev, network_m
     mac_octets[5] = (rah >> 8) & 0xFF;
 }
 
-static void network_igb_disable_interrupts(const network_igb_dev_t* dev) {
+static inline uint16_t network_igb_get_mtu(const network_igb_dev_t* dev) {
+    uint32_t rctl = network_igb_read_mmio(dev, NETWORK_IGB_REG_RCTL);
+
+    if(rctl & 0x100) {
+        return 1500;
+    }
+
+    uint32_t rlpml = network_igb_read_mmio(dev, NETWORK_IGB_REG_RLPML);
+
+    return rlpml - 22;
+}
+
+static inline void network_igb_disable_interrupts(const network_igb_dev_t* dev) {
     network_igb_write_mmio(dev, NETWORK_IGB_REG_IMC, 0xFFFFFFFF);
 }
 
-static void network_igb_enable_interrupts(const network_igb_dev_t* dev) {
+static inline void network_igb_enable_interrupts(const network_igb_dev_t* dev) {
     pci_msix_clear_pending_bit((pci_generic_device_t*)dev->pci_netdev->pci_header, dev->msix_cap, 0);
     pci_msix_clear_pending_bit((pci_generic_device_t*)dev->pci_netdev->pci_header, dev->msix_cap, 1);
     pci_msix_clear_pending_bit((pci_generic_device_t*)dev->pci_netdev->pci_header, dev->msix_cap, 2);
@@ -80,6 +91,7 @@ static void network_igb_enable_interrupts(const network_igb_dev_t* dev) {
 
 
 static int8_t network_igb_process_tx(void) {
+    PRINTLOG(NETWORK, LOG_INFO, "network tx task started. number of network devices: 0x%llx", list_size(igb_net_devs));
 
     for(uint64_t dev_idx = 0; dev_idx < list_size(igb_net_devs); dev_idx++) {
         network_igb_dev_t* dev = (network_igb_dev_t*)list_get_data_at_position(igb_net_devs, dev_idx);
@@ -87,14 +99,14 @@ static int8_t network_igb_process_tx(void) {
         dev->return_queue = list_create_queue_with_heap(NULL);
         task_add_message_queue(dev->return_queue);
 
-        network_info_t ni = {0};
-        memory_memcopy(&dev->mac, &ni.mac, 6);
-        ni.has_hw_vlan_support = true;
-        ni.is_vlan_tagged = true;
-        ni.vlan_id = 122;
-        ni.return_queue = dev->return_queue;
+        if(network_register_network_info(dev->mac, dev->mtu, dev->return_queue,
+                                         true, true, 122) != 0) {
+            PRINTLOG(NETWORK, LOG_ERROR, "failed to register network info for device with mac %02x:%02x:%02x:%02x:%02x:%02x",
+                     dev->mac[0], dev->mac[1], dev->mac[2],
+                     dev->mac[3], dev->mac[4], dev->mac[5]);
 
-        network_register_network_info(&ni);
+            return -1;
+        }
 
         void** args = memory_malloc(sizeof(void*) * 2);
 
@@ -109,7 +121,8 @@ static int8_t network_igb_process_tx(void) {
         args[0] = (void*)dev->mac;
         args[1] = dev->return_queue;
 
-        task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, args, dhcp_task_name);
+        task_create_task(NULL, 2 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, args, dhcp_task_name);
+        memory_free(dhcp_task_name);
     }
 
     while(true) {
@@ -122,7 +135,6 @@ static int8_t network_igb_process_tx(void) {
                 const network_transmit_packet_t* packet = list_queue_pop(dev->return_queue);
 
                 if(packet) {
-                    PRINTLOG(NETWORK, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
                     packet_exists = true;
 
                     // first context
@@ -179,7 +191,7 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
     frame_allocator_t* fa = frame_get_allocator();
 
     // allocate a 10K buffer for the receive queue
-    uint64_t packet_buffer_size = NETWORK_IGB_RX_BUFFER_SIZE * NETWORK_IGB_NUM_RX_DESCRIPTORS;
+    uint64_t packet_buffer_size    = NETWORK_IGB_RX_BUFFER_SIZE * NETWORK_IGB_NUM_RX_DESCRIPTORS;
     uint64_t packet_buffer_frm_cnt = (packet_buffer_size + FRAME_SIZE - 1)  / FRAME_SIZE;
 
     frame_t* rx_packet_buffer_frames;
@@ -202,7 +214,7 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
     dev->rx_packet_buffer_va = rx_packet_buffer_va;
 
     // allocate a 256 byte buffer for the receive queue headers
-    uint64_t header_buffer_size = NETWORK_IGB_RX_HEADER_SIZE * NETWORK_IGB_NUM_RX_DESCRIPTORS;
+    uint64_t header_buffer_size    = NETWORK_IGB_RX_HEADER_SIZE * NETWORK_IGB_NUM_RX_DESCRIPTORS;
     uint64_t header_buffer_frm_cnt = (header_buffer_size + FRAME_SIZE - 1)  / FRAME_SIZE;
 
     frame_t* rx_header_buffer_frames;
@@ -282,7 +294,7 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
 static int8_t network_igb_tx_init(network_igb_dev_t* dev) {
     uint64_t queue_size = (8192 + 16) * NETWORK_IGB_NUM_TX_DESCRIPTORS;
 
-    uint64_t queue_frm_cnt = (queue_size + FRAME_SIZE - 1)  / FRAME_SIZE;
+    uint64_t queue_frm_cnt      = (queue_size + FRAME_SIZE - 1)  / FRAME_SIZE;
     uint64_t queue_meta_frm_cnt = ((sizeof(network_igb_rx_desc_t) * NETWORK_IGB_NUM_TX_DESCRIPTORS)  + FRAME_SIZE - 1 ) / FRAME_SIZE;
 
 
@@ -298,7 +310,7 @@ static int8_t network_igb_tx_init(network_igb_dev_t* dev) {
         return -1;
     }
 
-    queue_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
+    queue_frames->frame_attributes      |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
     queue_meta_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 
     uint64_t queue_fa = queue_frames->frame_address;
@@ -318,13 +330,13 @@ static int8_t network_igb_tx_init(network_igb_dev_t* dev) {
     for(int32_t i = 0; i < NETWORK_IGB_NUM_TX_DESCRIPTORS; i++ ) {
         if(i % 2 == 0) {
             dev->tx_desc[i].context.vlan_macip_lens = 0;
-            dev->tx_desc[i].context.seqnum_seed = 0;
+            dev->tx_desc[i].context.seqnum_seed     = 0;
             dev->tx_desc[i].context.type_tucmd_mlhl = 0;
-            dev->tx_desc[i].context.mss_l4len_idx = 0;
+            dev->tx_desc[i].context.mss_l4len_idx   = 0;
             continue;
         } else {
-            dev->tx_desc[i].transmit.read.buffer_addr = queue_fa + i * (8192 + 16);
-            dev->tx_desc[i].transmit.read.cmd_type_len = 0;
+            dev->tx_desc[i].transmit.read.buffer_addr   = queue_fa + i * (8192 + 16);
+            dev->tx_desc[i].transmit.read.cmd_type_len  = 0;
             dev->tx_desc[i].transmit.read.olinfo_status = 0;
         }
     }
@@ -366,6 +378,10 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
         return -1;
     }
 
+    while(!dev->return_queue) {
+        task_yield();
+    }
+
 
     cpu_cli();
     pci_msix_update_lapic((pci_generic_device_t*)dev->pci_netdev->pci_header, dev->msix_cap, 0);
@@ -383,10 +399,10 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
                 ((network_igb_dev_t*)dev)->rx_tail = (dev->rx_tail + 1) % NETWORK_IGB_NUM_RX_DESCRIPTORS;
                 // check if the next descriptor is ready
                 network_igb_rx_desc_t* desc = (network_igb_rx_desc_t*)&dev->rx_desc[dev->rx_tail];
-                uint32_t status_error = desc->wb.upper.status_error;
+                uint32_t status_error       = desc->wb.upper.status_error;
                 // first 20bits are status, last 12 bits are error
                 uint32_t status = status_error & 0xFFFFF;
-                uint32_t error = status_error >> 20;
+                uint32_t error  = status_error >> 20;
 
                 PRINTLOG(IGB, LOG_TRACE, "rx status 0x%x error 0x%x", status, error);
 
@@ -397,9 +413,9 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
                 }
 
                 // we get packet address with calculated offset
-                uint8_t* pkt = (uint8_t*)(dev->rx_packet_buffer_va + dev->rx_tail * NETWORK_IGB_RX_BUFFER_SIZE);
-                uint16_t pktlen = desc->wb.upper.length;
-                uint16_t vlan_id = desc->wb.upper.vlan;
+                uint8_t* pkt       = (uint8_t*)(dev->rx_packet_buffer_va + dev->rx_tail * NETWORK_IGB_RX_BUFFER_SIZE);
+                uint16_t pktlen    = desc->wb.upper.length;
+                uint16_t vlan_id   = desc->wb.upper.vlan;
                 boolean_t dropflag = 0;
 
                 if( pktlen < 60 ) {
@@ -429,15 +445,16 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
                         continue;
                     }
 
-                    packet->packet_len = pktlen;
-                    packet->return_queue = dev->return_queue;
-                    packet->network_info = (void*)dev->mac;
-                    packet->network_type = NETWORK_TYPE_ETHERNET;
+                    packet->packet_len     = pktlen;
+                    packet->return_queue   = dev->return_queue;
+                    packet->network_type   = NETWORK_TYPE_ETHERNET;
                     packet->is_vlan_tagged = status & NETWORK_IGB_RXD_STAT_VD ? true : false;
-                    packet->vlan_id = vlan_id;
-                    packet->tx_task_id = dev->tx_task_id;
+                    packet->vlan_id        = vlan_id;
+                    packet->tx_task_id     = dev->tx_task_id;
 
-                    packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), pktlen, 0);
+                    memory_memcopy(dev->mac, packet->mac, sizeof(network_mac_address_t));
+
+                    packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), dev->mtu + 22, 0);
 
                     if(packet->packet_data == NULL) {
                         PRINTLOG(IGB, LOG_ERROR, "failed to allocate packet");
@@ -602,8 +619,8 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
 
     dev->pci_netdev = pci_netdev; // pci structure
 
-    dev->rx_count = 0;
-    dev->tx_count = 0;
+    dev->rx_count        = 0;
+    dev->tx_count        = 0;
     dev->packets_dropped = 0;
 
     pci_generic_device_t* pci_dev = (pci_generic_device_t*)pci_header;
@@ -661,10 +678,10 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
         PRINTLOG(IGB, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
         frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
-        uint64_t size = pci_get_bar_size(pci_dev, 0);
+        uint64_t size       = pci_get_bar_size(pci_dev, 0);
         PRINTLOG(IGB, LOG_TRACE, "bar size 0x%llx", size);
         uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
-        frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+        frame_t bar_req_frm  = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
         bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
 
@@ -715,6 +732,8 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
 
     PRINTLOG(IGB, LOG_TRACE, "device has mac %02x:%02x:%02x:%02x:%02x:%02x", mac_tmp[0], mac_tmp[1], mac_tmp[2], mac_tmp[3], mac_tmp[4], mac_tmp[5]);
 
+    dev->mtu = network_igb_get_mtu(dev);
+
     uint32_t igb_ctrl = network_igb_read_mmio(dev, NETWORK_IGB_REG_CTRL);
 
     igb_ctrl |= NETWORK_IGB_CTRL_SLU | NETWORK_IGB_CTRL_VME;
@@ -742,8 +761,8 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
     }
 
     // register the interrupt handler
-    dev->rx_isr = pci_msix_set_isr(pci_dev, dev->msix_cap, 0, &network_igb_rx_isr);
-    dev->tx_isr = pci_msix_set_isr(pci_dev, dev->msix_cap, 1, &network_igb_tx_isr);
+    dev->rx_isr    = pci_msix_set_isr(pci_dev, dev->msix_cap, 0, &network_igb_rx_isr);
+    dev->tx_isr    = pci_msix_set_isr(pci_dev, dev->msix_cap, 1, &network_igb_tx_isr);
     dev->other_isr = pci_msix_set_isr(pci_dev, dev->msix_cap, 2, &network_igb_other_isr);
 
     network_igb_write_mmio(dev, NETWORK_IGB_REG_IVAR, 0x8180);
@@ -762,6 +781,8 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
     network_igb_enable_interrupts(dev);
 
     network_igb_write_mmio(dev, NETWORK_IGB_REG_RCTL, network_igb_read_mmio(dev, NETWORK_IGB_REG_RCTL) | NETWORK_IGB_RCTL_EN);
+
+    list_list_insert(igb_net_devs, dev);
 
     void** rx_args = memory_malloc(sizeof(void*) * 1);
 
@@ -783,8 +804,6 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
 
     uint64_t tx_task_id =    task_create_task(NULL, 2 << 20, 64 << 10, &network_igb_process_tx, 0, NULL, "igb-tx");
     dev->tx_task_id = tx_task_id;
-
-    list_list_insert(igb_net_devs, dev);
 
     PRINTLOG(IGB, LOG_INFO, "device initialized");
 
