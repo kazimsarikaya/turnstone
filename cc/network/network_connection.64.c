@@ -694,6 +694,21 @@ static network_connection_t* network_connection_connect_internal(network_listene
 network_connection_t* network_connection_connect(network_listener_t*    listener,
                                                  network_ipv4_address_t remote_ip,
                                                  uint16_t               remote_port) {
+    if(!listener) {
+        return NULL;
+    }
+
+    if(listener->role != NETWORK_LISTENER_ROLE_CLIENT) {
+        PRINTLOG(NETWORK, LOG_ERROR, "only client listener can initiate connection");
+        return NULL;
+    }
+
+    if(hashmap_size(listener->connections) > 0) {
+        PRINTLOG(NETWORK, LOG_ERROR, "client listener already has an active connection. "
+                                     "multiple connections for client listener is not supported.");
+        return NULL;
+    }
+
     return network_connection_connect_internal(listener, remote_ip, remote_port, NULL);
 }
 
