@@ -140,7 +140,7 @@ efi_status_t efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* c
     efi_status_t status = EFI_OUT_OF_RESOURCES;
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(tdb_ctx->tosdb, "system");
-    tosdb_table_t* tbl_config = tosdb_table_create_or_open(db_system, "config", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_config   = tosdb_table_create_or_open(db_system, "config", 1 << 10, 512 << 10, 8);
 
     tosdb_record_t* rec_config = tosdb_table_create_record(tbl_config);
 
@@ -183,7 +183,7 @@ efi_status_t efi_setup_heap(void){
     efi_status_t res;
 
     efi_physical_address_t heap_area = NULL;
-    int64_t heap_size = 1024 * 1024 * 256;
+    int64_t heap_size                = 1024 * 1024 * 256;
 
     res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, heap_size / FRAME_SIZE, &heap_area);
 
@@ -231,10 +231,10 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
         goto catch_efi_error;
     }
 
-    uint64_t next_mode = gop->mode->mode;
+    uint64_t next_mode    = gop->mode->mode;
     uint64_t current_mode = gop->mode->mode;
     for(int64_t i = 0; i < gop->mode->max_mode; i++) {
-        uint64_t gop_mode_size = 0;
+        uint64_t gop_mode_size      = 0;
         efi_gop_mode_info_t* gop_mi = NULL;
 
         if(gop->query_mode(gop, i, &gop_mode_size, &gop_mi) == EFI_SUCCESS) {
@@ -277,11 +277,11 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
     }
 
     vfb->physical_base_address = gop->mode->frame_buffer_base;
-    vfb->virtual_base_address = gop->mode->frame_buffer_base;
-    vfb->buffer_size = gop->mode->frame_buffer_size;
-    vfb->width = gop->mode->information->horizontal_resolution;
-    vfb->height = gop->mode->information->vertical_resolution;
-    vfb->pixels_per_scanline = gop->mode->information->pixels_per_scanline;
+    vfb->virtual_base_address  = gop->mode->frame_buffer_base;
+    vfb->buffer_size           = gop->mode->frame_buffer_size;
+    vfb->width                 = gop->mode->information->horizontal_resolution;
+    vfb->height                = gop->mode->information->vertical_resolution;
+    vfb->pixels_per_scanline   = gop->mode->information->pixels_per_scanline;
 
     PRINTLOG(EFI, LOG_INFO, "frame buffer info %ix%i pps %i at 0x%llx size 0x%llx", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->physical_base_address, vfb->buffer_size);
     PRINTLOG(EFI, LOG_DEBUG, "vfb address 0x%p", vfb);
@@ -324,7 +324,7 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
     eipa.v4.addr[3] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[3];
 
     uint64_t buffer_size;
-    char_t* pxeconfig = (char_t*)"pxeconf.json";
+    char_t* pxeconfig           = (char_t*)"pxeconf.json";
     boolean_t pxeconfig_is_json = true;
 
     res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);
@@ -332,7 +332,7 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_WARNING, "cannot get config size as json: 0x%llx, trying bson", res);
 
-        pxeconfig = (char_t*)"pxeconf.bson";
+        pxeconfig         = (char_t*)"pxeconf.bson";
         pxeconfig_is_json = false;
 
         res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);
@@ -390,7 +390,7 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
         goto catch_efi_error;
     }
 
-    data_t* tdbd = &((data_t*)pxeconfig_data->value)[0];
+    data_t* tdbd   = &((data_t*)pxeconfig_data->value)[0];
     data_t* tdbd_s = &((data_t*)pxeconfig_data->value)[1];
 
     if(tdbd->name == NULL || strcmp(tdbd->name->value, "tosdb") != 0 || tdbd_s->name == NULL || strcmp(tdbd_s->name->value, "tosdb-size") != 0) {
@@ -401,9 +401,9 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
     }
 
     buffer_size = (uint64_t)tdbd_s->value;
-    uint64_t requested_buffer_size = (2 << 20) + buffer_size;
+    uint64_t requested_buffer_size  = (2 << 20) + buffer_size;
     uint64_t requested_buffer_pages = requested_buffer_size / FRAME_SIZE;
-    uint64_t requested_buffer_base = 0;
+    uint64_t requested_buffer_base  = 0;
 
     res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, requested_buffer_pages, &requested_buffer_base);
 
@@ -466,8 +466,8 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 8 << 20;
-    cc.index_data_size = 32 << 20;
-    cc.valuelog_size = 32 << 20;
+    cc.index_data_size  = 32 << 20;
+    cc.valuelog_size    = 32 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {
         PRINTLOG(EFI, LOG_ERROR, "cannot set tosdb cache config");
@@ -491,11 +491,11 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
         goto catch_efi_error;
     }
 
-    (*tdb_ctx)->is_pxe = true;
+    (*tdb_ctx)->is_pxe        = true;
     (*tdb_ctx)->pxe_data_size = buffer_size;
     (*tdb_ctx)->pxe_data_base = requested_buffer_base;
-    (*tdb_ctx)->tosdb = tdb;
-    (*tdb_ctx)->backend = tosdb_backend;
+    (*tdb_ctx)->tosdb         = tdb;
+    (*tdb_ctx)->backend       = tosdb_backend;
 
     res = EFI_SUCCESS;
 
@@ -559,8 +559,8 @@ efi_status_t efi_open_local_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 8 << 20;
-    cc.index_data_size = 32 << 20;
-    cc.valuelog_size = 32 << 20;
+    cc.index_data_size  = 32 << 20;
+    cc.valuelog_size    = 32 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {
         PRINTLOG(EFI, LOG_ERROR, "cannot set tosdb cache config");
@@ -584,8 +584,8 @@ efi_status_t efi_open_local_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb
         goto catch_efi_error;
     }
 
-    (*tdb_ctx)->bio = bio;
-    (*tdb_ctx)->tosdb = tdb;
+    (*tdb_ctx)->bio     = bio;
+    (*tdb_ctx)->tosdb   = tdb;
     (*tdb_ctx)->backend = tosdb_backend;
 
     res = EFI_SUCCESS;
@@ -692,7 +692,7 @@ efi_status_t efi_print_variable_names(void) {
 
     while(1) {
         var_size = sizeof(buffer);
-        res = RS->get_next_variable_name(&var_size, buffer, &var_ven_guid);
+        res      = RS->get_next_variable_name(&var_size, buffer, &var_ven_guid);
 
         if(res == EFI_NOT_FOUND) {
             break;
@@ -723,9 +723,9 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
     }
 
     char16_t* var_name_boot_current = char_to_wchar("BootCurrent");
-    efi_guid_t var_global = EFI_GLOBAL_VARIABLE;
-    uint32_t var_attrs = 0;
-    uint64_t buffer_size = sizeof(uint16_t);
+    efi_guid_t var_global           = EFI_GLOBAL_VARIABLE;
+    uint32_t var_attrs              = 0;
+    uint64_t buffer_size            = sizeof(uint16_t);
     uint16_t boot_order_idx;
 
     res = RS->get_variable(var_name_boot_current, &var_global, &var_attrs, &buffer_size, &boot_order_idx);
@@ -777,8 +777,8 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 
     memory_free(var_val_boot_current);
 
-    uint16_t lo_len = *((uint16_t*)(var_val_boot + sizeof(uint32_t)));
-    char16_t* lo_desc = (char16_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t));
+    uint16_t lo_len   = *((uint16_t*)(void*)(var_val_boot + sizeof(uint32_t)));
+    char16_t* lo_desc = (char16_t*)(void*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t));
     char_t* boot_desc = char16_to_char(lo_desc);
 
     PRINTLOG(EFI, LOG_DEBUG, "boot len %i desc: %s dl %lli", lo_len, boot_desc, wchar_size(lo_desc));
@@ -800,7 +800,7 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 
 
         lo_len -= lo_fp->length;
-        lo_fp = (efi_device_path_t*)(((uint8_t*)lo_fp) + lo_fp->length);
+        lo_fp   = (efi_device_path_t*)(((uint8_t*)lo_fp) + lo_fp->length);
     }
 
     res = EFI_SUCCESS;
@@ -858,7 +858,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
         goto catch_efi_error;
     }
 
-    efi_guid_t lip_guid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
+    efi_guid_t lip_guid              = EFI_LOADED_IMAGE_PROTOCOL_GUID;
     efi_loaded_image_t* loaded_image = NULL;
 
     res = BS->handle_protocol(image, &lip_guid, (void**)&loaded_image);
@@ -964,7 +964,54 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
 
     PRINTLOG(EFI, LOG_INFO, "spool size 0x%llx", spool_size);
 
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db, "symbols", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db, "modules", 1 << 10, 512 << 10, 8);
+
+    tosdb_record_t* s_mod_rec = tosdb_table_create_record(tbl_modules);
+
+    if(!s_mod_rec) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create record for searching modules");
+
+        return -1;
+    }
+
+    const char_t* ih_module_name = "turnstone.kernel.cpu.interrupt.handlers";
+
+    if(!s_mod_rec->set_string(s_mod_rec, "name", ih_module_name)) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot set search key for records id column for modules for module name %s", ih_module_name);
+        s_mod_rec->destroy(s_mod_rec);
+
+        return -1;
+    }
+
+    if(!s_mod_rec->get_record(s_mod_rec)) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot get module record for module name %s", ih_module_name);
+        s_mod_rec->destroy(s_mod_rec);
+
+        return -1;
+    }
+
+    uint64_t ih_module_id = 0;
+
+    if(!s_mod_rec->get_uint64(s_mod_rec, "id", &ih_module_id)) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot get module id for module name %s", ih_module_name);
+        s_mod_rec->destroy(s_mod_rec);
+
+        return -1;
+    }
+
+    s_mod_rec->destroy(s_mod_rec);
+
+    s_mod_rec = tosdb_table_create_record(tbl_modules);
+
+    if(!s_mod_rec) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create record for searching modules");
+
+        return -1;
+    }
+
+    PRINTLOG(LINKER, LOG_INFO, "interrupt handlers module id: 0x%llx", ih_module_id);
+
+    tosdb_table_t* tbl_symbols  = tosdb_table_create_or_open(db, "symbols", 1 << 10, 512 << 10, 8);
     tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db, "sections", 1 << 10, 512 << 10, 8);
 
     tosdb_record_t* s_sym_rec = tosdb_table_create_record(tbl_symbols);
@@ -1023,9 +1070,9 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
         goto catch_efi_error;
     }
 
-    uint64_t sym_id = 0;
+    uint64_t ep_sym_id = 0;
 
-    if(!s_sym_rec->get_int64(s_sym_rec, "id", (int64_t*)&sym_id)) {
+    if(!s_sym_rec->get_int64(s_sym_rec, "id", (int64_t*)&ep_sym_id)) {
         PRINTLOG(EFI, LOG_ERROR, "cannot get symbol id for entrypoint symbol");
 
         s_sym_rec->destroy(s_sym_rec);
@@ -1038,7 +1085,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     s_sym_rec->destroy(s_sym_rec);
 
 
-    PRINTLOG(EFI, LOG_INFO, "entry point symbol %s id 0x%llx section id: 0x%llx", entry_point, sym_id, sec_id);
+    PRINTLOG(EFI, LOG_INFO, "entry point symbol %s id 0x%llx section id: 0x%llx", entry_point, ep_sym_id, sec_id);
 
 
     tosdb_record_t* s_sec_rec = tosdb_table_create_record(tbl_sections);
@@ -1061,9 +1108,9 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
         goto catch_efi_error;
     }
 
-    uint64_t mod_id = 0;
+    uint64_t ep_mod_id = 0;
 
-    if(!s_sec_rec->get_int64(s_sec_rec, "module_id", (int64_t*)&mod_id)) {
+    if(!s_sec_rec->get_int64(s_sec_rec, "module_id", (int64_t*)&ep_mod_id)) {
         PRINTLOG(EFI, LOG_ERROR, "cannot get module id for entrypoint symbol");
 
         s_sec_rec->destroy(s_sec_rec);
@@ -1075,7 +1122,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
 
     s_sec_rec->destroy(s_sec_rec);
 
-    PRINTLOG(EFI, LOG_INFO, "entry point module id: 0x%llx", mod_id);
+    PRINTLOG(EFI, LOG_INFO, "entry point module id: 0x%llx", ep_mod_id);
 
     linker_context_t* ctx = memory_malloc(sizeof(linker_context_t));
 
@@ -1085,14 +1132,14 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
         goto catch_efi_error;
     }
 
-    ctx->entrypoint_symbol_id = sym_id;
-    ctx->program_start_virtual = program_base;
+    ctx->entrypoint_symbol_id   = ep_sym_id;
+    ctx->program_start_virtual  = program_base;
     ctx->program_start_physical = program_base;
-    ctx->tdb = tdb_ctx->tosdb;
-    ctx->modules = hashmap_integer(16);
-    ctx->got_table_buffer = buffer_new();
-    ctx->symbol_table_buffer = buffer_new();
-    ctx->got_symbol_index_map = hashmap_integer(1024);
+    ctx->tdb                    = tdb_ctx->tosdb;
+    ctx->modules                = hashmap_integer(16);
+    ctx->got_table_buffer       = buffer_new();
+    ctx->symbol_table_buffer    = buffer_new();
+    ctx->got_symbol_index_map   = hashmap_integer(1024);
 
     linker_global_offset_table_entry_t empty_got_entry = {0};
 
@@ -1102,7 +1149,14 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     time_t start_time = time_ns(NULL);
     PRINTLOG(EFI, LOG_INFO, "build module start time %llu", start_time);
 
-    if(linker_build_module(ctx, mod_id, true) != 0) {
+    if(linker_build_module(ctx, ih_module_id, false) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot build interrupt handlers module");
+        linker_destroy_context(ctx);
+
+        goto catch_efi_error;
+    }
+
+    if(linker_build_module(ctx, ep_mod_id, true) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot build module");
         linker_destroy_context(ctx);
 
@@ -1132,8 +1186,8 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
         goto catch_efi_error;
     }
 
-    uint64_t program_total_size = FRAME_SIZE + ctx->program_size + ctx->global_offset_table_size + ctx->relocation_table_size + ctx->metadata_size + ctx->symbol_table_size;
-    uint64_t requested_program_size = (2 << 20) + program_total_size;
+    uint64_t program_total_size      = FRAME_SIZE + ctx->program_size + ctx->global_offset_table_size + ctx->relocation_table_size + ctx->metadata_size + ctx->symbol_table_size;
+    uint64_t requested_program_size  = (2 << 20) + program_total_size;
     uint64_t requested_program_pages = requested_program_size / FRAME_SIZE;
 
     if(requested_program_size % FRAME_SIZE != 0) {
@@ -1156,10 +1210,10 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
 
     memory_memclean((void*)requested_program_base, program_total_size);
 
-    uint64_t heap_size = 64 << 20;
-    uint64_t requested_heap_size = (2 << 20) + heap_size;
+    uint64_t heap_size            = 64 << 20;
+    uint64_t requested_heap_size  = (2 << 20) + heap_size;
     uint64_t requested_heap_pages = requested_heap_size / FRAME_SIZE;
-    uint64_t requested_heap_base = 0;
+    uint64_t requested_heap_base  = 0;
 
     res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, requested_heap_pages, &requested_heap_base);
 
@@ -1202,7 +1256,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     PRINTLOG(EFI, LOG_INFO, "spool address 0x%llx", spool_address);
 
     uint64_t page_table_helper_frames = 0;
-    uint64_t page_frame_helper_size = 4 * FRAME_SIZE;
+    uint64_t page_frame_helper_size   = 4 * FRAME_SIZE;
 
     res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, page_frame_helper_size / FRAME_SIZE, &page_table_helper_frames);
 
@@ -1215,7 +1269,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     memory_memclean((void*)page_table_helper_frames, page_frame_helper_size);
 
     ctx->program_start_physical = requested_program_base + FRAME_SIZE;
-    ctx->program_start_virtual = (2 << 20) + FRAME_SIZE;
+    ctx->program_start_virtual  = (2 << 20) + FRAME_SIZE;
 
     if(linker_bind_linear_addresses(ctx) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot bind addresses");
@@ -1245,12 +1299,12 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     program_header_t* program_header = (program_header_t*)requested_program_base;
 
     program_header->program_heap_physical_address = requested_heap_base;
-    program_header->program_heap_virtual_address = (1 << 30);
-    program_header->program_heap_size = heap_size;
+    program_header->program_heap_virtual_address  = (1 << 30);
+    program_header->program_heap_size             = heap_size;
 
     program_header->program_stack_physical_address = stack_address;
-    program_header->program_stack_virtual_address = (1 << 30) - stack_size;
-    program_header->program_stack_size = stack_size;
+    program_header->program_stack_virtual_address  = (1 << 30) - stack_size;
+    program_header->program_stack_size             = stack_size;
 
     ctx->page_table_helper_frames = page_table_helper_frames;
 
@@ -1266,14 +1320,14 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
 
 
     PRINTLOG(EFI, LOG_DEBUG, "conf table count %lli", system_table->configuration_table_entry_count);
-    efi_guid_t acpi_table_v2_guid = EFI_ACPI_20_TABLE_GUID;
-    efi_guid_t acpi_table_v1_guid = EFI_ACPI_TABLE_GUID;
+    efi_guid_t acpi_table_v2_guid    = EFI_ACPI_20_TABLE_GUID;
+    efi_guid_t acpi_table_v1_guid    = EFI_ACPI_TABLE_GUID;
     efi_guid_t smbios_table_v2_guild = EFI_SMBIOS_2_TABLE_GUID;
     efi_guid_t smbios_table_v3_guild = EFI_SMBIOS_3_TABLE_GUID;
-    void* smbios_table_v2 = NULL;
-    void* smbios_table_v3 = NULL;
+    void* smbios_table_v2            = NULL;
+    void* smbios_table_v3            = NULL;
 
-    void* acpi_rsdp = NULL;
+    void* acpi_rsdp  = NULL;
     void* acpi_xrsdp = NULL;
 
     for (uint64_t i = 0; i <  system_table->configuration_table_entry_count; i++ ) {
@@ -1294,7 +1348,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     uint64_t map_size, map_key, descriptor_size;
     uint32_t descriptor_version;
 
-    BS->get_memory_map(&map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version);
+    BS->get_memory_map(&map_size, (efi_memory_descriptor_t*)(void*)mmap, &map_key, &descriptor_size, &descriptor_version);
     PRINTLOG(EFI, LOG_DEBUG, "mmap size %lli desc size %lli ver %i", map_size, descriptor_size, descriptor_version);
 
     uint64_t old_map_size = map_size;
@@ -1307,7 +1361,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
 
     PRINTLOG(EFI, LOG_DEBUG, "mmap %p size 0x%llx", mmap, old_map_size);
 
-    res = BS->get_memory_map(&old_map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version);
+    res = BS->get_memory_map(&old_map_size, (efi_memory_descriptor_t*)(void*)mmap, &map_key, &descriptor_size, &descriptor_version);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "cannot fill memory map.");
@@ -1330,32 +1384,33 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
         goto catch_efi_error;
     }
 
-    sysinfo->boot_type = is_pxe?SYSTEM_INFO_BOOT_TYPE_PXE:SYSTEM_INFO_BOOT_TYPE_DISK;
-    sysinfo->mmap_data = mmap;
-    sysinfo->mmap_size = old_map_size;
-    sysinfo->mmap_descriptor_size = descriptor_size;
-    sysinfo->mmap_descriptor_version = descriptor_version;
-    sysinfo->frame_buffer = vfb;
-    sysinfo->acpi_version = acpi_xrsdp != NULL?2:1;
-    sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
-    sysinfo->smbios_table_v2 = smbios_table_v2;
-    sysinfo->smbios_table_v3 = smbios_table_v3;
-    sysinfo->efi_system_table = system_table;
+    sysinfo->boot_type                     = is_pxe?SYSTEM_INFO_BOOT_TYPE_PXE:SYSTEM_INFO_BOOT_TYPE_DISK;
+    sysinfo->mmap_data                     = mmap;
+    sysinfo->mmap_size                     = old_map_size;
+    sysinfo->mmap_descriptor_size          = descriptor_size;
+    sysinfo->mmap_descriptor_version       = descriptor_version;
+    sysinfo->frame_buffer                  = vfb;
+    sysinfo->acpi_version                  = acpi_xrsdp != NULL?2:1;
+    sysinfo->acpi_table                    = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
+    sysinfo->smbios_table_v2               = smbios_table_v2;
+    sysinfo->smbios_table_v3               = smbios_table_v3;
+    sysinfo->efi_system_table              = system_table;
     sysinfo->program_header_physical_start = requested_program_base;
-    sysinfo->program_header_virtual_start = (2 << 20);
-    sysinfo->pxe_tosdb_size = tdb_ctx->pxe_data_size;
-    sysinfo->pxe_tosdb_address = tdb_ctx->pxe_data_base;
-    sysinfo->random_seed = rand64();
-    sysinfo->spool_size = spool_size;
-    sysinfo->spool_physical_start = spool_address;
-    sysinfo->spool_virtual_start = (64UL << 30) | spool_address;
+    sysinfo->program_header_virtual_start  = (2 << 20);
+    sysinfo->pxe_tosdb_size                = tdb_ctx->pxe_data_size;
+    sysinfo->pxe_tosdb_address             = tdb_ctx->pxe_data_base;
+    sysinfo->random_seed                   = rand64();
+    sysinfo->spool_size                    = spool_size;
+    sysinfo->spool_physical_start          = spool_address;
+    sysinfo->spool_virtual_start           = (64UL << 30) | spool_address;
+    sysinfo->interrupt_handlers_module_id  = ih_module_id;
 
     memory_page_table_context_t* page_table_ctx = (memory_page_table_context_t*)program_header->page_table_context_address;
 
     frame_t frm = {0};
 
     frm.frame_address = (uint64_t)sysinfo;
-    frm.frame_count = si_struct_size / FRAME_SIZE;
+    frm.frame_count   = si_struct_size / FRAME_SIZE;
 
     if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot add system info to page table");
@@ -1364,7 +1419,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     }
 
     frm.frame_address = sysinfo->spool_physical_start;
-    frm.frame_count = spool_size / FRAME_SIZE;
+    frm.frame_count   = spool_size / FRAME_SIZE;
 
     if(memory_paging_add_va_for_frame_ext(page_table_ctx, sysinfo->spool_virtual_start, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot add spool to page table");
@@ -1379,7 +1434,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     }
 
     frm.frame_address = (uint64_t)vfb;
-    frm.frame_count = vfb_struct_size / FRAME_SIZE;
+    frm.frame_count   = vfb_struct_size / FRAME_SIZE;
 
     if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot add video frame buffer to page table");
@@ -1389,7 +1444,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
 
     if(vfb->virtual_base_address) {
         frm.frame_address = (uint64_t)vfb->physical_base_address;
-        frm.frame_count = (vfb->buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
+        frm.frame_count   = (vfb->buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
         vfb->virtual_base_address = (64ULL << 40) | (uint64_t)vfb->virtual_base_address;
 
@@ -1403,7 +1458,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     PRINTLOG(EFI, LOG_DEBUG, "vfb virtual base address 0x%llx physical base address 0x%llx size 0x%llx", vfb->virtual_base_address, vfb->physical_base_address, vfb->buffer_size);
 
     frm.frame_address = (uint64_t)mmap;
-    frm.frame_count = map_size / FRAME_SIZE;
+    frm.frame_count   = map_size / FRAME_SIZE;
 
     if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot add memory map to page table");
@@ -1418,7 +1473,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     }
 
     frm.frame_address = (uint64_t)program_header->page_table_context_address;
-    frm.frame_count = tc_size / FRAME_SIZE;
+    frm.frame_count   = tc_size / FRAME_SIZE;
 
     if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot add page table context to page table");
@@ -1460,7 +1515,7 @@ catch_efi_error:
     PRINTLOG(EFI, LOG_FATAL, "efi app could not have finished correctly, infinite loop started. Halting...");
 
     buffer_t* err_buffer = buffer_get_io_buffer(BUFFER_IO_ERROR);
-    char_t* err_msgs = (char_t*)buffer_get_all_bytes_and_destroy(err_buffer, NULL);
+    char_t* err_msgs     = (char_t*)buffer_get_all_bytes_and_destroy(err_buffer, NULL);
 
     video_print(err_msgs);
 

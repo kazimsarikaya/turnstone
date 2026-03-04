@@ -11,6 +11,7 @@
 
 #include <types.h>
 #include <utils.h>
+#include <cpu/descriptor.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,6 +47,7 @@ typedef struct interrupt_frame_t {
  */
 typedef struct interrupt_frame_ext_t {
     uint64_t rsp; ///< rsp register value
+    uint64_t cr3; ///< cr3 register value
     uint64_t rax; ///< rax register value
     uint64_t rbx; ///< rbx register value
     uint64_t rcx; ///< rcx register value
@@ -73,7 +75,7 @@ typedef struct interrupt_frame_ext_t {
     uint64_t empty2    : 48; ///< unused value
 } __attribute__((packed)) interrupt_frame_ext_t; ///< struct short hand
 
-_Static_assert(sizeof(interrupt_frame_ext_t) == 0x2138, "interrupt_frame_ext_t size must be 0x2138");
+_Static_assert(sizeof(interrupt_frame_ext_t) == 0x2140, "interrupt_frame_ext_t size must be 0x2140");
 
 /**
  * @brief interrupt table builder functions
@@ -147,7 +149,13 @@ typedef union interrupt_errorcode_pagefault_u {
     uint32_t bits; ///< all value in 32bit integer
 } interrupt_errorcode_pagefault_t; ///< union short hand for @ref interrupt_errorcode_pagefault_u
 
-void interrupt_generic_handler(interrupt_frame_ext_t* frame);
+typedef void (*interrupt_generic_handler_f)(interrupt_frame_ext_t* frame);
+
+void   interrupt_generic_handler(interrupt_frame_ext_t* frame);
+void   interrupt_register_dummy_handlers(descriptor_idt_t* idt);
+void   interrupt_handlers_set_kernel_cr3_value(uint64_t cr3_value);
+void   interrupt_handlers_set_generic_handler(interrupt_generic_handler_f handler);
+int8_t interrupt_handlers_make_readonly(void);
 
 #ifdef __cplusplus
 }

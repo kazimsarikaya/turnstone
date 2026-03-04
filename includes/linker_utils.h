@@ -34,6 +34,8 @@ typedef union linker_metadata_at_memory_t {
     linker_section_at_memory_t section;
 } linker_metadata_at_memory_t;
 
+const linker_metadata_at_memory_t* linker_get_module_at_memory(uint64_t module_id);
+
 #ifdef __cplusplus
 }
 #endif

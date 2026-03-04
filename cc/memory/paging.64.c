@@ -69,11 +69,11 @@ uint64_t memory_paging_get_internal_frame(memory_page_table_context_t* table_con
 
 
     if(table_context->internal_frames_1_count == 0) {
-        table_context->internal_frames_1_start = table_context->internal_frames_2_start;
+        table_context->internal_frames_1_start   = table_context->internal_frames_2_start;
         table_context->internal_frames_1_current = table_context->internal_frames_1_start;
-        table_context->internal_frames_1_count = table_context->internal_frames_2_count;
-        table_context->internal_frames_2_start = 0;
-        table_context->internal_frames_2_count = 0;
+        table_context->internal_frames_1_count   = table_context->internal_frames_2_count;
+        table_context->internal_frames_2_start   = 0;
+        table_context->internal_frames_2_count   = 0;
     }
 
     if(table_context->internal_frames_1_count < 16) {
@@ -87,15 +87,15 @@ uint64_t memory_paging_get_internal_frame(memory_page_table_context_t* table_con
 
         if(table_context->internal_frame_init_state == MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING) {
             table_context->internal_frame_init_state = MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZED;
-            table_context->internal_frames_1_start = table_context->internal_frames_2_start;
+            table_context->internal_frames_1_start   = table_context->internal_frames_2_start;
             table_context->internal_frames_1_current = table_context->internal_frames_1_start;
-            table_context->internal_frames_1_count = table_context->internal_frames_2_count;
+            table_context->internal_frames_1_count   = table_context->internal_frames_2_count;
 
             memory_paging_internal_frame_build(table_context);
 
             table_context->internal_frames_helper_frame = table_context->internal_frames_1_current;
-            table_context->internal_frames_1_current += 4 * MEMORY_PAGING_PAGE_SIZE;
-            table_context->internal_frames_1_count -= 4;
+            table_context->internal_frames_1_current   += 4 * MEMORY_PAGING_PAGE_SIZE;
+            table_context->internal_frames_1_count     -= 4;
 
         }
 
@@ -197,12 +197,11 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
 
         memory_memclean(t_p3, FRAME_SIZE);
 
-        p4->pages[p4idx].present = 1;
-        p4->pages[p4idx].writable = 1;
+        p4->pages[p4idx].present          = 1;
+        p4->pages[p4idx].writable         = 1;
         p4->pages[p4idx].physical_address = p3_addr >> 12;
 
-    }
-    else {
+    }else {
         uint64_t tmp_pa = p4->pages[p4idx].physical_address;
         t_p3 = (memory_page_table_t*)(tmp_pa << 12);
         t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
@@ -218,7 +217,7 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
 
     if(t_p3->pages[p3idx].present != 1) {
         if(type & MEMORY_PAGING_PAGE_TYPE_1G) {
-            t_p3->pages[p3idx].present = 1;
+            t_p3->pages[p3idx].present  = 1;
             t_p3->pages[p3idx].hugepage = 1;
 
             if(type & MEMORY_PAGING_PAGE_TYPE_READONLY) {
@@ -268,8 +267,8 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
 
             memory_memclean(t_p2, FRAME_SIZE);
 
-            t_p3->pages[p3idx].present = 1;
-            t_p3->pages[p3idx].writable = 1;
+            t_p3->pages[p3idx].present          = 1;
+            t_p3->pages[p3idx].writable         = 1;
             t_p3->pages[p3idx].physical_address = p2_addr >> 12;
 
         }
@@ -293,7 +292,7 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
 
     if(t_p2->pages[p2idx].present != 1) {
         if(type & MEMORY_PAGING_PAGE_TYPE_2M) {
-            t_p2->pages[p2idx].present = 1;
+            t_p2->pages[p2idx].present  = 1;
             t_p2->pages[p2idx].hugepage = 1;
 
 
@@ -344,8 +343,8 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
 
             memory_memclean(t_p1, FRAME_SIZE);
 
-            t_p2->pages[p2idx].present = 1;
-            t_p2->pages[p2idx].writable = 1;
+            t_p2->pages[p2idx].present          = 1;
+            t_p2->pages[p2idx].writable         = 1;
             t_p2->pages[p2idx].physical_address = p1_addr >> 12;
 
         }
@@ -466,7 +465,7 @@ int8_t memory_paging_reserve_current_page_table_frames(void) {
     frame_t frm = {0};
 
     frm.frame_address = table_context->internal_frames_1_start;
-    frm.frame_count = table_context->internal_frames_1_count;
+    frm.frame_count   = table_context->internal_frames_1_count;
 
 
     if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &frm) != 0) {
@@ -476,7 +475,7 @@ int8_t memory_paging_reserve_current_page_table_frames(void) {
     }
 
     frm.frame_address = table_context->internal_frames_2_start;
-    frm.frame_count = table_context->internal_frames_2_count;
+    frm.frame_count   = table_context->internal_frames_2_count;
 
 
     if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &frm) != 0) {
@@ -508,7 +507,7 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
     table_context->internal_frames_helper_frame = internal_frame_address;
 
 
-    uint64_t p4_fa = memory_paging_get_internal_frame(table_context);
+    uint64_t p4_fa          = memory_paging_get_internal_frame(table_context);
     memory_page_table_t* p4 = (memory_page_table_t*)p4_fa;
 
     p4 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4);
@@ -540,7 +539,7 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
     frame_t internal_frms = {0};
 
     internal_frms.frame_address = table_context->internal_frames_1_start;
-    internal_frms.frame_count = table_context->internal_frames_1_count;
+    internal_frms.frame_count   = table_context->internal_frames_1_count;
 
     if(memory_paging_add_va_for_frame_ext(table_context,
                                           MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frms.frame_address),
@@ -551,7 +550,7 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
     }
 
     internal_frms.frame_address = table_context->internal_frames_2_start;
-    internal_frms.frame_count = table_context->internal_frames_2_count;
+    internal_frms.frame_count   = table_context->internal_frames_2_count;
 
     if(memory_paging_add_va_for_frame_ext(table_context,
                                           MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frms.frame_address),
@@ -566,7 +565,7 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
     frame_t internal_frms = {0};
 
     internal_frms.frame_address = table_context->internal_frames_1_start;
-    internal_frms.frame_count = table_context->internal_frames_1_count;
+    internal_frms.frame_count   = table_context->internal_frames_1_count;
 
     if(memory_paging_add_va_for_frame_ext(table_context,
                                           MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frms.frame_address) | (64ULL << 40),
@@ -577,7 +576,7 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
     }
 
     internal_frms.frame_address = table_context->internal_frames_2_start;
-    internal_frms.frame_count = table_context->internal_frames_2_count;
+    internal_frms.frame_count   = table_context->internal_frames_2_count;
 
     if(memory_paging_add_va_for_frame_ext(table_context,
                                           MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frms.frame_address) | (64ULL << 40),
@@ -1174,7 +1173,7 @@ int8_t memory_paging_add_va_for_frame_ext(memory_page_table_context_t* table_con
     }
 
     uint64_t frm_addr = frm->frame_address;
-    uint64_t frm_cnt = frm->frame_count;
+    uint64_t frm_cnt  = frm->frame_count;
 
     while(frm_cnt) {
         if(frm_cnt >= 0x200 && (frm_addr % MEMORY_PAGING_PAGE_LENGTH_2M) == 0 && (va_start % MEMORY_PAGING_PAGE_LENGTH_2M) == 0) {
@@ -1182,7 +1181,7 @@ int8_t memory_paging_add_va_for_frame_ext(memory_page_table_context_t* table_con
                 return -1;
             }
 
-            frm_cnt -= 0x200;
+            frm_cnt  -= 0x200;
             frm_addr += MEMORY_PAGING_PAGE_LENGTH_2M;
             va_start += MEMORY_PAGING_PAGE_LENGTH_2M;
         } else {
@@ -1205,7 +1204,7 @@ int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_context_t* table_
     }
 
     uint64_t frm_addr = frm->frame_address;
-    uint64_t frm_cnt = frm->frame_count;
+    uint64_t frm_cnt  = frm->frame_count;
 
     while(frm_cnt) {
         if(frm_cnt >= 0x200 && (frm_addr % MEMORY_PAGING_PAGE_LENGTH_2M) == 0 && (va_start % MEMORY_PAGING_PAGE_LENGTH_2M) == 0) {
@@ -1213,7 +1212,7 @@ int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_context_t* table_
                 return -1;
             }
 
-            frm_cnt -= 0x200;
+            frm_cnt  -= 0x200;
             frm_addr += MEMORY_PAGING_PAGE_LENGTH_2M;
             va_start += MEMORY_PAGING_PAGE_LENGTH_2M;
         } else {

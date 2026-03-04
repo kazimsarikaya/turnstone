@@ -73,7 +73,7 @@ void linker_print_modules_at_memory(void) {
     }
 
     program_header_t* program_header = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
-    const char_t* symbol_names = (const char_t*)program_header->symbol_table_virtual_address;
+    const char_t* symbol_names       = (const char_t*)program_header->symbol_table_virtual_address;
 
     iterator_t* iter = hashmap_iterator_create(linker_modules_at_memory);
 
@@ -115,7 +115,7 @@ void linker_print_module_info_at_memory(uint64_t module_id) {
     }
 
     program_header_t* program_header = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
-    const char_t* symbol_names = (const char_t*)program_header->symbol_table_virtual_address;
+    const char_t* symbol_names       = (const char_t*)program_header->symbol_table_virtual_address;
 
     const linker_metadata_at_memory_t* module_or_section = hashmap_get(linker_modules_at_memory, (void*)module_id);
 
@@ -150,4 +150,13 @@ void linker_print_module_info_at_memory(uint64_t module_id) {
         module_or_section++;
     }
 
+}
+
+const linker_metadata_at_memory_t* linker_get_module_at_memory(uint64_t module_id) {
+    if(!linker_modules_at_memory) {
+        PRINTLOG(LINKER, LOG_ERROR, "Linker modules at memory not initialized\n");
+        return NULL;
+    }
+
+    return hashmap_get(linker_modules_at_memory, (void*)module_id);
 }

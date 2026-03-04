@@ -11,15 +11,23 @@ cat <<EOF
  */
 
 #include <types.h>
-#include <cpu.h>
-#include <cpu/descriptor.h>
 #include <cpu/interrupt.h>
 
 MODULE("turnstone.kernel.cpu.interrupt.handlers");
 
 #ifndef ___DEPEND_ANALYSIS
 
-void interrupt_register_dummy_handlers(descriptor_idt_t* idt);
+static uint64_t interrupt_handlers_kernel_cr3_value __attribute__((used)) = 0;
+
+void interrupt_handlers_set_kernel_cr3_value(uint64_t cr3_value) {
+    interrupt_handlers_kernel_cr3_value = cr3_value;
+}
+
+static interrupt_generic_handler_f interrupt_generic_handler_handle __attribute__((used)) = 0;
+
+void interrupt_handlers_set_generic_handler(interrupt_generic_handler_f handler) {
+    interrupt_generic_handler_handle = handler;
+}
 
 EOF
 
@@ -28,7 +36,7 @@ for i in 8 $(seq 10 14) 17 21; do
 j=`printf "%02x" $i`
 
 cat <<EOF
-void interrupt_naked_handler_int_0x${j}(void);
+static void interrupt_naked_handler_int_0x${j}(void);
 __attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${j}(void) {
     asm volatile (
         "push \$${i}\n" // push interrupt number
@@ -48,16 +56,25 @@ __attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${
         "push %rcx\n"
         "push %rbx\n"
         "push %rax\n"
+        "mov %cr3, %rax\n"
+        "push %rax\n"
         "push %rsp\n"
         "mov %rsp, %rdi\n"
-        "sub \$0x8, %rsp\n"
-        "lea 0x0(%rip), %rax\n"
-        "movabsq \$_GLOBAL_OFFSET_TABLE_, %rbx\n"
-        "add %rax, %rbx\n"
-        "movabsq \$interrupt_generic_handler@GOT, %rax\n"
-        "call *(%rbx, %rax, 1)\n"
-        "add \$0x8, %rsp\n"
+        "movq interrupt_handlers_kernel_cr3_value(%rip), %rax\n"
+        "mov %cr3, %rdx\n"
+        "cmp %rax, %rdx\n"
+        "je 1f\n"
+        "mov %rax, %cr3\n"
+        "1:\n"
+        "movq interrupt_generic_handler_handle(%rip), %rax\n"
+        "call *%rax\n"
         "pop %rsp\n"
+        "pop %rax\n"
+        "mov %cr3, %rbx\n"
+        "cmp %rax, %rbx\n"
+        "jne 1f\n"
+        "mov %rax, %cr3\n"
+        "1:\n"
         "pop %rax\n"
         "pop %rbx\n"
         "pop %rcx\n"
@@ -86,7 +103,7 @@ for i in $(seq 0 7) 9 15 16 18 19 20 $(seq 22 31) $(seq 32 255); do
 j=`printf "%02x" $i`
 
 cat <<EOF
-void interrupt_naked_handler_int_0x${j}(void);
+static void interrupt_naked_handler_int_0x${j}(void);
 __attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${j}(void) {
     asm volatile (
         "push \$0\n" // push error code
@@ -107,16 +124,25 @@ __attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${
         "push %rcx\n"
         "push %rbx\n"
         "push %rax\n"
+        "mov %cr3, %rax\n"
+        "push %rax\n"
         "push %rsp\n"
         "mov %rsp, %rdi\n"
-        "sub \$0x8, %rsp\n"
-        "lea 0x0(%rip), %rax\n"
-        "movabsq \$_GLOBAL_OFFSET_TABLE_, %rbx\n"
-        "add %rax, %rbx\n"
-        "movabsq \$interrupt_generic_handler@GOT, %rax\n"
-        "call *(%rbx, %rax, 1)\n"
-        "add \$0x8, %rsp\n"
+        "movq interrupt_handlers_kernel_cr3_value(%rip), %rax\n"
+        "mov %cr3, %rdx\n"
+        "cmp %rax, %rdx\n"
+        "je 1f\n"
+        "mov %rax, %cr3\n"
+        "1:\n"
+        "movq interrupt_generic_handler_handle(%rip), %rax\n"
+        "call *%rax\n"
         "pop %rsp\n"
+        "pop %rax\n"
+        "mov %cr3, %rbx\n"
+        "cmp %rax, %rbx\n"
+        "je 1f\n"
+        "mov %rax, %cr3\n"
+        "1:\n"
         "pop %rax\n"
         "pop %rbx\n"
         "pop %rcx\n"
@@ -143,7 +169,7 @@ done
 cat <<EOF
 typedef void (*interrupt_dummy_noerrcode_int_ptr)(void);
 
-const interrupt_dummy_noerrcode_int_ptr interrupt_dummy_noerrcode_list[256] = {
+static const interrupt_dummy_noerrcode_int_ptr interrupt_dummy_noerrcode_list[256] = {
 EOF
 
 for i in $(seq 0 255); do

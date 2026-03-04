@@ -51,6 +51,7 @@ typedef struct system_info_t {
     uint64_t              spool_size; ///< spool size
     uint64_t              spool_physical_start; ///< spool physical start
     uint64_t              spool_virtual_start; ///< spool virtual start
+    uint64_t              interrupt_handlers_module_id; ///< the module id of interrupt handlers, used for task switching for userspace processes
 } system_info_t; ///< struct short hand for system_info_s
 
 /*! static location of system information */

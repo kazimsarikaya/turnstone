@@ -24,15 +24,13 @@ MODULE("turnstone.kernel.cpu.interrupt");
 
 void video_text_print(const char_t* string);
 
-void interrupt_register_dummy_handlers(descriptor_idt_t*);
-
 typedef struct interrupt_irq_list_item_t {
     interrupt_irq                     irq;
     struct interrupt_irq_list_item_t* next;
 } interrupt_irq_list_item_t;
 
 interrupt_irq_list_item_t** interrupt_irqs = NULL;
-uint8_t next_empty_interrupt = 0;
+uint8_t next_empty_interrupt               = 0;
 
 int8_t interrupt_int01_debug_exception(interrupt_frame_ext_t*);
 int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t*);
@@ -46,6 +44,13 @@ extern boolean_t KERNEL_PANIC_DISABLE_LOCKS;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t interrupt_init(void) {
+    uint64_t current_cr3 = 0;
+
+    asm volatile ("mov %%cr3, %0" : "=r" (current_cr3));
+
+    interrupt_handlers_set_kernel_cr3_value(current_cr3);
+    interrupt_handlers_set_generic_handler(interrupt_generic_handler);
+
     descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
 
     interrupt_register_dummy_handlers(idt_table); // 32-255 dummy handlers
@@ -281,8 +286,8 @@ static void interrupt_print_frame_ext(interrupt_frame_ext_t* frame) {
 }
 
 static boolean_t interrupt_xsave_mask_memorized = false;
-static uint64_t interrupt_xsave_mask_lo = 0;
-static uint64_t interrupt_xsave_mask_hi = 0;
+static uint64_t interrupt_xsave_mask_lo         = 0;
+static uint64_t interrupt_xsave_mask_hi         = 0;
 
 static void interrupt_save_restore_avx512f(boolean_t save, interrupt_frame_ext_t* frame) {
     if(!interrupt_xsave_mask_memorized) {
@@ -299,7 +304,7 @@ static void interrupt_save_restore_avx512f(boolean_t save, interrupt_frame_ext_t
         interrupt_xsave_mask_memorized = true;
     }
 
-    uint64_t frame_base = (uint64_t)frame;
+    uint64_t frame_base     = (uint64_t)frame;
     uint64_t avx512f_offset = frame_base + offsetof_field(interrupt_frame_ext_t, avx512f);
     // align to 0x40
     avx512f_offset = (avx512f_offset + 0x3F) & ~0x3F;
@@ -341,8 +346,8 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
 
         if(interrupt_irqs[intnum] != NULL) {
             interrupt_irq_list_item_t* item = interrupt_irqs[intnum];
-            uint8_t miss_count = 0;
-            boolean_t found = false;
+            uint8_t miss_count              = 0;
+            boolean_t found                 = false;
 
             while(item) {
                 interrupt_irq irq = item->irq;

@@ -285,6 +285,11 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_DEBUG, "Default gdt builded");
     }
 
+    if(interrupt_handlers_make_readonly() != 0) {
+        PRINTLOG(KERNEL, LOG_PANIC, "cannot make interrupt handlers readonly");
+        cpu_hlt();
+    }
+
     PRINTLOG(KERNEL, LOG_DEBUG, "vfb address 0x%p", SYSTEM_INFO->frame_buffer);
     PRINTLOG(KERNEL, LOG_DEBUG, "Frame buffer at 0x%llx and size 0x%016llx", SYSTEM_INFO->frame_buffer->virtual_base_address, SYSTEM_INFO->frame_buffer->buffer_size);
     PRINTLOG(KERNEL, LOG_DEBUG, "Screen resultion %ix%i", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);

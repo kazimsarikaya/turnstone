@@ -205,7 +205,7 @@ int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint64_
     UNUSED(alloc_list_size);
 
     uint64_t frame_address = 0;
-    uint64_t old_count = count;
+    uint64_t old_count     = count;
 
     if(count % 0x200) {
         count += 0x200;
@@ -240,10 +240,10 @@ int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint64_
     }
 
     (*fs)->frame_address = frame_address;
-    (*fs)->frame_count = count;
+    (*fs)->frame_count   = count;
 
     (*fs)->frame_address = frame_address;
-    (*fs)->frame_count = count;
+    (*fs)->frame_count   = count;
 
     return EFI_SUCCESS;
 }
@@ -329,7 +329,7 @@ EFIAPI void efi_timer_cb(efi_event_t event, void* context) {
 }
 
 void efi_set_current_time_ns(void) {
-    efi_time_t time = {0};
+    efi_time_t time                   = {0};
     efi_time_capabilities_t time_caps = {0};
 
     if(RS->get_time(&time, &time_caps) != EFI_SUCCESS) {
@@ -338,7 +338,7 @@ void efi_set_current_time_ns(void) {
 
     time_t res = 0;
 
-    res = time.second;
+    res  = time.second;
     res += time.minute * TIME_SECONDS_OF_MINUTE;
     res += time.hour * TIME_SECONDS_OF_HOUR;
 

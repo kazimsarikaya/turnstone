@@ -27,40 +27,40 @@ buffer_t* linker_build_relocation_table_buffer(linker_context_t* ctx);
 buffer_t* linker_build_metadata_buffer(linker_context_t* ctx);
 
 const char_t*const linker_section_type_names[LINKER_SECTION_TYPE_NR_SECTIONS] = {
-    [LINKER_SECTION_TYPE_TEXT]  = ".text",
-    [LINKER_SECTION_TYPE_DATA]  = ".data",
-    [LINKER_SECTION_TYPE_TDATA] = ".tdata",
-    [LINKER_SECTION_TYPE_DATARELOC] = ".datareloc",
-    [LINKER_SECTION_TYPE_RODATA] = ".rodata",
-    [LINKER_SECTION_TYPE_RODATARELOC] = ".rodatareloc",
-    [LINKER_SECTION_TYPE_BSS]   = ".bss",
-    [LINKER_SECTION_TYPE_TBSS]  = ".tbss",
-    [LINKER_SECTION_TYPE_PLT]   = ".plt",
-    [LINKER_SECTION_TYPE_TLSGD] = ".tlsgd",
-    [LINKER_SECTION_TYPE_RELOCATION_TABLE] = ".reloc",
+    [LINKER_SECTION_TYPE_TEXT]                          = ".text",
+    [LINKER_SECTION_TYPE_DATA]                          = ".data",
+    [LINKER_SECTION_TYPE_TDATA]                         = ".tdata",
+    [LINKER_SECTION_TYPE_DATARELOC]                     = ".datareloc",
+    [LINKER_SECTION_TYPE_RODATA]                        = ".rodata",
+    [LINKER_SECTION_TYPE_RODATARELOC]                   = ".rodatareloc",
+    [LINKER_SECTION_TYPE_BSS]                           = ".bss",
+    [LINKER_SECTION_TYPE_TBSS]                          = ".tbss",
+    [LINKER_SECTION_TYPE_PLT]                           = ".plt",
+    [LINKER_SECTION_TYPE_TLSGD]                         = ".tlsgd",
+    [LINKER_SECTION_TYPE_RELOCATION_TABLE]              = ".reloc",
     [LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE] = ".gotrel",
-    [LINKER_SECTION_TYPE_GOT] = ".got",
-    [LINKER_SECTION_TYPE_STACK] = ".stack",
-    [LINKER_SECTION_TYPE_HEAP]  = ".heap",
+    [LINKER_SECTION_TYPE_GOT]                           = ".got",
+    [LINKER_SECTION_TYPE_STACK]                         = ".stack",
+    [LINKER_SECTION_TYPE_HEAP]                          = ".heap",
 };
 
 const char_t*const linker_relocation_type_names[LINKER_RELOCATION_TYPE_NR_TYPES] = {
-    [ LINKER_RELOCATION_TYPE_32_16]  = "R_386_16",
-    [LINKER_RELOCATION_TYPE_32_32]   = "R_386_32",
-    [LINKER_RELOCATION_TYPE_32_PC16] = "R_386_PC16",
-    [LINKER_RELOCATION_TYPE_32_PC32] = "R_386_PC32",
-    [LINKER_RELOCATION_TYPE_64_8]     = "R_X86_64_8",
-    [LINKER_RELOCATION_TYPE_64_16]    = "R_X86_64_16",
-    [LINKER_RELOCATION_TYPE_64_32]    = "R_X86_64_32",
-    [LINKER_RELOCATION_TYPE_64_32S]   = "R_X86_64_32S",
-    [LINKER_RELOCATION_TYPE_64_64]    = "R_X86_64_64",
-    [LINKER_RELOCATION_TYPE_64_PC32]  = "R_X86_64_PC32",
-    [LINKER_RELOCATION_TYPE_64_PC64]  = "R_X86_64_PC64",
-    [LINKER_RELOCATION_TYPE_64_GOT64] = "R_X86_64_GOT64",
-    [LINKER_RELOCATION_TYPE_64_GOTOFF64] = "R_X86_64_GOTOFF64",
-    [LINKER_RELOCATION_TYPE_64_GOTPC64]  = "R_X86_64_GOTPC64",
-    [LINKER_RELOCATION_TYPE_64_PLTOFF64] = "R_X86_64_PLTOFF64",
-    [LINKER_RELOCATION_TYPE_64_TLSGD] = "R_X86_64_TLSGD",
+    [ LINKER_RELOCATION_TYPE_32_16]            = "R_386_16",
+    [LINKER_RELOCATION_TYPE_32_32]             = "R_386_32",
+    [LINKER_RELOCATION_TYPE_32_PC16]           = "R_386_PC16",
+    [LINKER_RELOCATION_TYPE_32_PC32]           = "R_386_PC32",
+    [LINKER_RELOCATION_TYPE_64_8]              = "R_X86_64_8",
+    [LINKER_RELOCATION_TYPE_64_16]             = "R_X86_64_16",
+    [LINKER_RELOCATION_TYPE_64_32]             = "R_X86_64_32",
+    [LINKER_RELOCATION_TYPE_64_32S]            = "R_X86_64_32S",
+    [LINKER_RELOCATION_TYPE_64_64]             = "R_X86_64_64",
+    [LINKER_RELOCATION_TYPE_64_PC32]           = "R_X86_64_PC32",
+    [LINKER_RELOCATION_TYPE_64_PC64]           = "R_X86_64_PC64",
+    [LINKER_RELOCATION_TYPE_64_GOT64]          = "R_X86_64_GOT64",
+    [LINKER_RELOCATION_TYPE_64_GOTOFF64]       = "R_X86_64_GOTOFF64",
+    [LINKER_RELOCATION_TYPE_64_GOTPC64]        = "R_X86_64_GOTPC64",
+    [LINKER_RELOCATION_TYPE_64_PLTOFF64]       = "R_X86_64_PLTOFF64",
+    [LINKER_RELOCATION_TYPE_64_TLSGD]          = "R_X86_64_TLSGD",
     [LINKER_RELOCATION_TYPE_64_GOT64_ABSOLUTE] = "R_X86_64_GOT64_ABS",
 };
 
@@ -180,12 +180,12 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
     PRINTLOG(LINKER, LOG_DEBUG, "found %llu symbols for section id 0x%llx", list_size(symbols), section_id);
 
     linker_global_offset_table_entry_t got_entry = {0};
-    uint64_t symbol_id    = 0;
-    uint8_t symbol_type   = 0;
-    uint8_t symbol_scope  = 0;
-    uint64_t symbol_value = 0;
-    uint64_t symbol_size  = 0;
-    char_t* symbol_name   = NULL;
+    uint64_t symbol_id                           = 0;
+    uint8_t symbol_type                          = 0;
+    uint8_t symbol_scope                         = 0;
+    uint64_t symbol_value                        = 0;
+    uint64_t symbol_size                         = 0;
+    char_t* symbol_name                          = NULL;
 
     size_t sym_idx = 0;
 
@@ -263,7 +263,7 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
                 goto clean_symbols_iter;
             }
 
-            existing_got_entry->resolved = true;
+            existing_got_entry->resolved     = true;
             existing_got_entry->symbol_type  = symbol_type;
             existing_got_entry->symbol_scope = symbol_scope;
             existing_got_entry->symbol_value = symbol_value + section_offset;
@@ -273,9 +273,9 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
         } else {
             memory_memclean(&got_entry, sizeof(linker_global_offset_table_entry_t));
 
-            got_entry.resolved  = true;
-            got_entry.module_id = module_id;
-            got_entry.symbol_id = symbol_id;
+            got_entry.resolved     = true;
+            got_entry.module_id    = module_id;
+            got_entry.symbol_id    = symbol_id;
             got_entry.symbol_type  = symbol_type;
             got_entry.symbol_scope = symbol_scope;
             got_entry.symbol_value = symbol_value + section_offset;
@@ -428,8 +428,8 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
     linker_section_t* reloc_section = &module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE];
 
-    tosdb_database_t* db_system = tosdb_database_create_or_open(ctx->tdb, "system");
-    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
+    tosdb_database_t* db_system    = tosdb_database_create_or_open(ctx->tdb, "system");
+    tosdb_table_t* tbl_sections    = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
     tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 1 << 10, 512 << 10, 8);
 
     tosdb_record_t* s_rel_reloc = tosdb_table_create_record(tbl_relocations);
@@ -462,14 +462,14 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
     PRINTLOG(LINKER, LOG_DEBUG, "relocations count of section 0x%llx: 0x%llx", section_id, list_size(relocations));
 
     linker_relocation_entry_t relocation = {0};
-    int64_t reloc_id = 0;
-    int64_t symbol_section_id = 0;
-    int64_t symbol_id = 0;
-    int8_t reloc_type = 0;
-    int64_t reloc_offset = 0;
-    int64_t reloc_addend = 0;
-    char_t* symbol_name  = NULL;
-    int64_t module_id = 0;
+    int64_t reloc_id                     = 0;
+    int64_t symbol_section_id            = 0;
+    int64_t symbol_id                    = 0;
+    int8_t reloc_type                    = 0;
+    int64_t reloc_offset                 = 0;
+    int64_t reloc_addend                 = 0;
+    char_t* symbol_name                  = NULL;
+    int64_t module_id                    = 0;
 
     if(!reloc_section->section_data) {
         reloc_section->section_data = buffer_new();
@@ -478,8 +478,8 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
     size_t reloc_idx = 0;
 
     for(reloc_idx = 0; reloc_idx < list_size(relocations); reloc_idx++) {
-        tosdb_record_t* reloc_rec = (tosdb_record_t*)list_get_data_at_position(relocations, reloc_idx);
-        boolean_t is_got_symbol = false;
+        tosdb_record_t* reloc_rec   = (tosdb_record_t*)list_get_data_at_position(relocations, reloc_idx);
+        boolean_t is_got_symbol     = false;
         boolean_t symbol_id_missing = false;
 
         if(!reloc_rec) {
@@ -518,7 +518,7 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
         if(strcmp(symbol_name, "_GLOBAL_OFFSET_TABLE_") == 0) {
             PRINTLOG(LINKER, LOG_TRACE, "found _GLOBAL_OFFSET_TABLE_ symbol for relocation at section 0x%llx", section_id);
             is_got_symbol = true;
-            symbol_id = LINKER_GOT_SYMBOL_ID;
+            symbol_id     = LINKER_GOT_SYMBOL_ID;
         }
 
         if(symbol_id_missing && !is_got_symbol) {
@@ -638,11 +638,11 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
             memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
 
-            relocation.symbol_id = symbol_id;
-            relocation.section_type = LINKER_SECTION_TYPE_TLSGD;
+            relocation.symbol_id       = symbol_id;
+            relocation.section_type    = LINKER_SECTION_TYPE_TLSGD;
             relocation.relocation_type = LINKER_RELOCATION_TYPE_64_GOT64_ABSOLUTE;
-            relocation.offset = tlsgd_offset;
-            relocation.addend = 0;
+            relocation.offset          = tlsgd_offset;
+            relocation.addend          = 0;
 
             buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
             reloc_section->size += sizeof(linker_relocation_entry_t);
@@ -699,9 +699,9 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
                 uint64_t plt_symbol_id = module->id << 32; // may be we have over 0x100000000 symbols ???
 
-                got_entry.resolved  = true;
-                got_entry.module_id = module->id;
-                got_entry.symbol_id = plt_symbol_id;
+                got_entry.resolved     = true;
+                got_entry.module_id    = module->id;
+                got_entry.symbol_id    = plt_symbol_id;
                 got_entry.symbol_type  = LINKER_SYMBOL_TYPE_FUNCTION;
                 got_entry.symbol_scope = LINKER_SYMBOL_SCOPE_LOCAL;
                 got_entry.symbol_value = 0;
@@ -734,33 +734,33 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
             memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
 
-            relocation.symbol_id = 1;
-            relocation.section_type = LINKER_SECTION_TYPE_PLT;
+            relocation.symbol_id       = 1;
+            relocation.section_type    = LINKER_SECTION_TYPE_PLT;
             relocation.relocation_type = LINKER_RELOCATION_TYPE_64_GOTPC64;
-            relocation.offset = plt_offset + 0x6;
-            relocation.addend = 6; // two push instructions before this and it is also 2 bytes
+            relocation.offset          = plt_offset + 0x6;
+            relocation.addend          = 6; // two push instructions before this and it is also 2 bytes
 
             buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
             reloc_section->size += sizeof(linker_relocation_entry_t);
 
             memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
 
-            relocation.symbol_id = symbol_id;
-            relocation.section_type = LINKER_SECTION_TYPE_PLT;
+            relocation.symbol_id       = symbol_id;
+            relocation.section_type    = LINKER_SECTION_TYPE_PLT;
             relocation.relocation_type = LINKER_RELOCATION_TYPE_64_GOT64;
-            relocation.offset = plt_offset + 0x1a;
-            relocation.addend = 0;
+            relocation.offset          = plt_offset + 0x1a;
+            relocation.addend          = 0;
 
             buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
             reloc_section->size += sizeof(linker_relocation_entry_t);
 
             memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
 
-            relocation.symbol_id = module->id << 32;
-            relocation.section_type = LINKER_SECTION_TYPE_PLT;
+            relocation.symbol_id       = module->id << 32;
+            relocation.section_type    = LINKER_SECTION_TYPE_PLT;
             relocation.relocation_type = LINKER_RELOCATION_TYPE_64_PC32;
-            relocation.offset = plt_offset + 0x3a;
-            relocation.addend = -4;
+            relocation.offset          = plt_offset + 0x3a;
+            relocation.addend          = -4;
 
             buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
             reloc_section->size += sizeof(linker_relocation_entry_t);
@@ -770,11 +770,11 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
         memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
 
-        relocation.symbol_id = symbol_id;
-        relocation.section_type = section_type;
+        relocation.symbol_id       = symbol_id;
+        relocation.section_type    = section_type;
         relocation.relocation_type = reloc_type;
-        relocation.offset = reloc_offset + section_offset;
-        relocation.addend = reloc_addend;
+        relocation.offset          = reloc_offset + section_offset;
+        relocation.addend          = reloc_addend;
 
         buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
         reloc_section->size += sizeof(linker_relocation_entry_t);
@@ -948,13 +948,13 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
     PRINTLOG(LINKER, LOG_DEBUG, "module 0x%llx sections count: %llu", module_id, list_size(sections));
 
 
-    uint64_t section_id   = 0;
-    uint8_t section_type  = 0;
-    uint8_t* section_data = NULL;
-    uint64_t section_size = 0;
+    uint64_t section_id       = 0;
+    uint8_t section_type      = 0;
+    uint8_t* section_data     = NULL;
+    uint64_t section_size     = 0;
     uint64_t tmp_section_size = 0;
     int64_t section_alignment = 0;
-    char_t* section_name = NULL;
+    char_t* section_name      = NULL;
 
     uint64_t section_offset = 0;
 
@@ -1130,7 +1130,7 @@ int8_t linker_calculate_program_size(linker_context_t* ctx) {
     }
 
     uint64_t relocation_table_size = 0;
-    uint64_t metadata_size = 0;
+    uint64_t metadata_size         = 0;
 
     iterator_t* it = hashmap_iterator_create(ctx->modules);
 
@@ -1317,7 +1317,7 @@ int8_t linker_bind_got_entry_values(linker_context_t* ctx) {
             }
 
             got_entries[i].entry_value = module->sections[got_entries[i].section_type].virtual_start + got_entries[i].symbol_value;
-            got_entries[i].binded = true;
+            got_entries[i].binded      = true;
         }
     }
 
@@ -1416,31 +1416,31 @@ int8_t linker_link_module(linker_context_t* ctx, linker_module_t* module) {
 
 
         if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_32) {
-            uint32_t* value = (uint32_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint32_t* value = (uint32_t*)(void*)(section_data + reloc_entries[reloc_id].offset);
             *value = (uint32_t)(got_entries[got_idx].entry_value + reloc_entries[reloc_id].addend);
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_32S) {
-            int32_t* value = (int32_t*)(section_data + reloc_entries[reloc_id].offset);
+            int32_t* value = (int32_t*)(void*)(section_data + reloc_entries[reloc_id].offset);
             *value = (int32_t)got_entries[got_idx].entry_value + reloc_entries[reloc_id].addend;
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_64) {
-            uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint64_t* value = (uint64_t*)(void*)(section_data + reloc_entries[reloc_id].offset);
             *value = got_entries[got_idx].entry_value + reloc_entries[reloc_id].addend;
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_PC32) {
-            uint32_t* value = (uint32_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint32_t* value = (uint32_t*)(void*)(section_data + reloc_entries[reloc_id].offset);
             *value = (uint32_t)got_entries[got_idx].entry_value + reloc_entries[reloc_id].addend - (uint32_t)(module->sections[reloc_entries[reloc_id].section_type].virtual_start + reloc_entries[reloc_id].offset);
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_PC64) {
-            uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint64_t* value = (uint64_t*)(void*)(section_data + reloc_entries[reloc_id].offset);
             *value = got_entries[got_idx].entry_value + reloc_entries[reloc_id].addend - (module->sections[reloc_entries[reloc_id].section_type].virtual_start + reloc_entries[reloc_id].offset);
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_GOT64) {
-            uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint64_t* value = (uint64_t*)(void*)(section_data + reloc_entries[reloc_id].offset);
             *value = got_idx * sizeof(linker_global_offset_table_entry_t) + reloc_entries[reloc_id].addend;
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_GOTOFF64) {
-            uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint64_t* value = (uint64_t*)(void*)(section_data + reloc_entries[reloc_id].offset);
             *value = got_entries[got_idx].entry_value + reloc_entries[reloc_id].addend - ctx->got_address_virtual;
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_GOTPC64) {
-            uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint64_t* value = (uint64_t*)(void*)(section_data + reloc_entries[reloc_id].offset);
             *value = ctx->got_address_virtual + reloc_entries[reloc_id].addend - (module->sections[reloc_entries[reloc_id].section_type].virtual_start + reloc_entries[reloc_id].offset);
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_PLTOFF64) {
-            uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint64_t* value     = (uint64_t*)(void*)(section_data + reloc_entries[reloc_id].offset);
             uint64_t plt_offset = (uint64_t)hashmap_get(module->plt_offsets, (void*)reloc_entries[reloc_id].symbol_id);
 
             if(!plt_offset) {
@@ -1452,7 +1452,7 @@ int8_t linker_link_module(linker_context_t* ctx, linker_module_t* module) {
             uint64_t plt_virtual = module->sections[LINKER_SECTION_TYPE_PLT].virtual_start + plt_offset;
             *value = plt_virtual - ctx->got_address_virtual;
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_TLSGD) {
-            uint32_t* value = (uint32_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint32_t* value = (uint32_t*)(void*)(section_data + reloc_entries[reloc_id].offset);
 
             uint64_t tlsgd_offset = (uint64_t)hashmap_get(module->tlsgd_offsets, (void*)reloc_entries[reloc_id].symbol_id);
 
@@ -1469,7 +1469,7 @@ int8_t linker_link_module(linker_context_t* ctx, linker_module_t* module) {
 
             *value = relative_addr;
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_GOT64_ABSOLUTE) {
-            uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint64_t* value      = (uint64_t*)(void*)(section_data + reloc_entries[reloc_id].offset);
             uint64_t got_virtual = ctx->got_address_virtual + got_idx * sizeof(linker_global_offset_table_entry_t) + reloc_entries[reloc_id].addend;
             PRINTLOG(LINKER, LOG_VERBOSE, "binding GOT64_ABSOLUTE relocation for symbol 0x%llx at section type %u offset 0x%llx with addend 0x%llx, got index 0x%llx, got virtual address 0x%llx",
                      reloc_entries[reloc_id].symbol_id, reloc_entries[reloc_id].section_type, reloc_entries[reloc_id].offset, reloc_entries[reloc_id].addend, got_idx, got_virtual);
@@ -1559,7 +1559,7 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
         linker_relocation_entry_t* reloc_entries = (linker_relocation_entry_t*)buffer_get_view_at_position(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data, 0, reloc_entries_size);
 
         efi_image_relocation_entry_t* efi_reloc_entry = NULL;
-        uint64_t efi_reloc_entry_count = 0;
+        uint64_t efi_reloc_entry_count                = 0;
 
         for(uint64_t i = 0; i < reloc_entries_count; i++) {
             if(reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_32 ||
@@ -1567,8 +1567,8 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
                reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_64) {
 
                 uint64_t reloc_offset = module->sections[reloc_entries[i].section_type].virtual_start + reloc_entries[i].offset;
-                uint64_t er_page = reloc_offset & ~(0x1000 - 1);
-                uint64_t er_offset = reloc_offset & (0x1000 - 1);
+                uint64_t er_page      = reloc_offset & ~(0x1000 - 1);
+                uint64_t er_offset    = reloc_offset & (0x1000 - 1);
 
                 if(!efi_reloc_entry) {
                     efi_reloc_entry = memory_malloc(sizeof(efi_image_relocation_entry_t) + sizeof(uint16_t) * EFI_IMAGE_MAX_RELOCATION_ENTRIES);
@@ -1580,7 +1580,7 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
                     }
 
                     efi_reloc_entry->page_rva = er_page;
-                    efi_reloc_entry_count = 0;
+                    efi_reloc_entry_count     = 0;
                 } else {
                     if(efi_reloc_entry->page_rva != er_page) {
                         efi_reloc_entry->block_size = sizeof(efi_image_relocation_entry_t) + efi_reloc_entry_count * sizeof(uint16_t);
@@ -1595,7 +1595,7 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
                         }
 
                         efi_reloc_entry->page_rva = er_page;
-                        efi_reloc_entry_count = 0;
+                        efi_reloc_entry_count     = 0;
                     }
                 }
 
@@ -1713,9 +1713,9 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
                 section_size += 0x1000 - (section_size % 0x1000);
             }
 
-            efi_section_header->virtual_size = section_size;
-            efi_section_header->virtual_address  = module->sections[i].virtual_start;
-            efi_section_header->size_of_raw_data = section_size;
+            efi_section_header->virtual_size        = section_size;
+            efi_section_header->virtual_address     = module->sections[i].virtual_start;
+            efi_section_header->size_of_raw_data    = section_size;
             efi_section_header->pointer_to_raw_data = module->sections[i].physical_start;
 
             ctx->size_of_sections[i] += section_size;
@@ -1803,7 +1803,7 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
         goto error;
     }
 
-    uint64_t section_headers_size = buffer_get_length(section_headers_buffer);
+    uint64_t section_headers_size                  = buffer_get_length(section_headers_buffer);
     uint64_t section_headers_size_with_relocations = section_headers_size + sizeof(efi_image_section_header_t);
 
     PRINTLOG(LINKER, LOG_INFO, "section headers size: 0x%llx", section_headers_size);
@@ -1825,28 +1825,28 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
     }
 
     efi_image_section_header_t reloc_section = {
-        .name = ".reloc",
-        .virtual_size = relocation_size,
-        .virtual_address  = ctx->program_size + ctx->program_start_virtual,
-        .size_of_raw_data = relocation_size,
+        .name                = ".reloc",
+        .virtual_size        = relocation_size,
+        .virtual_address     = ctx->program_size + ctx->program_start_virtual,
+        .size_of_raw_data    = relocation_size,
         .pointer_to_raw_data = ctx->program_size + ctx->program_start_physical,
-        .characteristics = EFI_IMAGE_SECTION_FLAGS_RELOC,
+        .characteristics     = EFI_IMAGE_SECTION_FLAGS_RELOC,
     };
 
 
     uint8_t dos_stub[EFI_IMAGE_DOSSTUB_LENGTH];
     memory_memclean(dos_stub, EFI_IMAGE_DOSSTUB_LENGTH);
 
-    *(uint16_t*)&dos_stub[0] = EFI_IMAGE_DOSSTUB_HEADER_MAGIC;
+    *(uint16_t*)&dos_stub[0]                                           = EFI_IMAGE_DOSSTUB_HEADER_MAGIC;
     *(uint32_t*)&dos_stub[EFI_IMAGE_DOSSTUB_EFI_IMAGE_OFFSET_LOCATION] = EFI_IMAGE_DOSSTUB_LENGTH;
 
 
     efi_image_header_t efi_image_hdr = {
-        .magic = EFI_IMAGE_HEADER_MAGIC,
-        .machine = EFI_IMAGE_MACHINE_AMD64,
-        .number_of_sections = section_count,
+        .magic                   = EFI_IMAGE_HEADER_MAGIC,
+        .machine                 = EFI_IMAGE_MACHINE_AMD64,
+        .number_of_sections      = section_count,
         .size_of_optional_header = sizeof(efi_image_optional_header_t),
-        .characteristics = EFI_IMAGE_CHARACTERISTISCS,
+        .characteristics         = EFI_IMAGE_CHARACTERISTISCS,
     };
 
     uint64_t size_of_headers = sizeof(efi_image_header_t) + efi_image_hdr.size_of_optional_header + section_headers_size_with_relocations + EFI_IMAGE_DOSSTUB_LENGTH;
@@ -1858,23 +1858,23 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
     PRINTLOG(LINKER, LOG_INFO, "size of headers: 0x%llx", size_of_headers);
 
     efi_image_optional_header_t efi_image_opt_hdr = {
-        .magic = EFI_IMAGE_OPTIONAL_HEADER_MAGIC,
-        .address_of_entrypoint = ctx->entrypoint_address_virtual,
-        .base_of_code = 0x1000,
-        .section_alignment = 0x1000,
-        .file_alignment = 0x1000,
-        .subsystem = EFI_IMAGE_SUBSYSTEM_EFI_APPLICATION,
-        .number_of_rva_nd_sizes = 16,
+        .magic                                 = EFI_IMAGE_OPTIONAL_HEADER_MAGIC,
+        .address_of_entrypoint                 = ctx->entrypoint_address_virtual,
+        .base_of_code                          = 0x1000,
+        .section_alignment                     = 0x1000,
+        .file_alignment                        = 0x1000,
+        .subsystem                             = EFI_IMAGE_SUBSYSTEM_EFI_APPLICATION,
+        .number_of_rva_nd_sizes                = 16,
         .base_relocation_table.virtual_address = reloc_section.virtual_address,
-        .base_relocation_table.size = reloc_section.size_of_raw_data,
-        .size_of_code = ctx->size_of_sections[LINKER_SECTION_TYPE_TEXT],
-        .size_of_initialized_data = ctx->size_of_sections[LINKER_SECTION_TYPE_DATA] +
-                                    ctx->size_of_sections[LINKER_SECTION_TYPE_DATARELOC] +
-                                    ctx->size_of_sections[LINKER_SECTION_TYPE_RODATA] +
-                                    ctx->size_of_sections[LINKER_SECTION_TYPE_RODATARELOC],
+        .base_relocation_table.size            = reloc_section.size_of_raw_data,
+        .size_of_code                          = ctx->size_of_sections[LINKER_SECTION_TYPE_TEXT],
+        .size_of_initialized_data              = ctx->size_of_sections[LINKER_SECTION_TYPE_DATA] +
+                                                 ctx->size_of_sections[LINKER_SECTION_TYPE_DATARELOC] +
+                                                 ctx->size_of_sections[LINKER_SECTION_TYPE_RODATA] +
+                                                 ctx->size_of_sections[LINKER_SECTION_TYPE_RODATARELOC],
         .size_of_uninitialized_data = ctx->size_of_sections[LINKER_SECTION_TYPE_BSS],
-        .size_of_headers = size_of_headers,
-        .size_of_image = ctx->program_size + relocation_size + ctx->program_start_physical + padding_after_relocations,
+        .size_of_headers            = size_of_headers,
+        .size_of_image              = ctx->program_size + relocation_size + ctx->program_start_physical + padding_after_relocations,
     };
 
 
@@ -2061,9 +2061,9 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
     uint64_t program_target_offset = 0;
 
     if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
-        program_header_t* program_header = (program_header_t*)array;
+        program_header_t* program_header = (program_header_t*)(void*)array;
 
-        program_header->jmp_code = 0xe9;
+        program_header->jmp_code                       = 0xe9;
         program_header->trampoline_address_pc_relative = offsetof_field(program_header_t, trampoline_code) - 5;
         memory_memcopy(linker_program_header_trampoline_code, program_header->trampoline_code, sizeof(linker_program_header_trampoline_code));
 
@@ -2071,10 +2071,10 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
         program_header->header_physical_address = ctx->program_start_physical - 0x1000;
         program_header->header_virtual_address  = ctx->program_start_virtual - 0x1000;
-        program_header->program_offset = 0x1000;
-        program_header->total_size += 0x1000 + ctx->program_size;
-        program_header->program_size  = ctx->program_size;
-        program_header->program_entry = ctx->entrypoint_address_virtual;
+        program_header->program_offset          = 0x1000;
+        program_header->total_size             += 0x1000 + ctx->program_size;
+        program_header->program_size            = ctx->program_size;
+        program_header->program_entry           = ctx->entrypoint_address_virtual;
 
         program_target_offset += 0x1000;
 
@@ -2096,7 +2096,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
             frame_t frame = {
                 .frame_address = program_header->header_physical_address,
-                .frame_count = 1,
+                .frame_count   = 1,
             };
 
             if(memory_paging_add_va_for_frame_ext(page_table_ctx,
@@ -2166,7 +2166,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
                     frame_t frame = {
                         .frame_address = module->sections[i].physical_start,
-                        .frame_count = section_size / FRAME_SIZE,
+                        .frame_count   = section_size / FRAME_SIZE,
                     };
 
                     memory_paging_page_type_t page_type = MEMORY_PAGING_PAGE_TYPE_GLOBAL;
@@ -2217,10 +2217,10 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         // ctx->got_address_physical = ctx->program_start_physical + program_target_offset;
 
         if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
-            program_header_t* program_header = (program_header_t*)array;
+            program_header_t* program_header = (program_header_t*)(void*)array;
 
-            program_header->got_offset = program_target_offset;
-            program_header->got_size = ctx->global_offset_table_size;
+            program_header->got_offset           = program_target_offset;
+            program_header->got_size             = ctx->global_offset_table_size;
             program_header->got_virtual_address  = ctx->got_address_virtual; // program_header->header_virtual_address + program_target_offset;
             program_header->got_physical_address = program_header->header_physical_address + program_target_offset;
 
@@ -2230,7 +2230,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
             if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
                 frame_t frame = {
                     .frame_address = program_header->got_physical_address,
-                    .frame_count = program_header->got_size / FRAME_SIZE,
+                    .frame_count   = program_header->got_size / FRAME_SIZE,
                 };
 
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
@@ -2265,10 +2265,10 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         buffer_destroy(relocs_buf);
 
         if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
-            program_header_t* program_header = (program_header_t*)array;
+            program_header_t* program_header = (program_header_t*)(void*)array;
 
-            program_header->relocation_table_offset = program_target_offset;
-            program_header->relocation_table_size = ctx->relocation_table_size;
+            program_header->relocation_table_offset           = program_target_offset;
+            program_header->relocation_table_size             = ctx->relocation_table_size;
             program_header->relocation_table_virtual_address  = program_header->header_virtual_address + program_target_offset;
             program_header->relocation_table_physical_address = program_header->header_physical_address + program_target_offset;
 
@@ -2278,7 +2278,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
             if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
                 frame_t frame = {
                     .frame_address = program_header->relocation_table_physical_address,
-                    .frame_count = program_header->relocation_table_size / FRAME_SIZE,
+                    .frame_count   = program_header->relocation_table_size / FRAME_SIZE,
                 };
 
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
@@ -2316,10 +2316,10 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         ctx->metadata_address_virtual  = ctx->program_start_virtual + program_target_offset;
 
         if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
-            program_header_t* program_header = (program_header_t*)array;
+            program_header_t* program_header = (program_header_t*)(void*)array;
 
-            program_header->metadata_offset = program_target_offset;
-            program_header->metadata_size = ctx->metadata_size;
+            program_header->metadata_offset           = program_target_offset;
+            program_header->metadata_size             = ctx->metadata_size;
             program_header->metadata_virtual_address  = program_header->header_virtual_address + program_target_offset;
             program_header->metadata_physical_address = program_header->header_physical_address + program_target_offset;
 
@@ -2329,7 +2329,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
             if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
                 frame_t frame = {
                     .frame_address = program_header->metadata_physical_address,
-                    .frame_count = program_header->metadata_size / FRAME_SIZE,
+                    .frame_count   = program_header->metadata_size / FRAME_SIZE,
                 };
 
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
@@ -2363,10 +2363,10 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         buffer_destroy(symbol_table_buf);
 
         if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
-            program_header_t* program_header = (program_header_t*)array;
+            program_header_t* program_header = (program_header_t*)(void*)array;
 
-            program_header->symbol_table_offset = program_target_offset;
-            program_header->symbol_table_size = ctx->symbol_table_size;
+            program_header->symbol_table_offset           = program_target_offset;
+            program_header->symbol_table_size             = ctx->symbol_table_size;
             program_header->symbol_table_virtual_address  = program_header->header_virtual_address + program_target_offset;
             program_header->symbol_table_physical_address = program_header->header_physical_address + program_target_offset;
 
@@ -2376,7 +2376,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
             if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
                 frame_t frame = {
                     .frame_address = program_header->symbol_table_physical_address,
-                    .frame_count = program_header->symbol_table_size / FRAME_SIZE,
+                    .frame_count   = program_header->symbol_table_size / FRAME_SIZE,
                 };
 
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
@@ -2405,7 +2405,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         if(program_header->program_heap_size > 0) {
             frame_t frame = {
                 .frame_address = program_header->program_heap_physical_address,
-                .frame_count = program_header->program_heap_size / FRAME_SIZE,
+                .frame_count   = program_header->program_heap_size / FRAME_SIZE,
             };
 
             if(memory_paging_add_va_for_frame_ext(page_table_ctx,
@@ -2424,7 +2424,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         if(program_header->program_stack_size > 0) {
             frame_t frame = {
                 .frame_address = program_header->program_stack_physical_address,
-                .frame_count = program_header->program_stack_size / FRAME_SIZE,
+                .frame_count   = program_header->program_stack_size / FRAME_SIZE,
             };
 
             if(memory_paging_add_va_for_frame_ext(page_table_ctx,
@@ -2623,7 +2623,7 @@ buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
             }
         }
 
-        if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 8) != 0) {
+        if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 4) != 0) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
             it->destroy(it);
 
