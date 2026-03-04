@@ -140,7 +140,11 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     PRINTLOG(TASKING, LOG_TRACE, "old gs base 0x%llx new gs base 0x%llx", old_gs_base, kernel_gs_va);
 
+    cpu_cli();
     cpu_write_msr(CPU_MSR_IA32_GS_BASE, kernel_gs_va);
+    asm volatile ("swapgs\n");
+    cpu_write_msr(CPU_MSR_IA32_GS_BASE, kernel_gs_va);
+    cpu_sti();
 
     cpu_state_t* current_cpu_state = (cpu_state_t*)kernel_gs_va;
     current_cpu_state->local_apic_id = apic_id;
@@ -362,7 +366,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     // get mxcsr
     task_save_registers(kernel_task->registers);
 
-    task_mxcsr_mask = *(uint32_t*)&kernel_task->registers->avx512f[28];
+    task_mxcsr_mask = *(uint32_t*)(void*)&kernel_task->registers->avx512f[28];
 
     PRINTLOG(TASKING, LOG_INFO, "mxcsr mask 0x%x", task_mxcsr_mask);
 
@@ -480,8 +484,8 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
     current_task->registers->xsave_mask_lo = task_xsave_mask & 0xFFFFFFFF;
     current_task->registers->xsave_mask_hi = task_xsave_mask >> 32;
 
-    *(uint16_t*)&current_task->registers->avx512f[0]  = 0x37F;
-    *(uint32_t*)&current_task->registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
+    *(uint16_t*)(void*)&current_task->registers->avx512f[0]  = 0x37F;
+    *(uint32_t*)(void*)&current_task->registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     memory_heap_t* sheap = spool_get_heap();
 
@@ -956,19 +960,20 @@ void task_end_task(void) {
 
     int64_t ret = -1;
 
+
     if(current_task->state == TASK_STATE_STARTING) {
         task_task_switch_exit();
         cpu_sti();
 
         if(!entry_point) {
             PRINTLOG(TASKING, LOG_ERROR, "no entry point for task 0x%llx", current_task->task_id);
-        }
+        } else {
 
-        PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx on cpu 0x%llx",
-                 current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
-        ret = entry_point(current_task->arguments_count, current_task->arguments);
-    }
-    if(current_task->state == TASK_STATE_RUNNING) {
+            PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx on cpu 0x%llx",
+                     current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
+            ret = entry_point(current_task->arguments_count, current_task->arguments);
+        }
+    } else if(current_task->state == TASK_STATE_RUNNING) {
         ret = current_task->exit_code;
     } else {
         PRINTLOG(TASKING, LOG_WARNING, "ending task %s with pid 0x%llx on cpu 0x%llx that is not in starting state but in state 0x%x",
@@ -978,16 +983,6 @@ void task_end_task(void) {
 
     PRINTLOG(TASKING, LOG_INFO, "ending task 0x%llx return code 0x%llx on cpu 0x%llx",
              current_task->task_id, ret, cpu_state->local_apic_id);
-
-    if(current_task->vmcs_physical_address) {
-        if(cpu_get_type() == CPU_TYPE_INTEL) {
-            if(vmx_vmclear(current_task->vmcs_physical_address) != 0) {
-                PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
-            }
-        } else if(cpu_get_type() == CPU_TYPE_AMD) {
-
-        }
-    }
 
     current_task->state = TASK_STATE_ENDED;
 
@@ -1124,8 +1119,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     registers->xsave_mask_lo = task_xsave_mask & 0xFFFFFFFF;
     registers->xsave_mask_hi = task_xsave_mask >> 32;
 
-    *(uint16_t*)&registers->avx512f[0]  = 0x37F;
-    *(uint32_t*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
+    *(uint16_t*)(void*)&registers->avx512f[0]  = 0x37F;
+    *(uint32_t*)(void*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp           += stack_size - 16;
@@ -1134,9 +1129,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
 
     uint64_t* stack = (uint64_t*)rbp;
-    stack[-1] = 0; // (uint64_t)task_end_task;
+    stack[-1] = 0;
     stack[-2] = (uint64_t)task_end_task; // entry_point;
-    // stack[-3] = (uint64_t)task_task_switch_exit;
 
     memory_heap_t* sheap = spool_get_heap();
 
@@ -1292,8 +1286,8 @@ int8_t task_create_idle_task(void) {
     registers->xsave_mask_lo = task_xsave_mask & 0xFFFFFFFF;
     registers->xsave_mask_hi = task_xsave_mask >> 32;
 
-    *(uint16_t*)&registers->avx512f[0]  = 0x37F;
-    *(uint32_t*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
+    *(uint16_t*)(void*)&registers->avx512f[0]  = 0x37F;
+    *(uint32_t*)(void*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp           += stack_size - 16;
@@ -1301,10 +1295,8 @@ int8_t task_create_idle_task(void) {
     registers->rsp = rbp - 16;
 
     uint64_t* stack = (uint64_t*)rbp;
-    stack[-1] = 0; // (uint64_t)task_end_task;
+    stack[-1] = 0;
     stack[-2] = (uint64_t)task_end_task;
-    // stack[-2] = (uint64_t)new_task->entry_point;
-    // stack[-3] = (uint64_t)task_task_switch_exit;
 
     cpu_state->idle_task = new_task;
 
@@ -1333,8 +1325,6 @@ void task_yield(void) {
     task_switch_task();
     task_task_switch_exit();
     cpu_sti();
-
-    // asm volatile ("int $0xfe\n");
 }
 
 int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
@@ -1360,12 +1350,6 @@ void task_remove_task_after_fault(uint64_t task_id) {
         return;
     }
 
-    char_t task_id_buf[100] = {0};
-    utoh_with_buffer(task_id_buf, task_id);
-    video_text_print("task_remove_task_after_fault: task 0x");
-    video_text_print(task_id_buf);
-    video_text_print("\n");
-
     PRINTLOG(TASKING, LOG_WARNING, "task_remove_task_after_fault: task 0x%llx", task_id);
 
     task->state = TASK_STATE_ENDED;
@@ -1381,18 +1365,42 @@ void task_remove_task_after_fault(uint64_t task_id) {
     }
 
     task_t* current_task = (task_t*)cpu_state->idle_task;
-    current_task->last_tick_count = cpu_state->tick_count;
+
+    current_task->last_tick_count = rdtsc();
     current_task->task_switch_count++;
 
-    cpu_state->current_task = current_task;
-    current_task->state     = TASK_STATE_RUNNING;
+    switch(current_task->state) {
+    case TASK_STATE_CREATED:
+        current_task->state = TASK_STATE_STARTING;
+        break;
+    default:
+        current_task->state = TASK_STATE_RUNNING;
+        break;
+    }
 
-    PRINTLOG(TASKING, LOG_WARNING, "switching to %s task 0x%p (0x%p) 0x%llx on cpu 0x%llx",
-             current_task->task_name,
-             current_task, cpu_state->idle_task,
-             current_task->task_id, cpu_state->local_apic_id);
+    cpu_state->current_task = current_task;
+
+    if(current_task->vmcs_physical_address) {
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmptrld(current_task->vmcs_physical_address) != 0) {
+                utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
+                video_text_print("vmptrld failed for task 0x");
+                video_text_print(task_switch_task_id_buf);
+                video_text_print("\n");
+                return;
+            }
+
+            vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
+            vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
+        } else if(cpu_get_type() == CPU_TYPE_AMD) {
+
+        }
+    }
+
+    // idle task always opens interrupts and we dont need EOI because if we are there,
+    // it is a fault interrupt which does not require EOI.
 
     task_load_registers(current_task->registers);
 
-    cpu_sti();
+    asm volatile ("" ::: "memory"); // prevent compiler jmp directly to the task_load_registers
 }

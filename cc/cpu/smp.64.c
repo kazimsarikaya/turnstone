@@ -148,7 +148,7 @@ int8_t smp_init(void) {
 
     memory_memcopy(trampoline_code, trampoline, sizeof(trampoline_code));
 
-    uint32_t* trampoline_call_addr = (uint32_t*)(trampoline + 0x10d);
+    uint32_t* trampoline_call_addr = (uint32_t*)(void*)(trampoline + 0x10d);
 
     *trampoline_call_addr = (uint32_t)((uint64_t)smp_ap_boot);
 
@@ -156,9 +156,11 @@ int8_t smp_init(void) {
 
     frame_t* stack_frames;
     uint64_t stack_frames_cnt = 16 * ap_cpu_count;
-    uint64_t stack_size = 16 * FRAME_SIZE;
+    uint64_t stack_size       = 16 * FRAME_SIZE;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt,
+                                                      FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      &stack_frames, NULL) != 0) {
         PRINTLOG(APIC, LOG_ERROR, "SMP: Failed to allocate stack frames");
         return -1;
     }
@@ -172,12 +174,14 @@ int8_t smp_init(void) {
 
     memory_memclean((void*)stack_frames_va, stack_frames_cnt * FRAME_SIZE);
 
-    frame_t* ap_gs_frames = NULL;
+    frame_t* ap_gs_frames     = NULL;
     uint64_t ap_gs_frames_cnt = 4 * ap_cpu_count;
-    uint64_t ap_gs_size = 4 * FRAME_SIZE;
+    uint64_t ap_gs_size       = 4 * FRAME_SIZE;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), ap_gs_frames_cnt, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &ap_gs_frames, NULL) != 0) {
-        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 4");
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), ap_gs_frames_cnt,
+                                                      FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      &ap_gs_frames, NULL) != 0) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate gs frames of count 4");
 
         return -1;
     }
@@ -191,13 +195,13 @@ int8_t smp_init(void) {
     uint64_t* ap_gs = (uint64_t*)ap_gs_va;
 
 
-    smp_data->stack_base = stack_frames_va;
-    smp_data->stack_size = stack_size;
-    smp_data->cr0 = cpu_read_cr0();
-    smp_data->cr3 =  MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(memory_paging_get_table()->page_table);
-    smp_data->cr4 = cpu_read_cr4();
-    smp_data->idt = IDT_REGISTER;
-    smp_data->gs_base = ap_gs_va;
+    smp_data->stack_base   = stack_frames_va;
+    smp_data->stack_size   = stack_size;
+    smp_data->cr0          = cpu_read_cr0();
+    smp_data->cr3          =  MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(memory_paging_get_table()->page_table);
+    smp_data->cr4          = cpu_read_cr4();
+    smp_data->idt          = IDT_REGISTER;
+    smp_data->gs_base      = ap_gs_va;
     smp_data->gs_base_size = ap_gs_size;
 
     for(uint64_t i = 0; i < list_size(apic_entries); i++) {
@@ -228,6 +232,9 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     uint64_t gs_base = smp_data->gs_base;
     gs_base += (cpu_id - 1) * smp_data->gs_base_size;
+
+    cpu_write_msr(CPU_MSR_IA32_GS_BASE, gs_base);
+    asm volatile ("swapgs\n");
     cpu_write_msr(CPU_MSR_IA32_GS_BASE, gs_base);
 
     uint64_t stack_base = smp_data->stack_base;

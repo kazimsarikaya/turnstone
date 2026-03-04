@@ -11,7 +11,11 @@ cat <<EOF
  */
 
 #include <types.h>
+#include <utils.h>
 #include <cpu/interrupt.h>
+#include <cpu/cpu_registers.h>
+
+_Static_assert(sizeof_field(cpu_registers_t, avx512f) == 0x2000, "cpu_registers_t.avx512f size must be 0x2000 bytes");
 
 MODULE("turnstone.kernel.cpu.interrupt.handlers");
 
@@ -36,9 +40,10 @@ for i in 8 $(seq 10 14) 17 21; do
 j=`printf "%02x" $i`
 
 cat <<EOF
-static void interrupt_naked_handler_int_0x${j}(void);
-__attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${j}(void) {
+__attribute__((naked, no_stack_protector))
+static void interrupt_naked_handler_int_0x${j}(void) {
     asm volatile (
+        "swapgs\n"
         "push \$${i}\n" // push interrupt number
         "subq \$0x2080, %rsp\n"
         "push %r15\n"
@@ -91,6 +96,7 @@ __attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${
         "pop %r14\n"
         "pop %r15\n"
         "add \$0x2088, %rsp\n"
+        "swapgs\n"
         "iretq\n"
         );
 }
@@ -103,9 +109,10 @@ for i in $(seq 0 7) 9 15 16 18 19 20 $(seq 22 31) $(seq 32 255); do
 j=`printf "%02x" $i`
 
 cat <<EOF
-static void interrupt_naked_handler_int_0x${j}(void);
-__attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${j}(void) {
+__attribute__((naked, no_stack_protector))
+static void interrupt_naked_handler_int_0x${j}(void) {
     asm volatile (
+        "swapgs\n"
         "push \$0\n" // push error code
         "push \$${i}\n" // push interrupt number
         "subq \$0x2080, %rsp\n"
@@ -159,6 +166,7 @@ __attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${
         "pop %r14\n"
         "pop %r15\n"
         "add \$0x2090, %rsp\n"
+        "swapgs\n"
         "iretq\n"
         );
 }
