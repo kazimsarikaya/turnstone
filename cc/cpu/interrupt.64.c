@@ -404,6 +404,8 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
         task_remove_task_after_fault(tid);
     }
 
+    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
+
     cpu_hlt();
 }
 
@@ -451,6 +453,8 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
         task_remove_task_after_fault(tid);
     }
 
+    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
+
     cpu_hlt();
 
     return -1;
@@ -488,7 +492,6 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame
     PRINTLOG(KERNEL, LOG_FATAL, "general protection error 0x%llx at 0x%x:0x%llx %s task 0x%llx",
              frame->error_code, frame->return_cs, frame->return_rip, return_symbol_name, tid);
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
-    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     stackframe_t* s_frame = (stackframe_t*)frame->rbp;
     backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
@@ -500,6 +503,8 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame
         // KERNEL_PANIC_DISABLE_LOCKS = false;
         task_remove_task_after_fault(tid);
     }
+
+    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     cpu_hlt();
 
@@ -516,7 +521,8 @@ int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
     PRINTLOG(KERNEL, LOG_FATAL, "lapic id 0x%x frame ext pointer 0x%p", apic_id, frame);
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
-    video_text_print(return_symbol_name);
+    video_text_print("page fault error at: ");
+    video_text_print(return_symbol_name?return_symbol_name:"(unknown)");
     video_text_print("\n");
 
     PRINTLOG(KERNEL, LOG_FATAL, "page fault occured at 0x%x:0x%llx %s task 0x%llx", frame->return_cs, frame->return_rip, return_symbol_name, tid);
@@ -528,7 +534,6 @@ int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
 
     PRINTLOG(KERNEL, LOG_FATAL, "page 0x%016llx P? %i W? %i U? %i I? %i", cr2, epf.fields.present, epf.fields.write, epf.fields.user, epf.fields.instruction_fetch);
 
-    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     stackframe_t* s_frame = (stackframe_t*)frame->rbp;
     backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
@@ -540,6 +545,8 @@ int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
         // KERNEL_PANIC_DISABLE_LOCKS = false;
         task_remove_task_after_fault(tid);
     }
+
+    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     cpu_hlt();
 
@@ -585,12 +592,12 @@ int8_t interrupt_int13_simd_floating_point_exception(interrupt_frame_ext_t* fram
         PRINTLOG(KERNEL, LOG_ERROR, "SIMD floating point exception: precision");
     }
 
-    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
-
     stackframe_t* s_frame = (stackframe_t*)frame->rbp;
     backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
 
     interrupt_print_frame_ext(frame);
+
+    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     cpu_hlt();
 
