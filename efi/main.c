@@ -12,6 +12,7 @@
 #include <linker.h>
 #include <systeminfo.h>
 #include <cpu.h>
+#include <cpu/cpu_registers.h>
 #include <cpu/crx.h>
 #include <cpu/sync.h>
 #include <buffer.h>
@@ -858,7 +859,23 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
         goto catch_efi_error;
     }
 
-    efi_guid_t lip_guid              = EFI_LOADED_IMAGE_PROTOCOL_GUID;
+    cpu_cpuid_regs_t query  = {.eax = 0xd};
+    cpu_cpuid_regs_t answer = {0};
+
+    cpu_cpuid(query, &answer);
+
+    PRINTLOG(EFI, LOG_DEBUG, "cpuid leaf 0xd subleaf 0: eax 0x%08x ebx 0x%08x ecx 0x%08x edx 0x%08x",
+             answer.eax, answer.ebx, answer.ecx, answer.edx);
+
+    if(answer.ecx > sizeof_field(cpu_registers_t, avx512f)) {
+        PRINTLOG(EFI, LOG_ERROR, "cpu supports avx512f state larger than turnstone supports. cpu supports 0x%x bytes, turnstone supports 0x%lx bytes", answer.ecx, sizeof_field(cpu_registers_t, avx512f));
+        goto catch_efi_error;
+    } else {
+        PRINTLOG(EFI, LOG_INFO, "maximum size of avx512f state that cpu supports: 0x%x bytes", answer.ecx);
+    }
+
+    efi_guid_t lip_guid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
+
     efi_loaded_image_t* loaded_image = NULL;
 
     res = BS->handle_protocol(image, &lip_guid, (void**)&loaded_image);
