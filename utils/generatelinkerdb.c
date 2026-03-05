@@ -66,7 +66,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb);
 
 
 linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity) {
-    FILE* fp = fopen(file, "r+");
+    FILE* fp           = fopen(file, "r+");
     boolean_t new_file = false;
 
     if(!fp) {
@@ -142,7 +142,7 @@ linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity) {
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 8 << 20;
     cc.index_data_size  = 32 << 20;
-    cc.valuelog_size = 32 << 20;
+    cc.valuelog_size    = 32 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {
         print_error("cannot set cache");
@@ -170,14 +170,14 @@ linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity) {
         return NULL;
     }
 
-    ldb->backend = bend;
+    ldb->backend        = bend;
     ldb->backend_buffer = buf;
-    ldb->capacity = capacity;
-    ldb->db_file  = fp;
-    ldb->fd = fd;
-    ldb->mmap_res = mmap_res;
-    ldb->tdb = tdb;
-    ldb->new_file = new_file;
+    ldb->capacity       = capacity;
+    ldb->db_file        = fp;
+    ldb->fd             = fd;
+    ldb->mmap_res       = mmap_res;
+    ldb->tdb            = tdb;
+    ldb->new_file       = new_file;
 
     return ldb;
 }
@@ -507,7 +507,7 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
 }
 
 static boolean_t linkerdb_clear_relocation_references_at_section(linkerdb_t* ldb, int64_t section_id) {
-    tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
+    tosdb_database_t* db_system    = tosdb_database_create_or_open(ldb->tdb, "system");
     tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 8 << 10, 1 << 20, 8);
 
     tosdb_record_t* s_reloc_rec = tosdb_table_create_record(tbl_relocations);
@@ -841,7 +841,7 @@ static boolean_t linkerdb_create_clean_implementation(linkerdb_t* ldb, const cha
         return false;
     }
 
-    uint64_t impl_name_end = 0;
+    uint64_t impl_name_end   = 0;
     uint64_t impl_name_start = 0;
 
     for(uint64_t i = strlen(filename); i > 0; i--) {
@@ -948,31 +948,31 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     fread(&e_indent, sizeof(elf_indent_t), 1, fp);
     fseek(fp, 0, SEEK_SET);
 
-    uint8_t e_class  = e_indent.class;
-    uint16_t e_shnum = 0;
-    uint64_t e_shoff = 0;
+    uint8_t e_class     = e_indent.class;
+    uint16_t e_shnum    = 0;
+    uint64_t e_shoff    = 0;
     uint16_t e_shstrndx = 0;
-    uint64_t e_shsize = 0;
+    uint64_t e_shsize   = 0;
 
     if(e_class == ELFCLASS32) {
 
         elf32_hdr_t hdr;
         fread(&hdr, sizeof(elf32_hdr_t), 1, fp);
 
-        e_shnum = hdr.e_shnum;
-        e_shoff = hdr.e_shoff;
+        e_shnum    = hdr.e_shnum;
+        e_shoff    = hdr.e_shoff;
         e_shstrndx = hdr.e_shstrndx;
-        e_shsize = sizeof(elf32_shdr_t) * e_shnum;
+        e_shsize   = sizeof(elf32_shdr_t) * e_shnum;
 
     } else if(e_class == ELFCLASS64) {
 
         elf64_hdr_t hdr;
         fread(&hdr, sizeof(elf64_hdr_t), 1, fp);
 
-        e_shnum = hdr.e_shnum;
-        e_shoff = hdr.e_shoff;
+        e_shnum    = hdr.e_shnum;
+        e_shoff    = hdr.e_shoff;
         e_shstrndx = hdr.e_shstrndx;
-        e_shsize = sizeof(elf64_shdr_t) * e_shnum;
+        e_shsize   = sizeof(elf64_shdr_t) * e_shnum;
 
     } else {
         PRINTLOG(TOSDB, LOG_ERROR, "unknown file class %i", e_indent.class );
@@ -1007,7 +1007,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     fread(sections, e_shsize, 1, fp);
 
 
-    uint64_t shstrtab_size = ELF_SECTION_SIZE(e_class, sections, e_shstrndx);
+    uint64_t shstrtab_size   = ELF_SECTION_SIZE(e_class, sections, e_shstrndx);
     uint64_t shstrtab_offset = ELF_SECTION_OFFSET(e_class, sections, e_shstrndx);
 
     char_t* shstrtab = memory_malloc(shstrtab_size);
@@ -1025,9 +1025,9 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     fseek(fp, shstrtab_offset, SEEK_SET);
     fread(shstrtab, shstrtab_size, 1, fp);
 
-    int8_t req_sec_found = 0;
-    char_t* strtab = NULL;
-    uint8_t* symbols = NULL;
+    int8_t req_sec_found  = 0;
+    char_t* strtab        = NULL;
+    uint8_t* symbols      = NULL;
     uint64_t symbol_count = 0;
 
     tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
@@ -1043,9 +1043,9 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     int64_t module_id = 0;
 
     for(uint16_t sec_idx = 0; sec_idx < e_shnum; sec_idx++) {
-        uint64_t sec_size = ELF_SECTION_SIZE(e_class, sections, sec_idx);
+        uint64_t sec_size   = ELF_SECTION_SIZE(e_class, sections, sec_idx);
         uint64_t sec_offset = ELF_SECTION_OFFSET(e_class, sections, sec_idx);
-        char_t* sec_name = shstrtab + ELF_SECTION_NAME(e_class, sections, sec_idx);
+        char_t* sec_name    = shstrtab + ELF_SECTION_NAME(e_class, sections, sec_idx);
 
         if(strcmp(".___module___", sec_name) == 0 && sec_size) {
             char_t* module_name = memory_malloc(sec_size + 1);
@@ -1110,9 +1110,9 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     }
 
     for(uint64_t sec_idx = 0; sec_idx < e_shnum; sec_idx++) {
-        uint64_t sec_size = ELF_SECTION_SIZE(e_class, sections, sec_idx);
+        uint64_t sec_size   = ELF_SECTION_SIZE(e_class, sections, sec_idx);
         uint64_t sec_offset = ELF_SECTION_OFFSET(e_class, sections, sec_idx);
-        char_t* sec_name = shstrtab + ELF_SECTION_NAME(e_class, sections, sec_idx);
+        char_t* sec_name    = shstrtab + ELF_SECTION_NAME(e_class, sections, sec_idx);
 
         if(strcmp(".strtab", sec_name) == 0) {
             strtab = memory_malloc(sec_size);
@@ -1234,7 +1234,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
         goto close;
     }
 
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_symbols    = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
     tosdb_sequence_t* seq_symbols = tosdb_sequence_create_or_open(db_system, "symbols_symbol_id", 1, 10);
 
     for(uint16_t sym_idx = 0; sym_idx < symbol_count; sym_idx++) {
@@ -1251,11 +1251,11 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
             continue;
         }
 
-        char_t* sym_name = strtab + ELF_SYMBOL_NAME(e_class, symbols, sym_idx);
+        char_t* sym_name    = strtab + ELF_SYMBOL_NAME(e_class, symbols, sym_idx);
         uint64_t sym_sec_id = (int64_t)hashmap_get(section_ids, (void*)sym_shndx);
-        uint8_t sym_scope  = ELF_SYMBOL_SCOPE(e_class, symbols, sym_idx);
-        uint64_t sym_value = ELF_SYMBOL_VALUE(e_class, symbols, sym_idx);
-        uint64_t sym_size  = ELF_SYMBOL_SIZE(e_class, symbols, sym_idx);
+        uint8_t sym_scope   = ELF_SYMBOL_SCOPE(e_class, symbols, sym_idx);
+        uint64_t sym_value  = ELF_SYMBOL_VALUE(e_class, symbols, sym_idx);
+        uint64_t sym_size   = ELF_SYMBOL_SIZE(e_class, symbols, sym_idx);
 
         if(sym_type == STT_SECTION) {
             sym_name = shstrtab + ELF_SECTION_NAME(e_class, sections, sym_shndx);
@@ -1291,8 +1291,18 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
         boolean_t free_sym_name = false;
 
         if(sym_scope == STB_LOCAL) {
-            sym_name = strcat(shstrtab + ELF_SECTION_NAME(e_class, sections, sym_shndx), sym_name);
-            free_sym_name = true;
+            const char_t* sec_name = shstrtab + ELF_SECTION_NAME(e_class, sections, sym_shndx);
+            if(sec_name && strlen(sec_name) > 0) {
+                if(strstarts(sym_name, ".") != 0) {
+                    char_t* sym_name_tmp = strcat(sec_name, ".");
+                    sym_name = strcat(sym_name_tmp, sym_name);
+                    memory_free(sym_name_tmp);
+                } else {
+                    sym_name = strcat(sec_name, sym_name);
+                }
+
+                free_sym_name = true;
+            }
         }
 
         PRINTLOG(LINKER, LOG_DEBUG, "symbol '%s' at section %llx with type %i and scope %i", sym_name, sym_shndx, sym_type, sym_scope);
@@ -1333,7 +1343,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
         goto close;
     }
 
-    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 8 << 10, 1 << 20, 8);
+    tosdb_table_t* tbl_relocations    = tosdb_table_create_or_open(db_system, "relocations", 8 << 10, 1 << 20, 8);
     tosdb_sequence_t* seq_relocations = tosdb_sequence_create_or_open(db_system, "relocations_relocation_id", 1, 10);
 
     for(uint16_t sec_idx = 0; sec_idx < e_shnum; sec_idx++) {
@@ -1366,7 +1376,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
 
         reloc_sec_id = (int64_t)hashmap_get(section_ids, (void*)(uint64_t)reloc_sec_id);
 
-        uint64_t sec_size = ELF_SECTION_SIZE(e_class, sections, sec_idx);
+        uint64_t sec_size   = ELF_SECTION_SIZE(e_class, sections, sec_idx);
         uint64_t sec_offset = ELF_SECTION_OFFSET(e_class, sections, sec_idx);
 
         uint8_t* relocs = memory_malloc(sec_size);
@@ -1385,9 +1395,9 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
 
         for(uint64_t reloc_idx = 0; reloc_idx < reloc_count; reloc_idx++) {
 
-            uint64_t reloc_offset = ELF_RELOC_OFFSET(e_class, is_rela, relocs, reloc_idx);
-            uint32_t reloc_type  = ELF_RELOC_TYPE(e_class, is_rela, relocs, reloc_idx);
-            int64_t reloc_symidx = ELF_RELOC_SYMIDX(e_class, is_rela, relocs, reloc_idx);
+            uint64_t reloc_offset    = ELF_RELOC_OFFSET(e_class, is_rela, relocs, reloc_idx);
+            uint32_t reloc_type      = ELF_RELOC_TYPE(e_class, is_rela, relocs, reloc_idx);
+            int64_t reloc_symidx     = ELF_RELOC_SYMIDX(e_class, is_rela, relocs, reloc_idx);
             int64_t reloc_sym_sec_id = ELF_SYMBOL_SHNDX(e_class, symbols, reloc_symidx);
 
 
@@ -1405,12 +1415,23 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
             boolean_t free_reloc_sym_name = false;
 
             if(reloc_sym_type == STB_LOCAL) {
-                reloc_sym_name = strcat(shstrtab + ELF_SECTION_NAME(e_class, sections, reloc_sym_sec_id), reloc_sym_name);
-                free_reloc_sym_name = true;
+                sec_name = shstrtab + ELF_SECTION_NAME(e_class, sections, reloc_sym_sec_id);
+                if(sec_name && strlen(sec_name) > 0) {
+                    if(strstarts(reloc_sym_name, ".") != 0) {
+                        char_t* reloc_sym_name_tmp = strcat(sec_name, ".");
+                        reloc_sym_name = strcat(reloc_sym_name_tmp, reloc_sym_name);
+                        memory_free(reloc_sym_name_tmp);
+                    } else {
+                        reloc_sym_name = strcat(sec_name, reloc_sym_name);
+                    }
+
+                    free_reloc_sym_name = true;
+                }
             }
 
             if(strlen(reloc_sym_name) == 0) {
-                PRINTLOG(LINKER, LOG_INFO, "!!! at file %s at sec %s symbol name of reloc %llx unknown", filename, sec_name, reloc_idx);
+                PRINTLOG(LINKER, LOG_ERROR, "!!! at file %s at sec %s symbol name of reloc %llx unknown",
+                         filename, sec_name, reloc_idx);
                 print_error("cannot countinue");
 
                 if(free_reloc_sym_name) {
@@ -1425,7 +1446,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
 
             if(reloc_sym_sec_id) {
                 reloc_sym_sec_id = (int64_t)hashmap_get(section_ids, (void*)(uint64_t)reloc_sym_sec_id);
-                reloc_sym_id = (int64_t)hashmap_get(symbol_ids, (void*)reloc_symidx);
+                reloc_sym_id     = (int64_t)hashmap_get(symbol_ids, (void*)reloc_symidx);
             }
 
             if(e_class == ELFCLASS32) {
@@ -1557,9 +1578,9 @@ close:
 }
 
 boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
-    tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
+    tosdb_database_t* db_system    = tosdb_database_create_or_open(ldb->tdb, "system");
     tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 8 << 10, 1 << 20, 8);
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_symbols     = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
 
     tosdb_record_t* s_recs_need = tosdb_table_create_record(tbl_relocations);
 
@@ -1624,8 +1645,8 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
         }
 
         int64_t reloc_id = 0;
-        int64_t sec_id = 0;
-        int64_t sym_id = 0;
+        int64_t sec_id   = 0;
+        int64_t sym_id   = 0;
 
         if(!reloc_rec->get_int64(reloc_rec, "id", &reloc_id)) {
             print_error("cannot get reloc id");
@@ -1868,13 +1889,13 @@ int32_t main(int32_t argc, char_t** argv) {
     argc--;
     argv++;
 
-    char_t* output_file = NULL;
-    const char_t* entry_point = "___kstart64";
+    char_t* output_file             = NULL;
+    const char_t* entry_point       = "___kstart64";
     boolean_t need_free_entry_point = false;
-    uint64_t stack_size = 0x10000;
-    uint64_t program_base = 0x200000; // 2MB
-    uint64_t spool_size = 16 << 20; // 16MB
-    boolean_t compact = false;
+    uint64_t stack_size             = 0x10000;
+    uint64_t program_base           = 0x200000; // 2MB
+    uint64_t spool_size             = 16 << 20; // 16MB
+    boolean_t compact               = false;
 
     while(argc > 0) {
         if(strstarts(*argv, "-") != 0) {
@@ -1905,7 +1926,7 @@ int32_t main(int32_t argc, char_t** argv) {
             argv++;
 
             if(argc) {
-                entry_point = strdup(*argv);
+                entry_point           = strdup(*argv);
                 need_free_entry_point = true;
 
                 argc--;
