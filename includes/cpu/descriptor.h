@@ -30,11 +30,15 @@ extern "C" {
 #define DPL_USER   DPL_RING3
 
 /*! hard coded gdt code segment value */
-#define KERNEL_CODE_SEG 0x08
+#define KERNEL_CODE_SEG (0x08 | DPL_KERNEL)
 /*! hard coded gdt data segment value */
-#define KERNEL_DATA_SEG 0x10
+#define KERNEL_DATA_SEG (0x10 | DPL_KERNEL)
 /*! hard coded gdt tss segment value */
-#define KERNEL_TSS_SEG  0x18
+#define KERNEL_TSS_SEG  (0x18 | DPL_KERNEL)
+/*! hard coded gdt user data segment value */
+#define USER_DATA_SEG   (0x28 | DPL_USER)
+/*! hard coded gdt user code segment value */
+#define USER_CODE_SEG   (0x30 | DPL_USER)
 
 /**
  * @struct descriptor_gdt_null
@@ -45,46 +49,52 @@ typedef struct descriptor_gdt_null {
     uint32_t unused2; ///< null segment is always 0
 }__attribute__((packed)) descriptor_gdt_null_t; ///< struct short hand
 
+_Static_assert(sizeof(descriptor_gdt_null_t) == 8, "descriptor_gdt_null_t size must be 8 bytes");
+
 /**
  * @struct descriptor_gdt_code
  * @brief  code segment descriptor for gdt
  */
 typedef struct descriptor_gdt_code {
-    uint32_t unused1; ///< 1/0-31 are unused
-    uint8_t  unused2        : 8; ///< 2/0-7 aka 32-39 are unused
-    uint8_t  unused3        : 1; ///< 2/8 aka 40 is unused
-    uint8_t  readable       : 1; ///< 2/9 aka 41 readable bit
-    uint8_t  conforming     : 1; ///< 2/10 aka 42 conforming allow diffrent levels run code
-    uint8_t  always1        : 2; ///< 2/11-12 aka 43-44 are always 1
-    uint8_t  dpl            : 2; ///< 2/13-14 aka 45-46 bits are for privilage levels
-    uint8_t  present        : 1; ///< 2/15 aka 47 the page or page table is present?
-    uint8_t  unused4        : 4; ///< 2/16-19 aka 48-51 are unused
-    uint8_t  avl            : 1; ///< 2/20 aka 52 are avl bits aka unused
-    uint8_t  long_mode      : 1; ///< 2/21 aka 53 this bit is always 1 for long mode
-    uint8_t  default_opsize : 1; ///< 2/22 aka 54 this bit is always 0 for long mode
-    uint8_t  unused5        : 1; ///< 2/23 aka 55 is unused
-    uint8_t  unused6; ///< 2/24-31 aka 56-63 is unused
+    uint32_t unused1        : 32; ///< 1/0-31 are unused
+    uint32_t unused2        : 8; ///< 2/0-7 aka 32-39 are unused
+    uint32_t unused3        : 1; ///< 2/8 aka 40 is unused
+    uint32_t readable       : 1; ///< 2/9 aka 41 readable bit
+    uint32_t conforming     : 1; ///< 2/10 aka 42 conforming allow diffrent levels run code
+    uint32_t always1        : 2; ///< 2/11-12 aka 43-44 are always 1
+    uint32_t dpl            : 2; ///< 2/13-14 aka 45-46 bits are for privilage levels
+    uint32_t present        : 1; ///< 2/15 aka 47 the page or page table is present?
+    uint32_t unused4        : 4; ///< 2/16-19 aka 48-51 are unused
+    uint32_t avl            : 1; ///< 2/20 aka 52 are avl bits aka unused
+    uint32_t long_mode      : 1; ///< 2/21 aka 53 this bit is always 1 for long mode
+    uint32_t default_opsize : 1; ///< 2/22 aka 54 this bit is always 0 for long mode
+    uint32_t unused5        : 1; ///< 2/23 aka 55 is unused
+    uint32_t unused6        : 8; ///< 2/24-31 aka 56-63 is unused
 
 }__attribute__((packed)) descriptor_gdt_code_t; ///< struct short hand
+
+_Static_assert(sizeof(descriptor_gdt_code_t) == 8, "descriptor_gdt_code_t size must be 8 bytes");
 
 /**
  * @struct descriptor_gdt_data
  * @brief data segment descriptor for gdt
  */
 typedef struct descriptor_gdt_data {
-    uint32_t unused1; ///< 1/0-31 are unused
-    uint8_t  unused2; ///< 2/0-7 aka 32-39 are unused
-    uint8_t  unused3   : 1; ///< 2/8 aka 40 is unused
-    uint8_t  rw        : 1; ///< 2/9 aka 41 read write bit
-    uint8_t  unused4   : 1; ///< 2/10 aka 42 is unused
-    uint8_t  always0   : 1; ///< 2/11 aka 43 is always 0
-    uint8_t  always1   : 1; ///< 2/12 aka 44 is always 1
-    uint8_t  dpl       : 2; ///< 2/13-14 aka 45-46 are unused, page dpl is used for data see also memory_page_entry_t
-    uint8_t  present   : 1; ///< 2/15 aka 47 is always 1
-    uint16_t unused5   : 5; ///< 2/16-20 aka 48-52 are unused
-    uint16_t long_mode : 1; ///< 2/21 aka 53 is always 1
-    uint16_t unused6   : 10; ///< 2/22-31 aka 54-63 are unused
+    uint32_t unused1   : 32; ///< 1/0-31 are unused
+    uint32_t unused2   : 8; ///< 2/0-7 aka 32-39 are unused
+    uint32_t unused3   : 1; ///< 2/8 aka 40 is unused
+    uint32_t rw        : 1; ///< 2/9 aka 41 read write bit
+    uint32_t unused4   : 1; ///< 2/10 aka 42 is unused
+    uint32_t always0   : 1; ///< 2/11 aka 43 is always 0
+    uint32_t always1   : 1; ///< 2/12 aka 44 is always 1
+    uint32_t dpl       : 2; ///< 2/13-14 aka 45-46 are unused, page dpl is used for data see also memory_page_entry_t
+    uint32_t present   : 1; ///< 2/15 aka 47 is always 1
+    uint32_t unused5   : 5; ///< 2/16-20 aka 48-52 are unused
+    uint32_t long_mode : 1; ///< 2/21 aka 53 is always 1
+    uint32_t unused6   : 10; ///< 2/22-31 aka 54-63 are unused
 }__attribute__((packed)) descriptor_gdt_data_t; ///< struct short hand
+
+_Static_assert(sizeof(descriptor_gdt_data_t) == 8, "descriptor_gdt_data_t size must be 8 bytes");
 
 /**
  * @struct descriptor_gdt
@@ -111,37 +121,37 @@ typedef struct descriptor_gdt {
  * @param  seg segment to build as code
  * @param  DPL privilage level to build as code
  */
-#define DESCRIPTOR_BUILD_GDT_CODE_SEG(seg, DPL) {seg.code.unused1 = 0; \
-                                                 seg.code.unused2 = 0; \
-                                                 seg.code.unused3 = 0; \
-                                                 seg.code.readable = 1; \
-                                                 seg.code.conforming = 0; \
-                                                 seg.code.always1 = 3; \
-                                                 seg.code.dpl = DPL; \
-                                                 seg.code.present = 1; \
-                                                 seg.code.unused4 = 0; \
-                                                 seg.code.avl = 0; \
-                                                 seg.code.long_mode = 1; \
+#define DESCRIPTOR_BUILD_GDT_CODE_SEG(seg, DPL) {seg.code.unused1        = 0; \
+                                                 seg.code.unused2        = 0; \
+                                                 seg.code.unused3        = 0; \
+                                                 seg.code.readable       = 1; \
+                                                 seg.code.conforming     = 0; \
+                                                 seg.code.always1        = 3; \
+                                                 seg.code.dpl            = DPL; \
+                                                 seg.code.present        = 1; \
+                                                 seg.code.unused4        = 0; \
+                                                 seg.code.avl            = 0; \
+                                                 seg.code.long_mode      = 1; \
                                                  seg.code.default_opsize = 0; \
-                                                 seg.code.unused5 = 0; \
-                                                 seg.code.unused6 = 0;}
+                                                 seg.code.unused5        = 0; \
+                                                 seg.code.unused6        = 0;}
 
 /**
  * @brief data segment builder macro
  * @param  seg segment to build as data
  */
-#define DESCRIPTOR_BUILD_GDT_DATA_SEG(seg, DPL) {seg.data.unused1 = 0; \
-                                                 seg.data.unused2 = 0; \
-                                                 seg.data.unused3 = 0; \
-                                                 seg.data.rw = 1; \
-                                                 seg.data.unused4 = 0; \
-                                                 seg.data.always0 = 0; \
-                                                 seg.data.always1 = 1; \
-                                                 seg.data.dpl = DPL; \
-                                                 seg.data.present = 1; \
-                                                 seg.data.unused5 = 0; \
+#define DESCRIPTOR_BUILD_GDT_DATA_SEG(seg, DPL) {seg.data.unused1   = 0; \
+                                                 seg.data.unused2   = 0; \
+                                                 seg.data.unused3   = 0; \
+                                                 seg.data.rw        = 1; \
+                                                 seg.data.unused4   = 0; \
+                                                 seg.data.always0   = 0; \
+                                                 seg.data.always1   = 1; \
+                                                 seg.data.dpl       = DPL; \
+                                                 seg.data.present   = 1; \
+                                                 seg.data.unused5   = 0; \
                                                  seg.data.long_mode = 1; \
-                                                 seg.data.unused6 = 0;}
+                                                 seg.data.unused6   = 0;}
 
 #define IDT_BASE_ADDRESS (1 << 20)
 /*! IDT segment type */
@@ -188,17 +198,17 @@ _Static_assert(sizeof(descriptor_idt_t) == 16, "descriptor_idt_t size must be 16
  * @param[in]  DPL       privilage level of interrupt
  */
 #define DESCRIPTOR_BUILD_IDT_SEG(IE, FUNC_ADDR, SELECTOR, IST, DPL) { \
-            IE.selector = SELECTOR; \
-            IE.ist = IST; \
+            IE.selector  = SELECTOR; \
+            IE.ist       = IST; \
             IE.always0_1 = 0; \
-            IE.type = 0xE; \
+            IE.type      = 0xE; \
             IE.always0_2 = 0; \
-            IE.dpl = DPL; \
-            IE.present = 1; \
-            IE.zero = 0; \
-            IE.offset_1 = (FUNC_ADDR >> 0) & 0xFFFF; \
-            IE.offset_2 = (FUNC_ADDR >> 16) & 0xFFFF; \
-            IE.offset_3 = (FUNC_ADDR >> 32) & 0xFFFFFFFF; \
+            IE.dpl       = DPL; \
+            IE.present   = 1; \
+            IE.zero      = 0; \
+            IE.offset_1  = (FUNC_ADDR >> 0) & 0xFFFF; \
+            IE.offset_2  = (FUNC_ADDR >> 16) & 0xFFFF; \
+            IE.offset_3  = (FUNC_ADDR >> 32) & 0xFFFFFFFF; \
 }
 
 /**

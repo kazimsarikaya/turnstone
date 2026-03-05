@@ -41,6 +41,8 @@ typedef struct interrupt_frame_t {
     uint64_t empty2    : 48; ///< unused value
 } __attribute__((packed)) interrupt_frame_t; ///< struct short hand
 
+_Static_assert(sizeof(interrupt_frame_t) == 0x28, "interrupt_frame_t size must be 0x28");
+
 /**
  * @struct interrupt_frame_ext
  * @brief  interrupt frame for interrupt function
