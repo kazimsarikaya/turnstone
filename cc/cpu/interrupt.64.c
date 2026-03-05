@@ -265,7 +265,10 @@ static void interrupt_print_frame_ext(interrupt_frame_ext_t* frame) {
     PRINTLOG(KERNEL, LOG_ERROR, "\tRCX: 0x%llx", frame->rcx);
     PRINTLOG(KERNEL, LOG_ERROR, "\tRDX: 0x%llx", frame->rdx);
     PRINTLOG(KERNEL, LOG_ERROR, "\tRBP: 0x%llx", frame->rbp);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tRSP: 0x%llx", frame->rsp);
+    // this is ist's rsp. The real rsp is stored in return_rsp, but this one is also useful to see.
+    // first value after generic handler stores registers,
+    // second value ist's rsp value which is at tss descriptor.
+    PRINTLOG(KERNEL, LOG_ERROR, "\tRSP: 0x%llx (0x%llx)", frame->rsp, frame->rsp + sizeof(interrupt_frame_ext_t) - 8);
     PRINTLOG(KERNEL, LOG_ERROR, "\tRSI: 0x%llx", frame->rsi);
     PRINTLOG(KERNEL, LOG_ERROR, "\tRDI: 0x%llx", frame->rdi);
     PRINTLOG(KERNEL, LOG_ERROR, "\tR8: 0x%llx", frame->r8);
@@ -276,11 +279,11 @@ static void interrupt_print_frame_ext(interrupt_frame_ext_t* frame) {
     PRINTLOG(KERNEL, LOG_ERROR, "\tR13: 0x%llx", frame->r13);
     PRINTLOG(KERNEL, LOG_ERROR, "\tR14: 0x%llx", frame->r14);
     PRINTLOG(KERNEL, LOG_ERROR, "\tR15: 0x%llx", frame->r15);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tRIP: 0x%llx", frame->return_rip);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tCS: 0x%x", frame->return_cs);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tRFLAGS: 0x%llx", frame->return_rflags);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tSS: 0x%x", frame->return_ss);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tRSP: 0x%llx", frame->return_rsp);
+    PRINTLOG(KERNEL, LOG_ERROR, "\tReturn RIP: 0x%llx", frame->return_rip);
+    PRINTLOG(KERNEL, LOG_ERROR, "\tReturn CS: 0x%x", frame->return_cs);
+    PRINTLOG(KERNEL, LOG_ERROR, "\tReturn RFLAGS: 0x%llx", frame->return_rflags);
+    PRINTLOG(KERNEL, LOG_ERROR, "\tReturn SS: 0x%x", frame->return_ss);
+    PRINTLOG(KERNEL, LOG_ERROR, "\tReturn RSP: 0x%llx", frame->return_rsp);
     PRINTLOG(KERNEL, LOG_ERROR, "\tINT: 0x%llx", frame->interrupt_number);
     PRINTLOG(KERNEL, LOG_ERROR, "\tERROR: 0x%llx", frame->error_code);
 }
