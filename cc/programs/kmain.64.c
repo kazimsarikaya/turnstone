@@ -285,6 +285,8 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_DEBUG, "Default gdt builded");
     }
 
+    syscall_init_generic_handler();
+
     if(interrupt_handlers_make_readonly() != 0) {
         PRINTLOG(KERNEL, LOG_PANIC, "cannot make interrupt handlers readonly");
         cpu_hlt();
@@ -359,8 +361,6 @@ int8_t kmain64(size_t entry_point) {
     PRINTLOG(KERNEL, LOG_DEBUG, "acpi is initialized");
 
     PRINTLOG(KERNEL, LOG_DEBUG, "tasking is initializing");
-
-    syscall_init();
 
     if(hypervisor_iommu_init() != 0) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor iommu.");

@@ -263,6 +263,7 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
     task_set_current_and_idle_task(smp_ap_boot, stack_base, smp_data->stack_size);
 
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booting local apic id %i", cpu_id, local_apic_id);
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Stack Base: 0x%llx Stack Size: 0x%llx", cpu_id, stack_base, smp_data->stack_size);
 
     char_t * test_data = memory_malloc(sizeof(char_t*) * 32);
 
@@ -290,11 +291,10 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     cpu_sti();
 
-#if 0
     frame_t* user_code_frames = NULL;
 
     if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
-                                                      2,
+                                                      18,
                                                       FRAME_ALLOCATION_TYPE_BLOCK,
                                                       &user_code_frames,
                                                       NULL) != 0) {
@@ -303,62 +303,66 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
         cpu_hlt();
     }
 
-    uint64_t user_code_fa = user_code_frames->frame_address;
-    uint64_t user_code_va = 8ULL << 40 | user_code_fa;
-    uint64_t user_stack_fa = user_code_fa + 0x1000;
-    uint64_t user_stack_va = 8ULL << 40 | user_stack_fa;
+    uint64_t user_code_fa  = user_code_frames->frame_address;
+    uint64_t user_code_va  = user_code_fa;
+    uint64_t user_stack_fa = user_code_fa + 0x2000;
+    uint64_t user_stack_va = user_stack_fa;
 
-    memory_paging_add_page_ext(NULL,
-                               user_code_va, user_code_fa,
-                               MEMORY_PAGING_PAGE_TYPE_4K);
+    for(int32_t i = 0; i < 2; i++) {
+        memory_paging_add_page_ext(NULL,
+                                   user_code_va + i * FRAME_SIZE, user_code_fa + i * FRAME_SIZE,
+                                   MEMORY_PAGING_PAGE_TYPE_4K);
+    }
 
-    memory_paging_add_page_ext(NULL,
-                               user_stack_va, user_stack_fa,
-                               MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    for(int32_t i = 0; i < 16; i++) {
+        memory_paging_add_page_ext(NULL,
+                                   user_stack_va + i * FRAME_SIZE, user_stack_fa + i * FRAME_SIZE,
+                                   MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    }
 
-    memory_memclean((uint8_t*)user_code_va, FRAME_SIZE);
-    memory_memclean((uint8_t*)user_stack_va, FRAME_SIZE);
+    memory_memclean((uint8_t*)user_code_va, 2 * FRAME_SIZE);
+    memory_memclean((uint8_t*)user_stack_va, 16 * FRAME_SIZE);
 
     uint8_t* user_code = (uint8_t*)user_code_va;
     /*
      * user space example code
      * byte array of this assembly
      * start:
-     *    mov $1, %rax
+     *    mov $2, %rax
+     *    xor %rdi, %rdi
      *    syscallq
      *    jmp start
      */
-    user_code[0] = 0x48;
-    user_code[1] = 0xc7;
-    user_code[2] = 0xc0;
-    user_code[3] = 0x00;
-    user_code[4] = 0x00;
-    user_code[5] = 0x00;
-    user_code[6] = 0x00;
-    user_code[7] = 0x0f;
-    user_code[8] = 0x05;
-    user_code[9] = 0xeb;
-    user_code[10] = 0xf5;
+    user_code[0]  = 0x48; user_code[1]  = 0xc7; user_code[2]  = 0xc0;
+    user_code[3]  = 0x02; user_code[4]  = 0x00; user_code[5]  = 0x00; user_code[6] = 0x00;
+    user_code[7]  = 0x48; user_code[8]  = 0x31; user_code[9]  = 0xff;
+    user_code[10] = 0x0f; user_code[11]  = 0x05;
+    user_code[12] = 0xeb; user_code[13] = 0xf2;
 
-    memory_paging_toggle_attributes(user_code_va, MEMORY_PAGING_PAGE_TYPE_READONLY);
-    memory_paging_set_user_accessible(user_code_va);
-    memory_paging_clear_page(user_code_va, MEMORY_PAGING_CLEAR_TYPE_DIRTY | MEMORY_PAGING_CLEAR_TYPE_ACCESSED);
+    for(int32_t i = 0; i < 2; i++) {
+        memory_paging_toggle_attributes(user_code_va + i * FRAME_SIZE, MEMORY_PAGING_PAGE_TYPE_READONLY);
+        memory_paging_set_user_accessible(user_code_va + i * FRAME_SIZE);
+        memory_paging_clear_page(user_code_va + i * FRAME_SIZE, MEMORY_PAGING_CLEAR_TYPE_DIRTY | MEMORY_PAGING_CLEAR_TYPE_ACCESSED);
+    }
+
+    for(int32_t i = 0; i < 16; i++) {
+        memory_paging_set_user_accessible(user_stack_va + i * FRAME_SIZE);
+        memory_paging_clear_page(user_stack_va + i * FRAME_SIZE, MEMORY_PAGING_CLEAR_TYPE_DIRTY | MEMORY_PAGING_CLEAR_TYPE_ACCESSED);
+    }
 
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booted", cpu_id);
 
-    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Jumping to user code code at 0x%llx stack at 0x%llx", cpu_id, user_code_va, user_stack_va);
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Jumping to user code code at 0x%llx stack at 0x%llx", cpu_id, user_code_va, user_stack_va + 16 * 0x1000 - 0x10);
 
     // jump user mode with sysretq
     asm volatile (
         "xor %%rbp, %%rbp\n"
         "mov %%rax, %%rsp\n"
-        "mov $0x200, %%r11\n"
+        "mov $0x202, %%r11\n"
+        "swapgs\n"
         "sysretq\n"
-        : : "a" (user_stack_va + 0x1000 - 0x10), "c" (user_code_va)
+        : : "a" (user_stack_va + 16 * 0x1000 - 0x10), "c" (user_code_va)
         );
-#endif
-
-    task_exit(0);
 
     while(true) { // never reach here
         cpu_hlt();

@@ -26,7 +26,7 @@ descriptor_register_t* IDT_REGISTER = NULL;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 uint8_t descriptor_build_gdt_register(void){
-    uint16_t gdt_size = sizeof(descriptor_gdt_t) * 7;
+    uint16_t gdt_size      = sizeof(descriptor_gdt_t) * 7;
     descriptor_gdt_t* gdts = memory_malloc(gdt_size);
     if(gdts == NULL) {
         return -1;
@@ -34,6 +34,13 @@ uint8_t descriptor_build_gdt_register(void){
     DESCRIPTOR_BUILD_GDT_NULL_SEG(gdts[0]);
     DESCRIPTOR_BUILD_GDT_CODE_SEG(gdts[1], DPL_KERNEL);
     DESCRIPTOR_BUILD_GDT_DATA_SEG(gdts[2], DPL_KERNEL);
+    // because of sysretq, user code segment selector
+    // must be 0x30 and user data segment selector must be 0x28,
+    // msr_star's upper 16 bits (48:63) are sysretq's cs selector.
+    // from that value cs = sysretq_cs + 0x16, ss = sysretq_cs + 0x08.
+    // so they are in reverse order in gdt,
+    // otherwise sysretq will cause general protection fault when
+    // returning to user space
     DESCRIPTOR_BUILD_GDT_DATA_SEG(gdts[5], DPL_USER);
     DESCRIPTOR_BUILD_GDT_CODE_SEG(gdts[6], DPL_USER);
 
@@ -47,7 +54,7 @@ uint8_t descriptor_build_gdt_register(void){
     }
 
     GDT_REGISTER->limit = gdt_size - 1;
-    GDT_REGISTER->base = (size_t)gdts;
+    GDT_REGISTER->base  = (size_t)gdts;
 
     __asm__ __volatile__ ("lgdt (%%rax)\n"
                           "push $0x08\n"
@@ -66,7 +73,7 @@ uint8_t descriptor_build_gdt_register(void){
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 uint8_t descriptor_build_ap_descriptors_register(void){
 
-    uint16_t gdt_size = sizeof(descriptor_gdt_t) * 7;
+    uint16_t gdt_size      = sizeof(descriptor_gdt_t) * 7;
     descriptor_gdt_t* gdts = memory_malloc(gdt_size);
     if(gdts == NULL) {
         return -1;
@@ -74,6 +81,13 @@ uint8_t descriptor_build_ap_descriptors_register(void){
     DESCRIPTOR_BUILD_GDT_NULL_SEG(gdts[0]);
     DESCRIPTOR_BUILD_GDT_CODE_SEG(gdts[1], DPL_KERNEL);
     DESCRIPTOR_BUILD_GDT_DATA_SEG(gdts[2], DPL_KERNEL);
+    // because of sysretq, user code segment selector
+    // must be 0x30 and user data segment selector must be 0x28,
+    // msr_star's upper 16 bits (48:63) are sysretq's cs selector.
+    // from that value cs = sysretq_cs + 0x16, ss = sysretq_cs + 0x08.
+    // so they are in reverse order in gdt,
+    // otherwise sysretq will cause general protection fault when
+    // returning to user space
     DESCRIPTOR_BUILD_GDT_DATA_SEG(gdts[5], DPL_USER);
     DESCRIPTOR_BUILD_GDT_CODE_SEG(gdts[6], DPL_USER);
 
@@ -86,7 +100,7 @@ uint8_t descriptor_build_ap_descriptors_register(void){
     }
 
     gdtr->limit = gdt_size - 1;
-    gdtr->base = (size_t)gdts;
+    gdtr->base  = (size_t)gdts;
 
     __asm__ __volatile__ ("lgdt (%%rax)\n"
                           "push $0x08\n"
@@ -100,7 +114,7 @@ uint8_t descriptor_build_ap_descriptors_register(void){
 
 
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
-    uint64_t stack_size = kernel->program_stack_size;
+    uint64_t stack_size      = kernel->program_stack_size;
 
 
     uint64_t frame_count = 10 * stack_size / FRAME_SIZE;
@@ -120,6 +134,8 @@ uint8_t descriptor_build_ap_descriptors_register(void){
     uint64_t stack_bottom = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
 
     memory_paging_add_va_for_frame(stack_bottom, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+    memory_memclean((void*)stack_bottom, frame_count * FRAME_SIZE);
 
 
     tss_t* tss = memory_malloc_ext(NULL, sizeof(tss_t), 0x1000);
@@ -144,7 +160,7 @@ uint8_t descriptor_build_ap_descriptors_register(void){
 
     descriptor_tss_t* d_tss = (descriptor_tss_t*)&gdts[3];
 
-    size_t tmp_selector = (size_t)d_tss - (size_t)gdts;
+    size_t tmp_selector   = (size_t)d_tss - (size_t)gdts;
     uint16_t tss_selector = (uint16_t)tmp_selector;
 
     uint32_t tss_limit = sizeof(tss_t) - 1;
@@ -154,6 +170,15 @@ uint8_t descriptor_build_ap_descriptors_register(void){
         "ltr %0\n"
         : : "r" (tss_selector)
         );
+
+    interrupt_ist_redirect_main_interrupts(7);
+    interrupt_ist_redirect_interrupt(0xd, 6);
+    interrupt_ist_redirect_interrupt(0xe, 5);
+
+    // the functions above will open the interrupts,
+    // but we don't want that before ap booting,
+    // so we will close them here
+    cpu_cli();
 
     return 0;
 }
@@ -185,7 +210,7 @@ uint8_t descriptor_build_idt_register(void){
     }
 
     IDT_REGISTER->limit = idt_size - 1;
-    IDT_REGISTER->base = IDT_BASE_ADDRESS;
+    IDT_REGISTER->base  = IDT_BASE_ADDRESS;
 
     __asm__ __volatile__ ("lidt (%%rax)\n" : : "a" (IDT_REGISTER));
 

@@ -13,6 +13,7 @@ cat <<EOF
 #include <types.h>
 #include <utils.h>
 #include <cpu/interrupt.h>
+#include <cpu/syscall.h>
 #include <cpu/cpu_registers.h>
 
 _Static_assert(sizeof_field(cpu_registers_t, avx512f) == 0x2000, "cpu_registers_t.avx512f size must be 0x2000 bytes");
@@ -31,6 +32,76 @@ static interrupt_generic_handler_f interrupt_generic_handler_handle __attribute_
 
 void interrupt_handlers_set_generic_handler(interrupt_generic_handler_f handler) {
     interrupt_generic_handler_handle = handler;
+}
+
+static syscall_generic_handler_f syscall_generic_handler_handle __attribute__((used)) = 0;
+
+void syscall_handlers_set_generic_handler(syscall_generic_handler_f handler) {
+    syscall_generic_handler_handle = handler;
+}
+
+__attribute__((naked, no_stack_protector))
+void syscall_handler(void) {
+    asm volatile (
+        "swapgs\n"
+        "subq \$0x2080, %rsp\n"
+        "push %r15\n"
+        "push %r14\n"
+        "push %r13\n"
+        "push %r12\n"
+        "push %r11\n"
+        "push %r10\n"
+        "push %r9\n"
+        "push %r8\n"
+        "push %rbp\n"
+        "push %rdi\n"
+        "push %rsi\n"
+        "push %rdx\n"
+        "push %rcx\n"
+        "push %rbx\n"
+        "push %rax\n"
+        "mov %cr3, %rax\n"
+        "push %rax\n"
+        "push %rsp\n"
+        "mov %rsp, %rdi\n"
+        "movq interrupt_handlers_kernel_cr3_value(%rip), %rax\n"
+        "mov %cr3, %rdx\n"
+        "cmp %rax, %rdx\n"
+        "je 1f\n"
+        "mov %rax, %cr3\n"
+        "1:\n"
+        "movq syscall_generic_handler_handle(%rip), %rax\n"
+        "subq \$8, %rsp\n" // align stack to 16 bytes for call
+        "sti\n" // enable interrupts before calling syscall handler to allow nested interrupts during syscalls
+        "call *%rax\n"
+        "cli\n" // disable interrupts after syscall handler returns
+        "add \$8, %rsp\n" // restore stack after call
+        "pop %rsp\n"
+        "pop %rax\n"
+        "mov %cr3, %rbx\n"
+        "cmp %rax, %rbx\n"
+        "jne 1f\n"
+        "mov %rax, %cr3\n"
+        "1:\n"
+        "pop %rax\n"
+        "pop %rbx\n"
+        "pop %rcx\n"
+        "pop %rdx\n"
+        "pop %rsi\n"
+        "pop %rdi\n"
+        "pop %rbp\n"
+        "pop %r8\n"
+        "pop %r9\n"
+        "pop %r10\n"
+        "pop %r11\n"
+        "pop %r12\n"
+        "pop %r13\n"
+        "pop %r14\n"
+        "pop %r15\n"
+        "add \$0x2080, %rsp\n"
+        "swapgs\n"
+        "sysretq\n"
+        );
 }
 
 EOF
