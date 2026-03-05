@@ -190,6 +190,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     memory_paging_add_va_for_frame(stack_bottom, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
+    memory_memclean((void*)stack_bottom, frame_count * FRAME_SIZE);
+
     PRINTLOG(TASKING, LOG_TRACE, "for tasking frames 0x%llx with count 0x%llx mapped to 0x%llx",  stack_frames->frame_address, stack_frames->frame_count, stack_bottom);
 
     tss->ist7 = stack_bottom + stack_size - 0x10;
@@ -398,7 +400,6 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     interrupt_ist_redirect_main_interrupts(7);
     interrupt_ist_redirect_interrupt(0xd, 6);
     interrupt_ist_redirect_interrupt(0xe, 5);
-    // interrupt_ist_redirect_interrupt(0x20, 1);
 
     cpu_state->current_task = kernel_task;
 
