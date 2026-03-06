@@ -196,10 +196,7 @@ extern efi_boot_services_t* BS;
  * @param[out] alloc_list_size size of allocation list. (ignored)
  * @return 0 on success. error code otherwise.
  */
-int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size);
-
-
-int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size) {
+static int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size) {
     UNUSED(self);
     UNUSED(fa_type);
     UNUSED(alloc_list_size);
@@ -238,9 +235,6 @@ int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint64_
 
         return -1;
     }
-
-    (*fs)->frame_address = frame_address;
-    (*fs)->frame_count   = count;
 
     (*fs)->frame_address = frame_address;
     (*fs)->frame_count   = count;

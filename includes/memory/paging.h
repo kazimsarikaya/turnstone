@@ -70,8 +70,8 @@ typedef struct memory_page_table_t {
 
 typedef enum memory_paging_internal_frame_init_state_t {
     MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_UNINITIALIZED = 0,
-    MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING = 1,
-    MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZED = 2,
+    MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING  = 1,
+    MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZED   = 2,
 } memory_paging_internal_frame_init_state_t;
 
 typedef struct memory_page_table_context_t {
@@ -91,18 +91,18 @@ typedef struct memory_page_table_context_t {
  * @brief page type enum.
  */
 typedef enum memory_paging_page_type_e {
-    MEMORY_PAGING_PAGE_TYPE_UNKNOWN= 0, ///< 4k page
-    MEMORY_PAGING_PAGE_TYPE_4K = 1 << 0, ///< 4k page
-    MEMORY_PAGING_PAGE_TYPE_2M = 1 << 1, ///< 2m page aka hugepage
-    MEMORY_PAGING_PAGE_TYPE_1G = 1 << 2, ///< 1g page aka big hugepage
-    MEMORY_PAGING_PAGE_TYPE_READONLY = 1 << 4, ///< read only
-    MEMORY_PAGING_PAGE_TYPE_NOEXEC = 1 << 5, ///< no executable
+    MEMORY_PAGING_PAGE_TYPE_UNKNOWN         = 0, ///< 4k page
+    MEMORY_PAGING_PAGE_TYPE_4K              = 1 << 0, ///< 4k page
+    MEMORY_PAGING_PAGE_TYPE_2M              = 1 << 1, ///< 2m page aka hugepage
+    MEMORY_PAGING_PAGE_TYPE_1G              = 1 << 2, ///< 1g page aka big hugepage
+    MEMORY_PAGING_PAGE_TYPE_READONLY        = 1 << 4, ///< read only
+    MEMORY_PAGING_PAGE_TYPE_NOEXEC          = 1 << 5, ///< no executable
     MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE = 1 << 6, ///< no executable
-    MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH = 1 << 7, ///< write through
-    MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE = 1 << 8, ///< no cache
-    MEMORY_PAGING_PAGE_TYPE_GLOBAL = 1 << 9, ///< global
-    MEMORY_PAGING_PAGE_TYPE_INTERNAL = 1 << 15, ///< no executable
-    MEMORY_PAGING_PAGE_TYPE_WILL_DELETED = 1 << 16, ///< no executable
+    MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH   = 1 << 7, ///< write through
+    MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE   = 1 << 8, ///< no cache
+    MEMORY_PAGING_PAGE_TYPE_GLOBAL          = 1 << 9, ///< global
+    MEMORY_PAGING_PAGE_TYPE_INTERNAL        = 1 << 15, ///< no executable
+    MEMORY_PAGING_PAGE_TYPE_WILL_DELETED    = 1 << 16, ///< no executable
 } memory_paging_page_type_t; ///< short hand for enum
 
 /*! memory alignment for a page (4k) */
@@ -129,26 +129,20 @@ memory_page_table_context_t* memory_paging_switch_table(const memory_page_table_
 
 /**
  * @brief creates virtual address frame mapping with adding page
- * @param  heap            the heap where variables will be created in
  * @param  p4              p4 page table
  * @param  virtual_address virtual start address of page
  * @param  frame_address    frame address of page links
  * @param  type            page type, see also \ref memory_paging_page_type_t
  * @return  0 if successed
- *
- * if heap is NULL, the pages created in default heap
  */
 int8_t memory_paging_add_page_ext(memory_page_table_context_t* p4,
                                   uint64_t virtual_address, uint64_t frame_address,
                                   memory_paging_page_type_t type);
-/*! add virtual address va to pt page table with frame address fa and page type t uses default heap for mallocs */
-#define memory_paging_add_page_with_p4(pt, va, fa, t)  memory_paging_add_page_ext(pt, va, fa, t)
 /*! add va and fa to defeault p4 table*/
 #define memory_paging_add_page(va, fa, t)  memory_paging_add_page_ext(NULL, va, fa, t)
 
-int8_t memory_paging_delete_page_ext_with_heap(memory_page_table_context_t* p4, uint64_t virtual_address, uint64_t* frame_address);
-#define memory_paging_delete_page_ext(p4, va, faptr) memory_paging_delete_page_ext_with_heap(p4, va, faptr)
-#define memory_paging_delete_page(va, faptr) memory_paging_delete_page_ext_with_heap(NULL, va, faptr)
+int8_t memory_paging_delete_page_ext(memory_page_table_context_t* p4, uint64_t virtual_address, uint64_t* frame_address);
+#define memory_paging_delete_page(va, faptr) memory_paging_delete_page_ext(NULL, va, faptr)
 
 memory_page_table_t* memory_paging_clone_pagetable_ext(memory_page_table_context_t* table_context);
 #define memory_paging_clone_pagetable() memory_paging_clone_pagetable_ext(NULL)
@@ -173,8 +167,8 @@ int8_t memory_paging_set_user_accessible_ext(memory_page_table_context_t* table_
 #define memory_paging_set_user_accessible(va) memory_paging_set_user_accessible_ext(NULL, va)
 
 typedef enum memory_paging_clear_type_t {
-    MEMORY_PAGING_CLEAR_TYPE_DIRTY =1,
-    MEMORY_PAGING_CLEAR_TYPE_ACCESSED=2,
+    MEMORY_PAGING_CLEAR_TYPE_DIRTY    = 1,
+    MEMORY_PAGING_CLEAR_TYPE_ACCESSED = 2,
 } memory_paging_clear_type_t;
 
 int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, uint64_t virtual_address, memory_paging_clear_type_t type);

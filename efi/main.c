@@ -1272,19 +1272,6 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
 
     PRINTLOG(EFI, LOG_INFO, "spool address 0x%llx", spool_address);
 
-    uint64_t page_table_helper_frames = 0;
-    uint64_t page_frame_helper_size   = 4 * FRAME_SIZE;
-
-    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, page_frame_helper_size / FRAME_SIZE, &page_table_helper_frames);
-
-    if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot allocate page_frame_helper memory");
-
-        goto catch_efi_error;
-    }
-
-    memory_memclean((void*)page_table_helper_frames, page_frame_helper_size);
-
     ctx->program_start_physical = requested_program_base + FRAME_SIZE;
     ctx->program_start_virtual  = (2 << 20) + FRAME_SIZE;
 
@@ -1322,8 +1309,6 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     program_header->program_stack_physical_address = stack_address;
     program_header->program_stack_virtual_address  = (1 << 30) - stack_size;
     program_header->program_stack_size             = stack_size;
-
-    ctx->page_table_helper_frames = page_table_helper_frames;
 
     PRINTLOG(EFI, LOG_INFO, "program will be dumped into memory at %p", program_data);
 
