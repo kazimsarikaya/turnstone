@@ -151,7 +151,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     local_apic_id_is_valid           = true;
 
 
-    descriptor_gdt_t* gdts = (descriptor_gdt_t*)GDT_REGISTER->base;
+    descriptor_register_t gdtr = descriptor_get_gdt_register();
+    descriptor_gdt_t* gdts     = (descriptor_gdt_t*)gdtr.base;
 
     descriptor_tss_t* d_tss = (descriptor_tss_t*)&gdts[3];
 

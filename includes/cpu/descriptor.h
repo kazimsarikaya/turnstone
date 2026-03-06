@@ -219,35 +219,34 @@ _Static_assert(sizeof(descriptor_idt_t) == 16, "descriptor_idt_t size must be 16
 typedef struct descriptor_register {
     uint16_t limit; ///< size of table-1
     uint64_t base; ///< where is table?
-}__attribute__((packed)) descriptor_register_t; ///< struct short hand
+}__attribute__((packed, aligned(64))) descriptor_register_t; ///< struct short hand
 
-/**
- * @brief static address of gdt for lgdtr/sgdtr
- */
-extern descriptor_register_t* GDT_REGISTER;
+descriptor_register_t descriptor_get_gdt_register(void);
 
-/**
- * @brief static address of idt for lidtr/sidtr
- */
-extern descriptor_register_t* IDT_REGISTER;
+descriptor_register_t descriptor_get_idt_register(void);
 
 /**
  * @brief builds a default gdt
  * @return 0 at success.
  */
-uint8_t descriptor_build_gdt_register(void);
+int8_t descriptor_build_gdt_register(void);
 
 /**
  * @brief builds a default idt
  * @return 0 at success.
  */
-uint8_t descriptor_build_idt_register(void);
+int8_t descriptor_build_idt_register(void);
 
 /**
  * @brief builds gdt and tss for application processor
  * @return 0 at success.
  */
-uint8_t descriptor_build_ap_descriptors_register(void);
+int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
+                                                uint64_t* out_gdt_size,
+                                                uint64_t* tss_fa_location,
+                                                uint64_t* out_tss_size,
+                                                uint64_t* stack_bottom_fa_location,
+                                                uint64_t* out_stack_size);
 
 #ifdef __cplusplus
 }

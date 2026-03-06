@@ -51,7 +51,8 @@ int8_t interrupt_init(void) {
     interrupt_handlers_set_kernel_cr3_value(current_cr3);
     interrupt_handlers_set_generic_handler(interrupt_generic_handler);
 
-    descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
+    descriptor_register_t idt_reg = descriptor_get_idt_register();
+    descriptor_idt_t* idt_table   = (descriptor_idt_t*)idt_reg.base;
 
     interrupt_register_dummy_handlers(idt_table); // 32-255 dummy handlers
 
@@ -121,7 +122,8 @@ int8_t interrupt_init(void) {
 
 int8_t interrupt_ist_redirect_main_interrupts(uint8_t ist) {
     cpu_cli();
-    descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
+    descriptor_register_t idt_reg = descriptor_get_idt_register();
+    descriptor_idt_t* idt_table   = (descriptor_idt_t*)idt_reg.base;
 
     for(int32_t i = 0; i < 32; i++) {
         idt_table[i].ist = ist;
@@ -134,7 +136,8 @@ int8_t interrupt_ist_redirect_main_interrupts(uint8_t ist) {
 
 int8_t interrupt_ist_redirect_interrupt(uint8_t vec, uint8_t ist) {
     cpu_cli();
-    descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
+    descriptor_register_t idt_reg = descriptor_get_idt_register();
+    descriptor_idt_t* idt_table   = (descriptor_idt_t*)idt_reg.base;
 
     idt_table[vec].ist = ist;
 
@@ -286,6 +289,7 @@ static void interrupt_print_frame_ext(interrupt_frame_ext_t* frame) {
     PRINTLOG(KERNEL, LOG_ERROR, "\tReturn RSP: 0x%llx", frame->return_rsp);
     PRINTLOG(KERNEL, LOG_ERROR, "\tINT: 0x%llx", frame->interrupt_number);
     PRINTLOG(KERNEL, LOG_ERROR, "\tERROR: 0x%llx", frame->error_code);
+    PRINTLOG(KERNEL, LOG_ERROR, "\tCR3: 0x%llx", frame->cr3);
 }
 
 static boolean_t interrupt_xsave_mask_memorized = false;

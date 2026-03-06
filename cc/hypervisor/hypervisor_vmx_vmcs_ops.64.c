@@ -29,8 +29,8 @@ static int8_t vmx_validate_capability(uint64_t target, uint32_t allowed0, uint32
     int idx = 0;
 
     for (idx = 0; idx < 32; idx++) {
-        uint32_t mask = 1 << idx;
-        int target_is_set = !!(target & mask);
+        uint32_t mask       = 1 << idx;
+        int target_is_set   = !!(target & mask);
         int allowed0_is_set = !!(allowed0 & mask);
         int allowed1_is_set = !!(allowed1 & mask);
 
@@ -47,8 +47,8 @@ static uint32_t vmx_fix_reserved_1_bits(uint32_t target, uint32_t allowed0) {
     int idx = 0;
 
     for (idx = 0; idx < 32; idx++) {
-        uint32_t mask = BIT(idx);
-        int target_is_set = !!(target & mask);
+        uint32_t mask       = BIT(idx);
+        int target_is_set   = !!(target & mask);
         int allowed0_is_set = !!(allowed0 & mask);
 
         if (allowed0_is_set && !target_is_set) {
@@ -63,8 +63,8 @@ static uint32_t vmx_fix_reserved_0_bits(uint32_t target, uint32_t allowed1) {
     int idx = 0;
 
     for (idx = 0; idx < 32; idx++) {
-        uint32_t mask = BIT(idx);
-        int target_is_set = !!(target & mask);
+        uint32_t mask       = BIT(idx);
+        int target_is_set   = !!(target & mask);
         int allowed1_is_set = !!(allowed1 & mask);
 
         if (!allowed1_is_set && target_is_set) {
@@ -76,9 +76,9 @@ static uint32_t vmx_fix_reserved_0_bits(uint32_t target, uint32_t allowed1) {
 }
 
 static int8_t hypervisor_vmx_vmcs_prepare_host_state(hypervisor_vm_t* vm) {
-    uint64_t cr0 = cpu_read_cr0().bits;
-    uint64_t cr3 = cpu_read_cr3();
-    uint64_t cr4 = cpu_read_cr4().bits;
+    uint64_t cr0  = cpu_read_cr0().bits;
+    uint64_t cr3  = cpu_read_cr3();
+    uint64_t cr4  = cpu_read_cr4().bits;
     uint64_t efer = cpu_read_msr(CPU_MSR_EFER);
 
     vmx_write(VMX_HOST_CR0, cr0);
@@ -98,17 +98,20 @@ static int8_t hypervisor_vmx_vmcs_prepare_host_state(hypervisor_vm_t* vm) {
     vmx_write(VMX_HOST_IA32_SYSENTER_ESP, 0x0);
     vmx_write(VMX_HOST_IA32_SYSENTER_EIP, 0x0);
 
-    vmx_write(VMX_HOST_IDTR_BASE, IDT_REGISTER->base);
-    vmx_write(VMX_HOST_GDTR_BASE, GDT_REGISTER->base);
+    descriptor_register_t idt_reg = descriptor_get_idt_register();
+    descriptor_register_t gdt_reg = descriptor_get_gdt_register();
+
+    vmx_write(VMX_HOST_IDTR_BASE, idt_reg.base);
+    vmx_write(VMX_HOST_GDTR_BASE, gdt_reg.base);
     vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
     vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
 
-    descriptor_gdt_t* gdts = (descriptor_gdt_t*)GDT_REGISTER->base;
-    descriptor_tss_t* tss = (descriptor_tss_t*)&gdts[KERNEL_TSS_SEG / 8];
+    descriptor_gdt_t* gdts = (descriptor_gdt_t*)gdt_reg.base;
+    descriptor_tss_t* tss  = (descriptor_tss_t*)&gdts[KERNEL_TSS_SEG / 8];
 
     uint64_t tss_base = tss->base_address2;
     tss_base <<= 24;
-    tss_base |= tss->base_address1;
+    tss_base  |= tss->base_address1;
 
 
     vmx_write(VMX_HOST_TR_BASE, tss_base);
@@ -164,13 +167,13 @@ static int8_t hypervisor_vmx_vmcs_prepare_guest_state(void) {
     uint64_t cr0_fixed = cpu_read_msr(CPU_MSR_IA32_VMX_CR0_FIXED0);
     // cr0_fixed |= cpu_read_msr(CPU_MSR_IA32_VMX_CR0_FIXED1);
     cpu_reg_cr0_t cr0 = { .bits = cr0_fixed };
-    cr0.fields.protection_enabled = 1;
+    cr0.fields.protection_enabled  = 1;
     cr0.fields.monitor_coprocessor = 1;
-    cr0.fields.emulation = 0;
-    cr0.fields.task_switched = 0;
-    cr0.fields.numeric_error = 1;
-    cr0.fields.write_protect = 1;
-    cr0.fields.paging = 1;
+    cr0.fields.emulation           = 0;
+    cr0.fields.task_switched       = 0;
+    cr0.fields.numeric_error       = 1;
+    cr0.fields.write_protect       = 1;
+    cr0.fields.paging              = 1;
 
     vmx_write(VMX_GUEST_CR0, cr0.bits);
 
@@ -180,10 +183,10 @@ static int8_t hypervisor_vmx_vmcs_prepare_guest_state(void) {
     // cr4_fixed |= cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED1);
     cpu_reg_cr4_t cr4 = { .bits = cr4_fixed };
 
-    cr4.fields.physical_address_extension = 1;
-    cr4.fields.os_fx_support = 1;
+    cr4.fields.physical_address_extension    = 1;
+    cr4.fields.os_fx_support                 = 1;
     cr4.fields.os_unmasked_exception_support = 1;
-    cr4.fields.page_global_enable = 1;
+    cr4.fields.page_global_enable            = 1;
 
     vmx_write(VMX_GUEST_CR4, cr4.bits);
 
@@ -207,8 +210,8 @@ static int8_t hypervisor_vmx_vmcs_prepare_pinbased_control(void){
     uint32_t pinbased_vm_execution_ctrl = 0;
     // External Interrupt causes a VM EXIT
     pinbased_vm_execution_ctrl |= 1;
-    pinbased_vm_execution_ctrl = vmx_fix_reserved_1_bits(pinbased_vm_execution_ctrl,
-                                                         pinbased_msr_eax);
+    pinbased_vm_execution_ctrl  = vmx_fix_reserved_1_bits(pinbased_vm_execution_ctrl,
+                                                          pinbased_msr_eax);
     pinbased_vm_execution_ctrl = vmx_fix_reserved_0_bits(pinbased_vm_execution_ctrl,
                                                          pinbased_msr_edx);
 
@@ -235,7 +238,7 @@ static int8_t hypervisor_vmx_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, bool
 
 
     uint32_t byte_index = msr / 8;
-    uint8_t bit_index = msr % 8;
+    uint8_t bit_index   = msr % 8;
     bitmap[byte_index] |= BIT(bit_index);
     return 0;
 }
@@ -371,7 +374,7 @@ static int8_t hypervisor_vmx_vmcs_prepare_procbased_control(hypervisor_vm_t* vm)
 
 static void hypervisor_vmx_io_bitmap_set_port(uint8_t * bitmap, uint16_t port) {
     uint16_t byte_index = port >> 3;
-    uint8_t bit_index = port & 0x7;
+    uint8_t bit_index   = port & 0x7;
     bitmap[byte_index] |= 1 << bit_index;
 }
 
@@ -428,8 +431,8 @@ static int8_t hypervisor_vmx_vmcs_prepare_vm_exit_and_entry_control(hypervisor_v
     vm_exit_ctls |= 1 << 15; // ACK external interrupts.
     vm_exit_ctls |= 1 << 20; // Save IA32_EFER on vm-exit
     vm_exit_ctls |= 1 << 21; // Load IA32_EFER on vm-exit
-    vm_exit_ctls = vmx_fix_reserved_1_bits(vm_exit_ctls, vm_exit_msr_eax);
-    vm_exit_ctls = vmx_fix_reserved_0_bits(vm_exit_ctls, vm_exit_msr_edx);
+    vm_exit_ctls  = vmx_fix_reserved_1_bits(vm_exit_ctls, vm_exit_msr_eax);
+    vm_exit_ctls  = vmx_fix_reserved_0_bits(vm_exit_ctls, vm_exit_msr_edx);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "vm_exit_ctls:0x%08x resv 1:0x%08x resv 0:0x%08x",
              vm_exit_ctls, vm_exit_msr_eax, vm_exit_msr_edx);
@@ -437,11 +440,11 @@ static int8_t hypervisor_vmx_vmcs_prepare_vm_exit_and_entry_control(hypervisor_v
     vmx_write(VMX_CTLS_VM_EXIT, vm_exit_ctls);
 
     uint32_t predefined_msrs[0]; // = {IA32_EFER_MSR};
-    uint32_t nr_msrs = sizeof(predefined_msrs) / sizeof(uint32_t);
-    uint32_t vm_exit_load_msr_count = nr_msrs;
+    uint32_t nr_msrs                 = sizeof(predefined_msrs) / sizeof(uint32_t);
+    uint32_t vm_exit_load_msr_count  = nr_msrs;
     uint32_t vm_exit_store_msr_count = nr_msrs;
 
-    frame_t* vm_exit_load_msr_region = NULL;
+    frame_t* vm_exit_load_msr_region  = NULL;
     frame_t* vm_exit_store_msr_region = NULL;
 
     uint64_t vm_exit_load_msr_region_va = hypervisor_allocate_region(&vm_exit_load_msr_region, FRAME_SIZE);
@@ -464,18 +467,18 @@ static int8_t hypervisor_vmx_vmcs_prepare_vm_exit_and_entry_control(hypervisor_v
 
     for (uint32_t index = 0; index < nr_msrs; index++) {
         vmx_vmcs_msr_blob_t * vmcs_msr = ((vmx_vmcs_msr_blob_t *)vm_exit_store_msr_region_va) + index;
-        vmcs_msr->index = predefined_msrs[index];
+        vmcs_msr->index    = predefined_msrs[index];
         vmcs_msr->reserved = 0;
         uint64_t vmcs_msr_value = cpu_read_msr(vmcs_msr->index);
         vmcs_msr->msr_eax = vmcs_msr_value & 0xffffffff;
         vmcs_msr->msr_edx = vmcs_msr_value >> 32;
 
-        vmcs_msr = ((vmx_vmcs_msr_blob_t *)vm_exit_load_msr_region_va) + index;
-        vmcs_msr->index = predefined_msrs[index];
+        vmcs_msr           = ((vmx_vmcs_msr_blob_t *)vm_exit_load_msr_region_va) + index;
+        vmcs_msr->index    = predefined_msrs[index];
         vmcs_msr->reserved = 0;
-        vmcs_msr_value = cpu_read_msr(vmcs_msr->index);
-        vmcs_msr->msr_eax = vmcs_msr_value & 0xffffffff;
-        vmcs_msr->msr_edx = vmcs_msr_value >> 32;
+        vmcs_msr_value     = cpu_read_msr(vmcs_msr->index);
+        vmcs_msr->msr_eax  = vmcs_msr_value & 0xffffffff;
+        vmcs_msr->msr_edx  = vmcs_msr_value >> 32;
     }
 
     vmx_write(VMX_CTLS_VM_EXIT_MSR_STORE_COUNT, vm_exit_store_msr_count);
@@ -492,8 +495,8 @@ static int8_t hypervisor_vmx_vmcs_prepare_vm_exit_and_entry_control(hypervisor_v
 
     vm_entry_ctls |= 1 << 9; // VM entry to 64-bit long mode.
     vm_entry_ctls |= 1 << 15; // load EFER msr on vm-entry
-    vm_entry_ctls = vmx_fix_reserved_1_bits(vm_entry_ctls, vm_entry_msr_eax);
-    vm_entry_ctls = vmx_fix_reserved_0_bits(vm_entry_ctls, vm_entry_msr_edx);
+    vm_entry_ctls  = vmx_fix_reserved_1_bits(vm_entry_ctls, vm_entry_msr_eax);
+    vm_entry_ctls  = vmx_fix_reserved_0_bits(vm_entry_ctls, vm_entry_msr_edx);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "vm_entry_ctls:0x%08x resv 1:0x%08x resv 0:0x%08x",
              vm_entry_ctls, vm_entry_msr_eax, vm_entry_msr_edx);
@@ -673,7 +676,7 @@ int8_t hypervisor_vmx_vmcs_prepare(hypervisor_vm_t** vm_out) {
         return -1;
     }
 
-    vm->vmcs_frame_fa = vmcs_frame->frame_address;
+    vm->vmcs_frame_fa                               = vmcs_frame->frame_address;
     vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VMCS] = *vmcs_frame;
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "vmcs frame va: 0x%llx", vmcs_frame_va);

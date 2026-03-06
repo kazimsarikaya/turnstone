@@ -21,14 +21,13 @@ extern "C" {
 #endif
 
 typedef struct smp_data_t {
-    uint64_t               stack_base;
-    uint64_t               stack_size;
-    cpu_reg_cr0_t          cr0;
-    memory_page_table_t*   cr3;
-    cpu_reg_cr4_t          cr4;
-    descriptor_register_t* idt;
-    uint64_t               gs_base;
-    uint64_t               gs_base_size;
+    uint64_t             stack_base;
+    uint64_t             stack_size;
+    cpu_reg_cr0_t        cr0;
+    memory_page_table_t* cr3;
+    cpu_reg_cr4_t        cr4;
+    uint64_t             gs_base;
+    uint64_t             gs_base_size;
 } smp_data_t;
 
 

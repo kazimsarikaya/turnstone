@@ -200,7 +200,6 @@ int8_t smp_init(void) {
     smp_data->cr0          = cpu_read_cr0();
     smp_data->cr3          =  MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(memory_paging_get_table()->page_table);
     smp_data->cr4          = cpu_read_cr4();
-    smp_data->idt          = IDT_REGISTER;
     smp_data->gs_base      = ap_gs_va;
     smp_data->gs_base_size = ap_gs_size;
 
@@ -250,8 +249,16 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
         return -1;
     }
+    uint64_t gdt_fa_location;
+    uint64_t out_gdt_size;
+    uint64_t tss_fa_location;
+    uint64_t out_tss_size;
+    uint64_t stack_bottom_fa_location;
+    uint64_t out_stack_size;
 
-    if(descriptor_build_ap_descriptors_register() != 0) {
+    if(descriptor_build_ap_descriptors_register(&gdt_fa_location, &out_gdt_size,
+                                                &tss_fa_location, &out_tss_size,
+                                                &stack_bottom_fa_location, &out_stack_size) != 0) {
         PRINTLOG(APIC, LOG_ERROR, "SMP: AP %i Failed to build descriptors", cpu_id);
         cpu_hlt();
 
