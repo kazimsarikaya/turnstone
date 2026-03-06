@@ -48,7 +48,7 @@ void linker_build_modules_at_memory(void) {
 
     uint64_t metadata_end = program_header->metadata_virtual_address + program_header->metadata_size;
 
-    while (module_or_section->module.id != 0) {
+    while (module_or_section->module.id != 0 && (uint64_t)module_or_section < metadata_end) {
         hashmap_put(linker_modules_at_memory, (void*)module_or_section->module.id, module_or_section);
         module_or_section++;
 
@@ -57,12 +57,8 @@ void linker_build_modules_at_memory(void) {
         }
 
         module_or_section++;
-
-        if((uint64_t)module_or_section >= metadata_end) {
-            PRINTLOG(LINKER, LOG_ERROR, "Metadata end reached without module terminator");
-            break;
-        }
     }
+
     PRINTLOG(LINKER, LOG_INFO, "Linker modules at memory built");
 }
 

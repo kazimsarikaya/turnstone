@@ -27,12 +27,13 @@ int8_t interrupt_handlers_make_readonly(void) {
 
     module_or_section++;
     while(module_or_section->section.size) {
-        module_or_section++;
 
         if(module_or_section->section.section_type == LINKER_SECTION_TYPE_BSS) {
             bss_section = &module_or_section->section;
             break;
         }
+
+        module_or_section++;
     }
 
     if(!bss_section) {

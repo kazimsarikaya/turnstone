@@ -25,6 +25,7 @@ extern "C" {
  *
  */
 typedef enum linker_section_type_t {
+    LINKER_SECTION_TYPE_UNDEF, ///< undefined section type
     LINKER_SECTION_TYPE_TEXT, ///< executable (text) section
     LINKER_SECTION_TYPE_DATA, ///< read-write data section
     LINKER_SECTION_TYPE_TDATA, ///< thread local data section

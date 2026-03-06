@@ -27,6 +27,7 @@ buffer_t* linker_build_relocation_table_buffer(linker_context_t* ctx);
 buffer_t* linker_build_metadata_buffer(linker_context_t* ctx);
 
 const char_t*const linker_section_type_names[LINKER_SECTION_TYPE_NR_SECTIONS] = {
+    [LINKER_SECTION_TYPE_UNDEF]                         = "undef",
     [LINKER_SECTION_TYPE_TEXT]                          = ".text",
     [LINKER_SECTION_TYPE_DATA]                          = ".data",
     [LINKER_SECTION_TYPE_TDATA]                         = ".tdata",
