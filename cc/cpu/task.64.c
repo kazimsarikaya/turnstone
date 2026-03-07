@@ -326,6 +326,7 @@ static void task_cleanup_task(task_t* task) {
         list_destroy(task->allocated_frames);
     }
 
+    memory_paging_destroy_userspace_table(task->userspace_page_table);
 
     memory_free_ext(task->creator_heap, task->registers);
     memory_free_ext(task->creator_heap, task);

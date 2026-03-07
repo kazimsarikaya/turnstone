@@ -622,6 +622,113 @@ memory_page_table_context_t* memory_paging_create_empty_userspace_table(
     return new_table_context;
 }
 
+int8_t memory_paging_destroy_userspace_table(memory_page_table_context_t* table_context) {
+    if(!table_context) {
+        return 0;
+    }
+
+    if(table_context == memory_paging_switch_table(NULL)) {
+        PRINTLOG(PAGING, LOG_ERROR, "cannot destroy current page table");
+        return -1;
+    }
+
+    PRINTLOG(PAGING, LOG_DEBUG, "destroying page table context for page table: 0x%p", table_context->page_table);
+
+    uint64_t hm_key = (uint64_t)table_context->page_table;
+    hm_key >>= 12; // first 12 bits are always 0 because of page alignment, so we can ignore them for hashmap key
+
+    if(!hashmap_exists(memory_paging_page_tables, (void*)hm_key)) {
+        PRINTLOG(PAGING, LOG_ERROR, "page table context does not exist in hashmap: 0x%p, 0x%p", table_context, table_context->page_table);
+        // return -1;
+    }
+
+    memory_heap_t* heap = memory_get_default_heap();
+
+    hashmap_delete(memory_paging_page_tables, (void*)hm_key);
+
+    frame_allocator_t* fa = frame_get_allocator();
+    frame_t frm           = {0};
+
+    memory_page_table_t* p4 = table_context->page_table;
+
+    for(size_t i = 0; i < MEMORY_PAGING_INDEX_COUNT; i++) {
+        if(p4->pages[i].present) {
+            uint64_t p3_fa_addr       = p4->pages[i].physical_address << 12;
+            uint64_t p3_va_addr       = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p3_fa_addr);
+            memory_page_table_t* t_p3 = (memory_page_table_t*)p3_va_addr;
+
+            for(size_t j = 0; j < MEMORY_PAGING_INDEX_COUNT; j++) {
+                if(t_p3->pages[j].present) {
+                    if(t_p3->pages[j].hugepage) {
+                        continue;
+                    }
+
+                    uint64_t p2_fa_addr       = t_p3->pages[j].physical_address << 12;
+                    uint64_t p2_va_addr       = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p2_fa_addr);
+                    memory_page_table_t* t_p2 = (memory_page_table_t*)p2_va_addr;
+
+                    for(size_t k = 0; k < MEMORY_PAGING_INDEX_COUNT; k++) {
+                        if(t_p2->pages[k].present) {
+                            if(t_p2->pages[k].hugepage) {
+                                continue;
+                            }
+
+                            uint64_t p1_fa_addr = t_p2->pages[k].physical_address << 12;
+                            uint64_t p1_va_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_fa_addr);
+
+
+                            memory_paging_delete_page(p1_va_addr, NULL);
+
+                            frm.frame_address = p1_fa_addr;
+                            frm.frame_count   = 1;
+
+                            if(fa->release_frame(fa, &frm) != 0) {
+                                PRINTLOG(PAGING, LOG_ERROR, "failed to deallocate frame: 0x%llx", frm.frame_address);
+                            }
+                        }
+                    }
+
+                    memory_memclean(t_p2, MEMORY_PAGING_PAGE_SIZE);
+
+                    memory_paging_delete_page(p2_va_addr, NULL);
+
+                    frm.frame_address = p2_fa_addr;
+                    frm.frame_count   = 1;
+
+                    if(fa->release_frame(fa, &frm) != 0) {
+                        PRINTLOG(PAGING, LOG_ERROR, "failed to deallocate frame: 0x%llx", frm.frame_address);
+                    }
+                }
+            }
+
+            memory_paging_delete_page(p3_va_addr, NULL);
+
+            frm.frame_address = p3_fa_addr;
+            frm.frame_count   = 1;
+
+            if(fa->release_frame(fa, &frm) != 0) {
+                PRINTLOG(PAGING, LOG_ERROR, "failed to deallocate frame: 0x%llx", frm.frame_address);
+            }
+        }
+    }
+
+    memory_paging_delete_page((uint64_t)p4, NULL);
+
+    frm.frame_address = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)p4);
+    frm.frame_count   = 1;
+
+    if(fa->release_frame(fa, &frm) != 0) {
+        PRINTLOG(PAGING, LOG_ERROR, "failed to deallocate frame: 0x%llx", frm.frame_address);
+    }
+
+    uint64_t tc_addr = (uint64_t)table_context;
+
+    memory_free_ext(heap, table_context);
+
+    PRINTLOG(PAGING, LOG_DEBUG, "destroyed page table context for page table: 0x%llx", tc_addr);
+
+    return 0;
+}
 
 memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_frame_address) {
     PRINTLOG(PAGING, LOG_DEBUG, "building page table started");

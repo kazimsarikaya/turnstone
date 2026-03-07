@@ -197,6 +197,8 @@ memory_page_table_context_t* memory_paging_create_empty_userspace_table(
     uint64_t stack_bottom_fa_location, uint64_t stack_size
     );
 
+int8_t memory_paging_destroy_userspace_table(memory_page_table_context_t* table_context);
+
 #ifdef __cplusplus
 }
 #endif
