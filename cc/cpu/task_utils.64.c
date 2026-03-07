@@ -54,7 +54,7 @@ void task_current_task_sleep(uint64_t wake_tick) {
 
     if(current_task) {
         current_task->wake_tick = wake_tick;
-        current_task->state = TASK_STATE_SLEEPING;
+        current_task->state     = TASK_STATE_SLEEPING;
         task_yield();
     }
 }
@@ -70,7 +70,7 @@ void task_clear_message_waiting(uint64_t tid) {
 }
 
 void task_set_interrupt_received(uint64_t tid) {
-    task_t* task = (task_t*)hashmap_get(task_map, (void*)tid);
+    task_t* task         = (task_t*)hashmap_get(task_map, (void*)tid);
     task_t* current_task = cpu_state->current_task;
 
     if(task) {
@@ -120,7 +120,7 @@ boolean_t task_set_message_waiting(void){
 }
 
 void task_set_message_received(uint64_t tid) {
-    task_t* task = (task_t*)hashmap_get(task_map, (void*)tid);
+    task_t* task         = (task_t*)hashmap_get(task_map, (void*)tid);
     task_t* current_task = cpu_state->current_task;
 
     if(task) {
@@ -148,7 +148,7 @@ void task_set_interrupt_receive_workaround(uint64_t max_tick_wait_count) {
     task_t* current_task = task_get_current_task();
 
     if(current_task) {
-        current_task->interrupt_receive_workaround = true;
+        current_task->interrupt_receive_workaround                = true;
         current_task->interrupt_receive_workaround_max_tick_count = max_tick_wait_count * time_timer_get_rdtsc_delta();
     }
 }
@@ -165,7 +165,7 @@ void task_set_custom_has_message_func(task_custom_has_message_func_t func, void*
     task_t* current_task = task_get_current_task();
 
     if(current_task) {
-        current_task->custom_has_message_func = func;
+        current_task->custom_has_message_func      = func;
         current_task->custom_has_message_func_args = args;
     }
 }
@@ -244,24 +244,24 @@ buffer_t* task_build_task_list(void) {
         memory_get_heap_stat_ext(task->heap, &stat);
 
         task_list_item_t item = {
-            .task_name = task->task_name,
-            .task_address = (uint64_t)task,
-            .task_id = task->task_id,
-            .cpu_id = task->cpu_id,
-            .task_switch_count = task->task_switch_count,
-            .rsp = task->registers->rsp,
-            .rbp = task->registers->rbp,
-            .heap_address = (uint64_t)task->heap,
-            .heap_size = task->heap_size,
-            .stack_address = (uint64_t)task->stack,
-            .stack_size = task->stack_size,
-            .state = task->state,
-            .attributes = task->attributes,
-            .message_queues = list_size(task->message_queues),
-            .messages = msgcount,
-            .malloc_count = stat.malloc_count,
-            .free_count = stat.free_count,
-            .heap_diff = stat.malloc_count - stat.free_count,
+            .task_name           = task->task_name,
+            .task_address        = (uint64_t)task,
+            .task_id             = task->task_id,
+            .cpu_id              = task->cpu_id,
+            .task_switch_count   = task->task_switch_count,
+            .rsp                 = task->registers->rsp,
+            .rbp                 = task->registers->rbp,
+            .heap_address        = (uint64_t)task->heap,
+            .heap_size           = task->heap_size,
+            .stack_address       = (uint64_t)task->stack,
+            .stack_size          = task->stack_size,
+            .state               = task->state,
+            .attributes          = task->attributes,
+            .message_queues      = list_size(task->message_queues),
+            .messages            = msgcount,
+            .malloc_count        = stat.malloc_count,
+            .free_count          = stat.free_count,
+            .heap_diff           = stat.malloc_count - stat.free_count,
             .has_virtual_machine = task->vm != NULL,
         };
 

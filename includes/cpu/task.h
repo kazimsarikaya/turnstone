@@ -58,10 +58,10 @@ typedef struct descriptor_tss_t {
  * @param  DPL   privilage level
  */
 #define DESCRIPTOR_BUILD_TSS_SEG(tss, base, limit, DPL) { \
-            tss->type = SYSTEM_SEGMENT_TYPE_TSS_A; \
-            tss->present = 1; \
-            tss->long_mode = 1; \
-            tss->dpl = DPL; \
+            tss->type           = SYSTEM_SEGMENT_TYPE_TSS_A; \
+            tss->present        = 1; \
+            tss->long_mode      = 1; \
+            tss->dpl            = DPL; \
             tss->segment_limit1 = limit & 0xFFFF; \
             tss->segment_limit2 = (limit >> 16) & 0xF; \
             tss->base_address1  = base & 0xFFFFFF; \
