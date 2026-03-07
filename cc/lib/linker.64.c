@@ -696,6 +696,12 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
                     }
                 }
 
+                if(buffer_get_length(plt_section->section_data) != 0x80) {
+                    PRINTLOG(LINKER, LOG_ERROR, "invalid initial PLT section size 0x%llx", buffer_get_length(plt_section->section_data));
+
+                    goto clean_relocs_iter;
+                }
+
                 // each modules PLT0 entry needs to be defined as symbol with id module_id << 32
                 // also we need to add it to got table
                 linker_global_offset_table_entry_t got_entry = {0};
