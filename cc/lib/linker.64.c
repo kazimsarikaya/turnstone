@@ -689,7 +689,9 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
                     uint32_t nopl = 0x041f0f;
 
                     // fill first 128 bytes with nopl 0x0(%rax,%rax,1)
-                    for(int64_t idx = 0; idx < 32; idx++) {
+                    uint32_t jmp_myself = 0x0000feeb; // jmp $-2
+                    buffer_append_bytes(plt_section->section_data, (uint8_t*)&jmp_myself, sizeof(uint32_t));
+                    for(int64_t idx = 0; idx < 31; idx++) {
                         buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopl, sizeof(uint32_t));
                     }
                 }
