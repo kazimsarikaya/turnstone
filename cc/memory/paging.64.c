@@ -45,7 +45,7 @@ static void memory_paging_internal_frame_build(memory_page_table_context_t* tabl
     table_context->internal_frames_2_count = MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT;
     table_context->internal_frames_2_start = internal_frms->frame_address;
 
-    PRINTLOG(PAGING, LOG_INFO, "Internal paging frames allocated at 0x%llx with count 0x%llx", internal_frms->frame_address, internal_frms->frame_count);
+    PRINTLOG(PAGING, LOG_DEBUG, "Internal paging frames allocated at 0x%llx with count 0x%llx", internal_frms->frame_address, internal_frms->frame_count);
 
 #if ___KERNELBUILD == 1
     if(memory_paging_add_va_for_frame_ext(table_context,
