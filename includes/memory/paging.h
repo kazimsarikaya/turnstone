@@ -11,15 +11,11 @@
 
 #include <memory.h>
 #include <memory/frame.h>
+#include <list.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/*! how many index has a page */
-#define MEMORY_PAGING_INDEX_COUNT 512
-/*! page size (4K) */
-#define MEMORY_PAGING_PAGE_SIZE   0x1000
 
 /**
  * @struct memory_page_entry_s
@@ -55,6 +51,11 @@ typedef struct memory_page_entry_t {
     uint8_t  no_execute            : 1; ///< bit 63 prevents execution of page by kernel programs
 } __attribute__((packed)) memory_page_entry_t; ///< short hand for struct
 
+/*! page size (4K) */
+#define MEMORY_PAGING_PAGE_SIZE   FRAME_SIZE
+/*! how many index has a page */
+#define MEMORY_PAGING_INDEX_COUNT (MEMORY_PAGING_PAGE_SIZE / sizeof(memory_page_entry_t))
+
 /**
  * @struct memory_page_table_s
  * @brief page table struct
@@ -83,6 +84,7 @@ typedef struct memory_page_table_context_t {
     uint64_t                                  internal_frames_2_start; ///< internal frames type 2
     uint64_t                                  internal_frames_2_count; ///< internal frames type 2 count
     uint64_t                                  internal_frames_helper_frame; ///< internal frames helper frame
+    list_t*                                   internal_frames_list; ///< internal frames list
 } memory_page_table_context_t; ///< short hand for struct
 
 
@@ -144,17 +146,6 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* p4,
 int8_t memory_paging_delete_page_ext(memory_page_table_context_t* p4, uint64_t virtual_address, uint64_t* frame_address);
 #define memory_paging_delete_page(va, faptr) memory_paging_delete_page_ext(NULL, va, faptr)
 
-memory_page_table_t* memory_paging_clone_pagetable_ext(memory_page_table_context_t* table_context);
-#define memory_paging_clone_pagetable() memory_paging_clone_pagetable_ext(NULL)
-#define memory_paging_move_pagetable(h) memory_paging_clone_pagetable_ext(NULL)
-
-memory_page_table_t* memory_paging_clone_pagetable_to_frames_ext(memory_page_table_context_t* table_context, uint64_t fa);
-#define memory_paging_clone_current_pagetable_to_frames_ext(h, fa) memory_paging_clone_pagetable_to_frames_ext(NULL, fa)
-#define memory_paging_clone_current_pagetable_to_frames(fa) memory_paging_clone_pagetable_to_frames_ext(NULL, fa)
-
-int8_t memory_paging_destroy_pagetable_ext(memory_page_table_context_t* table_context);
-#define memory_paging_destroy_pagetable(p) memory_paging_destroy_pagetable_ext(p)
-
 int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table_context, uint64_t virtual_address, uint64_t* physical_address);
 #define memory_paging_get_physical_address(va, paptr) memory_paging_get_frame_address_ext(NULL, va, paptr)
 #define memory_paging_get_frame_address_ext(p4, va, fa) ((memory_paging_get_physical_address_ext(p4, va, fa) >> 12) << 12)
@@ -175,13 +166,13 @@ int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, 
 #define memory_paging_clear_page(va, t) memory_paging_clear_page_ext(NULL, va, t)
 
 /*! gets p4 index of virtual address at long mode */
-#define MEMORY_PT_GET_P4_INDEX(u64) ((u64 >> 39) & 0x1FF)
+#define MEMORY_PT_GET_P4_INDEX(u64) ((u64 >> 39) & (MEMORY_PAGING_INDEX_COUNT - 1))
 /*! gets p3 index of virtual address at long mode */
-#define MEMORY_PT_GET_P3_INDEX(u64) ((u64 >> 30) & 0x1FF)
+#define MEMORY_PT_GET_P3_INDEX(u64) ((u64 >> 30) & (MEMORY_PAGING_INDEX_COUNT - 1))
 /*! gets p2 index of virtual address at long mode */
-#define MEMORY_PT_GET_P2_INDEX(u64) ((u64 >> 21) & 0x1FF)
+#define MEMORY_PT_GET_P2_INDEX(u64) ((u64 >> 21) & (MEMORY_PAGING_INDEX_COUNT - 1))
 /*! gets p1 index of virtual address at long mode */
-#define MEMORY_PT_GET_P1_INDEX(u64) ((u64 >> 12) & 0x1FF)
+#define MEMORY_PT_GET_P1_INDEX(u64) ((u64 >> 12) & (MEMORY_PAGING_INDEX_COUNT - 1))
 
 #if ___KERNELBUILD == 1
 /*! returns frame address of reserved virtual address */
