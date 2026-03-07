@@ -29,96 +29,13 @@ typedef struct interrupt_irq_list_item_t {
     struct interrupt_irq_list_item_t* next;
 } interrupt_irq_list_item_t;
 
-interrupt_irq_list_item_t** interrupt_irqs = NULL;
-uint8_t next_empty_interrupt               = 0;
+static interrupt_irq_list_item_t** interrupt_irqs = NULL;
+static uint8_t next_empty_interrupt               = 0;
 
-int8_t interrupt_int01_debug_exception(interrupt_frame_ext_t*);
-int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t*);
-int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t*);
-int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t*);
-int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t*);
-int8_t interrupt_int13_simd_floating_point_exception(interrupt_frame_ext_t*);
+static uint64_t interrupt_xsave_mask_lo = 0;
+static uint64_t interrupt_xsave_mask_hi = 0;
 
 extern boolean_t KERNEL_PANIC_DISABLE_LOCKS;
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t interrupt_init(void) {
-    uint64_t current_cr3 = 0;
-
-    asm volatile ("mov %%cr3, %0" : "=r" (current_cr3));
-
-    interrupt_handlers_set_kernel_cr3_value(current_cr3);
-    interrupt_handlers_set_generic_handler(interrupt_generic_handler);
-
-    descriptor_register_t idt_reg = descriptor_get_idt_register();
-    descriptor_idt_t* idt_table   = (descriptor_idt_t*)idt_reg.base;
-
-    interrupt_register_dummy_handlers(idt_table); // 32-255 dummy handlers
-
-    interrupt_irqs = memory_malloc(sizeof(interrupt_irq_list_item_t*) * (256));
-
-    if(interrupt_irqs == NULL) {
-        return -1;
-    }
-
-    memory_memclean(interrupt_irqs, sizeof(interrupt_irq_list_item_t*) * (256));
-
-    interrupt_irqs[0x01] = memory_malloc(sizeof(interrupt_irq_list_item_t));
-
-    if(interrupt_irqs[0x01] == NULL) {
-        return -1;
-    }
-
-    interrupt_irqs[0x01]->irq = interrupt_int01_debug_exception;
-
-    interrupt_irqs[0x02] = memory_malloc(sizeof(interrupt_irq_list_item_t));
-
-    if(interrupt_irqs[0x02] == NULL) {
-        return -1;
-    }
-
-    interrupt_irqs[0x02]->irq = interrupt_int02_nmi_interrupt;
-
-    interrupt_irqs[0x03] = memory_malloc(sizeof(interrupt_irq_list_item_t));
-
-    if(interrupt_irqs[0x03] == NULL) {
-        return -1;
-    }
-
-    interrupt_irqs[0x03]->irq = interrupt_int03_breakpoint_exception;
-
-    interrupt_irqs[0x0D] = memory_malloc(sizeof(interrupt_irq_list_item_t));
-
-    if(interrupt_irqs[0x0D] == NULL) {
-        return -1;
-    }
-
-    interrupt_irqs[0x0D]->irq = interrupt_int0D_general_protection_exception;
-
-    interrupt_irqs[0x0E] = memory_malloc(sizeof(interrupt_irq_list_item_t));
-
-    if(interrupt_irqs[0x0E] == NULL) {
-        return -1;
-    }
-
-    interrupt_irqs[0x0E]->irq = interrupt_int0E_page_fault_exception;
-
-    interrupt_irqs[0x13] = memory_malloc(sizeof(interrupt_irq_list_item_t));
-
-    if(interrupt_irqs[0x13] == NULL) {
-        return -1;
-    }
-
-    interrupt_irqs[0x13]->irq = interrupt_int13_simd_floating_point_exception;
-
-    next_empty_interrupt = INTERRUPT_IRQ_BASE;
-
-    cpu_sti();
-
-    return 0;
-}
-#pragma GCC diagnostic pop
 
 int8_t interrupt_ist_redirect_main_interrupts(uint8_t ist) {
     cpu_cli();
@@ -292,31 +209,20 @@ static void interrupt_print_frame_ext(interrupt_frame_ext_t* frame) {
     PRINTLOG(KERNEL, LOG_ERROR, "\tCR3: 0x%llx", frame->cr3);
 }
 
-static boolean_t interrupt_xsave_mask_memorized = false;
-static uint64_t interrupt_xsave_mask_lo         = 0;
-static uint64_t interrupt_xsave_mask_hi         = 0;
+_Static_assert(sizeof_field(interrupt_frame_ext_t, avx512f) == 0x2080, "interrupt_frame_ext_t.avx512f size must be 0x2080");
 
 static void interrupt_save_restore_avx512f(boolean_t save, interrupt_frame_ext_t* frame) {
-    if(!interrupt_xsave_mask_memorized) {
-        cpu_cpuid_regs_t query = {0};
-        cpu_cpuid_regs_t result;
-
-        query.eax = 0xd;
-
-        cpu_cpuid(query, &result);
-
-        interrupt_xsave_mask_lo = result.eax;
-        interrupt_xsave_mask_hi = result.edx;
-
-        interrupt_xsave_mask_memorized = true;
-    }
-
     uint64_t frame_base     = (uint64_t)frame;
     uint64_t avx512f_offset = frame_base + offsetof_field(interrupt_frame_ext_t, avx512f);
     // align to 0x40
     avx512f_offset = (avx512f_offset + 0x3F) & ~0x3F;
 
     if(save) {
+        // TODO: do we really need to clean? interrupt's stacks are
+        // specially for interrupts and not used for other purposes,
+        // so access is impossible for other codes. But maybe for
+        // security reasons we can clean it to avoid leaking data
+        // to user space if there is some vulnerability.
         memory_memclean((void*)avx512f_offset, 0x2000);
 
         asm volatile (
@@ -340,6 +246,15 @@ static void interrupt_save_restore_avx512f(boolean_t save, interrupt_frame_ext_t
             "rdx" (interrupt_xsave_mask_hi)
             : "rbx"
             );
+
+        memory_memclean((void*)avx512f_offset, 0x2000);
+    }
+
+    if(frame->return_cs != KERNEL_CODE_SEG) {
+        // we come from user space, we need to swapgs
+        // to access kernel gs base which is used for
+        // per cpu data and tss.
+        asm volatile ("swapgs\n");
     }
 }
 
@@ -416,7 +331,7 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
     cpu_hlt();
 }
 
-int8_t interrupt_int01_debug_exception(interrupt_frame_ext_t* frame) {
+static int8_t interrupt_int01_debug_exception(interrupt_frame_ext_t* frame) {
     KERNEL_PANIC_DISABLE_LOCKS = true;
 
     stackframe_t* s_frame = (stackframe_t*)frame->rbp;
@@ -433,7 +348,7 @@ int8_t interrupt_int01_debug_exception(interrupt_frame_ext_t* frame) {
 
 extern boolean_t we_sended_nmi_to_bsp;
 
-int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
+static int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
     KERNEL_PANIC_DISABLE_LOCKS = true;
 
     uint32_t apic_id = apic_get_local_apic_id();
@@ -467,7 +382,7 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
     return -1;
 }
 
-int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t* frame) {
+static int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t* frame) {
     KERNEL_PANIC_DISABLE_LOCKS = true;
 
     stackframe_t* s_frame = (stackframe_t*)frame->rbp;
@@ -485,7 +400,7 @@ int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t* frame) {
 }
 
 
-int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame){
+static int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame){
     // KERNEL_PANIC_DISABLE_LOCKS = true;
 
     uint32_t apic_id = apic_get_local_apic_id();
@@ -518,7 +433,7 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame
     return -1;
 }
 
-int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
+static int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
     // KERNEL_PANIC_DISABLE_LOCKS = true;
 
     uint32_t apic_id = apic_get_local_apic_id();
@@ -560,7 +475,7 @@ int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
     return -1;
 }
 
-int8_t interrupt_int13_simd_floating_point_exception(interrupt_frame_ext_t* frame) {
+static int8_t interrupt_int13_simd_floating_point_exception(interrupt_frame_ext_t* frame) {
     KERNEL_PANIC_DISABLE_LOCKS = true;
 
     uint32_t mxcsr = 0;
@@ -610,3 +525,92 @@ int8_t interrupt_int13_simd_floating_point_exception(interrupt_frame_ext_t* fram
 
     return -1;
 }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+int8_t interrupt_init(void) {
+    cpu_cpuid_regs_t query = {0};
+    cpu_cpuid_regs_t result;
+
+    query.eax = 0xd;
+
+    cpu_cpuid(query, &result);
+
+    interrupt_xsave_mask_lo = result.eax;
+    interrupt_xsave_mask_hi = result.edx;
+
+    uint64_t current_cr3 = 0;
+
+    asm volatile ("mov %%cr3, %0" : "=r" (current_cr3));
+
+    interrupt_handlers_set_kernel_cr3_value(current_cr3);
+    interrupt_handlers_set_generic_handler(interrupt_generic_handler);
+
+    descriptor_register_t idt_reg = descriptor_get_idt_register();
+    descriptor_idt_t* idt_table   = (descriptor_idt_t*)idt_reg.base;
+
+    interrupt_register_dummy_handlers(idt_table); // 32-255 dummy handlers
+
+    interrupt_irqs = memory_malloc(sizeof(interrupt_irq_list_item_t*) * (256));
+
+    if(interrupt_irqs == NULL) {
+        return -1;
+    }
+
+    memory_memclean(interrupt_irqs, sizeof(interrupt_irq_list_item_t*) * (256));
+
+    interrupt_irqs[0x01] = memory_malloc(sizeof(interrupt_irq_list_item_t));
+
+    if(interrupt_irqs[0x01] == NULL) {
+        return -1;
+    }
+
+    interrupt_irqs[0x01]->irq = interrupt_int01_debug_exception;
+
+    interrupt_irqs[0x02] = memory_malloc(sizeof(interrupt_irq_list_item_t));
+
+    if(interrupt_irqs[0x02] == NULL) {
+        return -1;
+    }
+
+    interrupt_irqs[0x02]->irq = interrupt_int02_nmi_interrupt;
+
+    interrupt_irqs[0x03] = memory_malloc(sizeof(interrupt_irq_list_item_t));
+
+    if(interrupt_irqs[0x03] == NULL) {
+        return -1;
+    }
+
+    interrupt_irqs[0x03]->irq = interrupt_int03_breakpoint_exception;
+
+    interrupt_irqs[0x0D] = memory_malloc(sizeof(interrupt_irq_list_item_t));
+
+    if(interrupt_irqs[0x0D] == NULL) {
+        return -1;
+    }
+
+    interrupt_irqs[0x0D]->irq = interrupt_int0D_general_protection_exception;
+
+    interrupt_irqs[0x0E] = memory_malloc(sizeof(interrupt_irq_list_item_t));
+
+    if(interrupt_irqs[0x0E] == NULL) {
+        return -1;
+    }
+
+    interrupt_irqs[0x0E]->irq = interrupt_int0E_page_fault_exception;
+
+    interrupt_irqs[0x13] = memory_malloc(sizeof(interrupt_irq_list_item_t));
+
+    if(interrupt_irqs[0x13] == NULL) {
+        return -1;
+    }
+
+    interrupt_irqs[0x13]->irq = interrupt_int13_simd_floating_point_exception;
+
+    next_empty_interrupt = INTERRUPT_IRQ_BASE;
+
+    cpu_sti();
+
+    return 0;
+}
+#pragma GCC diagnostic pop

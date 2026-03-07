@@ -17,6 +17,7 @@ cat <<EOF
 #include <cpu/cpu_registers.h>
 
 _Static_assert(sizeof_field(cpu_registers_t, avx512f) == 0x2000, "cpu_registers_t.avx512f size must be 0x2000 bytes");
+_Static_assert(sizeof_field(interrupt_frame_ext_t, avx512f) == 0x2080, "interrupt_frame_ext_t.avx512f size must be 0x2080");
 
 MODULE("turnstone.kernel.cpu.interrupt.handlers");
 
@@ -114,7 +115,6 @@ cat <<EOF
 __attribute__((naked, no_stack_protector))
 static void interrupt_naked_handler_int_0x${j}(void) {
     asm volatile (
-        "swapgs\n"
         "push \$${i}\n" // push interrupt number
         "subq \$0x2080, %rsp\n"
         "push %r15\n"
@@ -136,11 +136,10 @@ static void interrupt_naked_handler_int_0x${j}(void) {
         "push %rax\n"
         "push %rsp\n"
         "mov %rsp, %rdi\n"
-        "movq interrupt_handlers_kernel_cr3_value(%rip), %rax\n"
-        "mov %cr3, %rdx\n"
+        "movq interrupt_handlers_kernel_cr3_value(%rip), %rdx\n"
         "cmp %rax, %rdx\n"
         "je 1f\n"
-        "mov %rax, %cr3\n"
+        "mov %rdx, %cr3\n"
         "1:\n"
         "movq interrupt_generic_handler_handle(%rip), %rax\n"
         "call *%rax\n"
@@ -167,7 +166,6 @@ static void interrupt_naked_handler_int_0x${j}(void) {
         "pop %r14\n"
         "pop %r15\n"
         "add \$0x2088, %rsp\n"
-        "swapgs\n"
         "iretq\n"
         );
 }
@@ -183,7 +181,6 @@ cat <<EOF
 __attribute__((naked, no_stack_protector))
 static void interrupt_naked_handler_int_0x${j}(void) {
     asm volatile (
-        "swapgs\n"
         "push \$0\n" // push error code
         "push \$${i}\n" // push interrupt number
         "subq \$0x2080, %rsp\n"
@@ -206,11 +203,10 @@ static void interrupt_naked_handler_int_0x${j}(void) {
         "push %rax\n"
         "push %rsp\n"
         "mov %rsp, %rdi\n"
-        "movq interrupt_handlers_kernel_cr3_value(%rip), %rax\n"
-        "mov %cr3, %rdx\n"
+        "movq interrupt_handlers_kernel_cr3_value(%rip), %rdx\n"
         "cmp %rax, %rdx\n"
         "je 1f\n"
-        "mov %rax, %cr3\n"
+        "mov %rdx, %cr3\n"
         "1:\n"
         "movq interrupt_generic_handler_handle(%rip), %rax\n"
         "call *%rax\n"
@@ -237,7 +233,6 @@ static void interrupt_naked_handler_int_0x${j}(void) {
         "pop %r14\n"
         "pop %r15\n"
         "add \$0x2090, %rsp\n"
-        "swapgs\n"
         "iretq\n"
         );
 }
