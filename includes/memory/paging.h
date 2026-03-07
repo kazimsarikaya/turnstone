@@ -84,7 +84,6 @@ typedef struct memory_page_table_context_t {
     uint64_t                                  internal_frames_2_start; ///< internal frames type 2
     uint64_t                                  internal_frames_2_count; ///< internal frames type 2 count
     uint64_t                                  internal_frames_helper_frame; ///< internal frames helper frame
-    list_t*                                   internal_frames_list; ///< internal frames list
 } memory_page_table_context_t; ///< short hand for struct
 
 

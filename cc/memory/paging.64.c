@@ -23,19 +23,21 @@ MODULE("turnstone.kernel.memory.paging");
 
 hashmap_t* memory_paging_page_tables = NULL;
 
-static void memory_paging_internal_frame_build(memory_page_table_context_t* table_context, memory_page_table_context_t* caller_table_context) {
+static void memory_paging_internal_frame_build(memory_page_table_context_t* table_context) {
     frame_t* internal_frms;
 
-    if(!frame_get_allocator() || frame_get_allocator()->allocate_frame_by_count == NULL) {
+    frame_allocator_t* fa = frame_get_allocator();
+
+    if(!fa || fa->allocate_frame_by_count == NULL) {
         PRINTLOG(PAGING, LOG_PANIC, "cannot allocate internal paging frames. frame allocator 0x%p0 is null halting...",
                  frame_get_allocator());
         cpu_hlt();
     }
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
-                                                      MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT,
-                                                      FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
-                                                      &internal_frms, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa,
+                                   MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT,
+                                   FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                   &internal_frms, NULL) != 0) {
         PRINTLOG(PAGING, LOG_PANIC, "cannot allocate internal paging frames. Halting...");
         cpu_hlt();
     }
@@ -43,18 +45,16 @@ static void memory_paging_internal_frame_build(memory_page_table_context_t* tabl
     table_context->internal_frames_2_count = MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT;
     table_context->internal_frames_2_start = internal_frms->frame_address;
 
-#if ___KERNELBUILD == 1
-    list_list_insert(table_context->internal_frames_list, internal_frms);
+    PRINTLOG(PAGING, LOG_INFO, "Internal paging frames allocated at 0x%llx with count 0x%llx", internal_frms->frame_address, internal_frms->frame_count);
 
-    if(memory_paging_add_va_for_frame_ext(caller_table_context,
+#if ___KERNELBUILD == 1
+    if(memory_paging_add_va_for_frame_ext(table_context,
                                           MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frms->frame_address),
                                           internal_frms,
                                           MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(PAGING, LOG_PANIC, "cannot map internal paging frames. Halting...");
         cpu_hlt();
     }
-#else
-    UNUSED(caller_table_context);
 #endif
 
     uint64_t internal_frm_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(table_context->internal_frames_2_start);
@@ -62,7 +62,7 @@ static void memory_paging_internal_frame_build(memory_page_table_context_t* tabl
     memory_memclean((void*)internal_frm_va, table_context->internal_frames_2_count * FRAME_SIZE);
 }
 
-static uint64_t memory_paging_get_internal_frame_ext(memory_page_table_context_t* table_context, memory_page_table_context_t* caller_table_context) {
+static uint64_t memory_paging_get_internal_frame(memory_page_table_context_t* table_context) {
     PRINTLOG(PAGING, LOG_TRACE, "Requesting internal page frame for 0x%p", table_context);
     if(table_context->internal_frame_init_state == MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING) {
         uint64_t internal_frm_address = table_context->internal_frames_helper_frame;
@@ -89,7 +89,7 @@ static uint64_t memory_paging_get_internal_frame_ext(memory_page_table_context_t
             table_context->internal_frame_init_state = MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING;
         }
 
-        memory_paging_internal_frame_build(table_context, caller_table_context);
+        memory_paging_internal_frame_build(table_context);
 
         if(table_context->internal_frame_init_state == MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING) {
             table_context->internal_frame_init_state = MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZED;
@@ -97,7 +97,7 @@ static uint64_t memory_paging_get_internal_frame_ext(memory_page_table_context_t
             table_context->internal_frames_1_current = table_context->internal_frames_1_start;
             table_context->internal_frames_1_count   = table_context->internal_frames_2_count;
 
-            memory_paging_internal_frame_build(table_context, caller_table_context);
+            memory_paging_internal_frame_build(table_context);
 
             // table_context->internal_frames_helper_frame = table_context->internal_frames_1_current;
             // table_context->internal_frames_1_current += 4 * MEMORY_PAGING_PAGE_SIZE;
@@ -120,8 +120,6 @@ static uint64_t memory_paging_get_internal_frame_ext(memory_page_table_context_t
 
     return res;
 }
-
-#define memory_paging_get_internal_frame(t) memory_paging_get_internal_frame_ext(t, t)
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
@@ -523,11 +521,9 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
     table_context->internal_frames_helper_frame = internal_frame_address;
 
 #if ___KERNELBUILD == 1
-    table_context->internal_frames_list = list_create_list_with_heap(heap);
-
     memory_page_table_context_t* current_table_context = memory_paging_switch_table(NULL);
 
-    uint64_t p4_fa = memory_paging_get_internal_frame_ext(table_context, current_table_context);
+    uint64_t p4_fa = memory_paging_get_internal_frame(current_table_context);
 #endif
 
 #if ___EFIBUILD == 1
@@ -538,56 +534,19 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
 
     p4 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4);
 
-    memory_memclean(p4, sizeof(memory_page_table_t));
-
     table_context->page_table = p4;
 
     PRINTLOG(PAGING, LOG_DEBUG, "p4 address: 0x%p 0x%llx", p4, p4_fa);
 
+#if ___EFIBUILD == 1
     for(int32_t i = 0; i < 4; i++) {
-#ifdef ___KERNELBUILD
-        memory_paging_add_page_ext(table_context,
-                                   MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frame_address + i * MEMORY_PAGING_PAGE_SIZE),
-                                   internal_frame_address + i * MEMORY_PAGING_PAGE_SIZE,
-                                   MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-#endif
-
-#ifdef ___EFIBUILD
         memory_paging_add_page_ext(table_context,
                                    MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frame_address + i * MEMORY_PAGING_PAGE_SIZE) | (64ULL << 40),
                                    internal_frame_address + i * MEMORY_PAGING_PAGE_SIZE,
                                    MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
-#endif
     }
 
-#if ___KERNELBUILD == 1
-    frame_t internal_frms = {0};
-
-    internal_frms.frame_address = table_context->internal_frames_1_start;
-    internal_frms.frame_count   = table_context->internal_frames_1_count;
-
-    if(memory_paging_add_va_for_frame_ext(table_context,
-                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frms.frame_address),
-                                          &internal_frms,
-                                          MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
-        PRINTLOG(PAGING, LOG_PANIC, "cannot map internal paging frames. Halting...");
-        cpu_hlt();
-    }
-
-    internal_frms.frame_address = table_context->internal_frames_2_start;
-    internal_frms.frame_count   = table_context->internal_frames_2_count;
-
-    if(memory_paging_add_va_for_frame_ext(table_context,
-                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frms.frame_address),
-                                          &internal_frms,
-                                          MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
-        PRINTLOG(PAGING, LOG_PANIC, "cannot map internal paging frames. Halting...");
-        cpu_hlt();
-    }
-#endif
-
-#if ___EFIBUILD == 1
     frame_t internal_frms = {0};
 
     internal_frms.frame_address = table_context->internal_frames_1_start;
