@@ -50,6 +50,7 @@ static int64_t syscall_function_hlt(uint64_t arg1, uint64_t arg2, uint64_t arg3,
     UNUSED(arg6);
 
     asm volatile ("hlt\n");
+
     return 0;
 }
 
@@ -73,6 +74,7 @@ static int64_t syscall_function_cli_and_hlt(uint64_t arg1, uint64_t arg2, uint64
 
     asm volatile ("cli\n"
                   "hlt\n");
+
     return 0;
 }
 
@@ -133,24 +135,12 @@ static const syscall_f SYSCALL_TABLE[] = {
     syscall_function_task_yield,
 };
 
-static boolean_t syscall_xsave_mask_memorized = false;
-static uint64_t syscall_xsave_mask_lo         = 0;
-static uint64_t syscall_xsave_mask_hi         = 0;
+static uint64_t syscall_xsave_mask_lo = 0;
+static uint64_t syscall_xsave_mask_hi = 0;
+
+_Static_assert(sizeof_field(syscall_frame_t, avx512f) == 0x2080, "syscall_frame_t.avx512f size must be 0x2080");
 
 static void syscall_save_restore_avx512f(boolean_t save, syscall_frame_t* frame) {
-    if(!syscall_xsave_mask_memorized) {
-        cpu_cpuid_regs_t query = {0};
-        cpu_cpuid_regs_t result;
-
-        query.eax = 0xd;
-
-        cpu_cpuid(query, &result);
-
-        syscall_xsave_mask_lo        = result.eax;
-        syscall_xsave_mask_hi        = result.edx;
-        syscall_xsave_mask_memorized = true;
-    }
-
     uint64_t frame_base     = (uint64_t)frame;
     uint64_t avx512f_offset = frame_base + offsetof_field(syscall_frame_t, avx512f);
     // align to 0x40
@@ -180,6 +170,8 @@ static void syscall_save_restore_avx512f(boolean_t save, syscall_frame_t* frame)
             "rdx" (syscall_xsave_mask_hi)
             : "rbx"
             );
+
+        memory_memclean((void*)avx512f_offset, 0x2000);
     }
 }
 
@@ -200,6 +192,7 @@ static int64_t syscall_generic_handler(syscall_frame_t* frame) {
         return -1;
     }
 
+    PRINTLOG(KERNEL, LOG_TRACE, "cr3 is 0x%llx", frame->cr3);
     PRINTLOG(KERNEL, LOG_TRACE, "stack is at 0x%llx", frame->rsp);
     PRINTLOG(KERNEL, LOG_TRACE, "syscall (0x%p) number %llu called with args: 0x%llx 0x%llx 0x%llx 0x%llx 0x%llx 0x%llx",
              function,
@@ -219,6 +212,16 @@ static int64_t syscall_generic_handler(syscall_frame_t* frame) {
 }
 
 void syscall_init_generic_handler(void) {
+    cpu_cpuid_regs_t query = {0};
+    cpu_cpuid_regs_t result;
+
+    query.eax = 0xd;
+
+    cpu_cpuid(query, &result);
+
+    syscall_xsave_mask_lo = result.eax;
+    syscall_xsave_mask_hi = result.edx;
+
     syscall_handlers_set_generic_handler(syscall_generic_handler);
 }
 

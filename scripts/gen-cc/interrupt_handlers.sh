@@ -66,11 +66,7 @@ void syscall_handler(void) {
         "push %rsp\n"
         "mov %rsp, %rdi\n"
         "movq interrupt_handlers_kernel_cr3_value(%rip), %rax\n"
-        "mov %cr3, %rdx\n"
-        "cmp %rax, %rdx\n"
-        "je 1f\n"
         "mov %rax, %cr3\n"
-        "1:\n"
         "movq syscall_generic_handler_handle(%rip), %rax\n"
         "subq \$8, %rsp\n" // align stack to 16 bytes for call
         "sti\n" // enable interrupts before calling syscall handler to allow nested interrupts during syscalls
@@ -79,11 +75,7 @@ void syscall_handler(void) {
         "add \$8, %rsp\n" // restore stack after call
         "pop %rsp\n"
         "pop %rax\n"
-        "mov %cr3, %rbx\n"
-        "cmp %rax, %rbx\n"
-        "jne 1f\n"
         "mov %rax, %cr3\n"
-        "1:\n"
         "pop %rax\n"
         "pop %rbx\n"
         "pop %rcx\n"
