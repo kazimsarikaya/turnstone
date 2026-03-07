@@ -22,6 +22,7 @@ typedef struct cpu_state_t {
     uint64_t  local_apic_id; ///< local apic id
     task_t*   current_task; ///< current task
     task_t*   idle_task; ///< idle task
+    task_t*   cleaner_task; ///< cleaner task
     boolean_t tasking_enabled; ///< tasking enabled
     boolean_t task_switch_paramters_need_eoi; ///< task switch parameters need eoi
     list_t*   task_queue; ///< task list

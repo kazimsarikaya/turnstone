@@ -331,11 +331,18 @@ static void task_cleanup_task(task_t* task) {
     memory_free_ext(task->creator_heap, task);
 }
 
-static void task_cleanup(void){
-    while(list_size(cpu_state->task_cleanup_queue)) {
-        task_t* task = (task_t*)list_queue_pop(cpu_state->task_cleanup_queue);
-        task_cleanup_task(task);
+static int8_t task_cleaner_task(void){
+    while(true) {
+        while(list_size(cpu_state->task_cleanup_queue)) {
+            task_t* task = (task_t*)list_queue_peek(cpu_state->task_cleanup_queue);
+            task_cleanup_task(task);
+            list_queue_pop(cpu_state->task_cleanup_queue);
+        }
+
+        task_yield();
     }
+
+    return 0;
 }
 
 static task_t* task_find_next_task(void) {
@@ -433,6 +440,10 @@ static task_t* task_find_next_task(void) {
         }
     }
 
+    if(!tmp_task && list_size(cpu_state->task_cleanup_queue)) {
+        tmp_task = cpu_state->cleaner_task;
+    }
+
     if(!tmp_task && list_size(cpu_state->task_queue)) {
         tmp_task = (task_t*)list_queue_pop(cpu_state->task_queue);
     }
@@ -452,7 +463,7 @@ static task_t* task_find_next_task(void) {
 
     if(tmp_task->state == TASK_STATE_ENDED) {
         list_queue_push(cpu_state->task_cleanup_queue, tmp_task);
-        tmp_task = (task_t*)cpu_state->idle_task;
+        tmp_task = (task_t*)cpu_state->cleaner_task;
     }
 
     return tmp_task;
@@ -505,7 +516,9 @@ void task_switch_task(void) {
         current_task->state = TASK_STATE_SUSPENDED;
     }
 
-    if(current_task != cpu_state->idle_task) {
+    boolean_t special_task = current_task == cpu_state->idle_task || current_task == cpu_state->cleaner_task;
+
+    if(!special_task) {
         switch(current_task->state) {
         case TASK_STATE_SUSPENDED:
         case TASK_STATE_STARTING:
@@ -521,10 +534,6 @@ void task_switch_task(void) {
             list_queue_push(cpu_state->task_wait_queue, current_task);
             break;
         }
-    }
-
-    if(current_task == cpu_state->idle_task && list_size(cpu_state->task_cleanup_queue) > 0) {
-        task_cleanup();
     }
 
     current_task                  = task_find_next_task();
@@ -804,8 +813,6 @@ static void task_idle_task(void) {
 
     cpu_cpuid(query, &answer);
 
-    PRINTLOG(TASKING, LOG_TRACE, "monitor/mwait query 0x%x", answer.ecx);
-
     boolean_t monitor_mwait_supported = (answer.ecx >> 3) & 0x1;
 
     query.eax = 0x5;
@@ -813,8 +820,6 @@ static void task_idle_task(void) {
     query.edx = 0x0;
     query.ebx = 0x0;
     cpu_cpuid(query, &answer);
-
-    PRINTLOG(TASKING, LOG_TRACE, "monitor/mwait extended query 0x%x", answer.ecx);
 
     boolean_t monitor_mwait_extended_supported = (answer.ecx >> 1) & 0x1;
 
@@ -871,7 +876,7 @@ static int8_t task_create_idle_task(void) {
 
     frame_allocator_t* fa = frame_get_allocator();
 
-    uint64_t stack_size = 1 << 20;
+    uint64_t stack_size = 128 << 10;
     frame_t* stack_frames;
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
     stack_size = stack_frames_cnt * FRAME_SIZE;
@@ -941,6 +946,107 @@ static int8_t task_create_idle_task(void) {
     hashmap_put(task_map, (void*)new_task->task_id, new_task);
 
     PRINTLOG(TASKING, LOG_INFO, "created idle task %s 0x%llx 0x%p stack at 0x%llx-0x%llx on cpu 0x%llx", new_task->task_name, new_task->task_id, new_task, registers->rsp, registers->rbp, new_task->cpu_id);
+
+    return 0;
+}
+#pragma GCC diagnostic pop
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+static int8_t task_create_cleaner_task(void) {
+    program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
+    memory_heap_t* heap      = task_map_heap;
+
+    task_t* new_task = memory_malloc_ext(heap, sizeof(task_t), 0x40);
+
+    if(new_task == NULL) {
+        return -1;
+    }
+
+    new_task->creator_heap = heap;
+    new_task->heap         = heap;
+    new_task->heap_size    = kernel->program_heap_size;
+
+    cpu_registers_t* registers = memory_malloc_ext(heap, sizeof(cpu_registers_t), 0x40);
+
+    if(registers == NULL) {
+        memory_free_ext(heap, new_task);
+
+        return -1;
+    }
+
+    frame_allocator_t* fa = frame_get_allocator();
+
+    uint64_t stack_size = 2 << 20;
+    frame_t* stack_frames;
+    uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
+    stack_size = stack_frames_cnt * FRAME_SIZE;
+
+    if(fa->allocate_frame_by_count(fa, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
+        memory_free_ext(heap, new_task);
+        memory_free_ext(heap, registers);
+
+        return -1;
+    }
+
+    uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
+
+    if(memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_va, stack_frames->frame_address, stack_frames->frame_count);
+
+        cpu_hlt();
+    }
+    new_task->task_id = apic_get_local_apic_id() + 1;
+    new_task->cpu_id  = apic_get_local_apic_id();
+
+    new_task->state       = TASK_STATE_CREATED;
+    new_task->entry_point = task_cleaner_task;
+    new_task->page_table  = memory_paging_get_table();
+    new_task->registers   = registers;
+    new_task->stack_size  = stack_size;
+    new_task->stack       = (void*)stack_va;
+
+    char_t* tmp_task_name = strprintf("%s-%d", "task-cleaner", new_task->task_id);
+
+    new_task->task_name = strdup_at_heap(heap, tmp_task_name);
+
+    memory_free(tmp_task_name);
+
+    registers->rflags = 0x002;
+
+    uint64_t cr3_fa = (uint64_t)new_task->page_table->page_table;
+    cr3_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(cr3_fa);
+
+    registers->cr3 = cr3_fa;
+
+    registers->xsave_mask_lo = task_xsave_mask & 0xFFFFFFFF;
+    registers->xsave_mask_hi = task_xsave_mask >> 32;
+
+    *(uint16_t*)(void*)&registers->avx512f[0]  = 0x37F;
+    *(uint32_t*)(void*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
+
+    uint64_t rbp = (uint64_t)new_task->stack;
+    rbp           += stack_size - 16;
+    registers->rbp = rbp;
+    registers->rsp = rbp - 16;
+
+    uint64_t* stack = (uint64_t*)rbp;
+    stack[-1] = 0;
+    stack[-2] = (uint64_t)task_end_task;
+
+    cpu_state->cleaner_task = new_task;
+
+    memory_heap_t* sheap = spool_get_heap();
+
+    new_task->output_buffer = buffer_create_with_heap(sheap, 0x1000);
+    new_task->error_buffer  = buffer_create_with_heap(sheap, 0x1000);
+
+    spool_add(new_task->task_name, 2, new_task->output_buffer, new_task->error_buffer);
+
+    hashmap_put(task_map, (void*)new_task->task_id, new_task);
+
+    PRINTLOG(TASKING, LOG_INFO, "created cleaner task %s 0x%llx 0x%p stack at 0x%llx-0x%llx on cpu 0x%llx", new_task->task_name, new_task->task_id, new_task, registers->rsp, registers->rbp, new_task->cpu_id);
 
     return 0;
 }
@@ -1335,6 +1441,12 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         return -1;
     }
 
+    if(task_create_cleaner_task() != 0) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot create cleaner task");
+
+        return -1;
+    }
+
     PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended, kernel task address 0x%p lapic id %d", kernel_task, apic_id);
 
     memory_set_current_task_getter(&task_get_current_task);
@@ -1436,6 +1548,12 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     if(task_create_idle_task() != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot create idle task");
+
+        return -1;
+    }
+
+    if(task_create_cleaner_task() != 0) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot create cleaner task");
 
         return -1;
     }
