@@ -147,6 +147,7 @@ typedef struct task_t {
     uint64_t                       wake_tick; ///< tick value when task wakes up
     const char*                    task_name; ///< task name
     memory_page_table_context_t*   page_table; ///< page table
+    list_t*                        allocated_frames; ///< list of allocated frames for task, these frames will be freed when task is killed or ended
     buffer_t*                      input_buffer; ///< input buffer
     buffer_t*                      output_buffer; ///< output buffer
     buffer_t*                      error_buffer; ///< error buffer
@@ -341,6 +342,8 @@ uint32_t task_get_task_mxcsr_mask(void);
 
 void task_sleep(uint64_t secs);
 void task_msleep(uint64_t msecs);
+
+int8_t task_allocate_frame_and_add_paging(uint64_t count, boolean_t is_reserved, frame_t** frame);
 
 #ifdef __cplusplus
 }

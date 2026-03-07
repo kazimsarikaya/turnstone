@@ -488,3 +488,52 @@ void task_sleep(uint64_t secs) {
 void task_msleep(uint64_t msecs) {
     task_current_task_sleep(cpu_state->tick_count + msecs);
 }
+
+int8_t task_allocate_frame_and_add_paging(uint64_t count, boolean_t is_reserved, frame_t** frame) {
+    task_t* current_task = task_get_current_task();
+
+    if(!current_task) {
+        return -1;
+    }
+
+    frame_allocator_t* fa = frame_get_allocator();
+
+    frame_allocation_type_t allocation_type = FRAME_ALLOCATION_TYPE_BLOCK;
+
+    if(is_reserved) {
+        allocation_type |= FRAME_ALLOCATION_TYPE_RESERVED;
+    } else {
+        allocation_type |= FRAME_ALLOCATION_TYPE_USED;
+    }
+
+    if(fa->allocate_frame_by_count(fa, count, allocation_type, frame, NULL) != 0) {
+        return -1;
+    }
+
+    uint64_t va = is_reserved ? MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((*frame)->frame_address) : (*frame)->frame_address;
+
+    if(memory_paging_add_va_for_frame(va, *frame, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        fa->release_frame(fa, *frame);
+        return -1;
+    }
+
+    memory_memclean((void*)va, (*frame)->frame_count * FRAME_SIZE);
+
+    if(!current_task->allocated_frames) {
+        current_task->allocated_frames = list_create_list_with_heap(current_task->creator_heap);
+
+        if(!current_task->allocated_frames) {
+            memory_paging_delete_va_for_frame(va, *frame);
+            fa->release_frame(fa, *frame);
+            return -1;
+        }
+    }
+
+    if(list_list_insert(current_task->allocated_frames, *frame) == -1ULL) {
+        memory_paging_delete_va_for_frame(va, *frame);
+        fa->release_frame(fa, *frame);
+        return -1;
+    }
+
+    return 0;
+}

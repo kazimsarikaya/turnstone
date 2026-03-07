@@ -291,6 +291,41 @@ static void task_cleanup_task(task_t* task) {
         }
     }
 
+    if(task->allocated_frames) {
+        for(uint64_t i = 0; i < list_size(task->allocated_frames); i++) {
+            frame_t* frm = (frame_t*)list_get_data_at_position(task->allocated_frames, i);
+
+            uint64_t frm_va = frm->frame_address;
+
+            if(frm->type & FRAME_TYPE_RESERVED) {
+                frm_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(frm_va);
+            }
+
+            if(frm) {
+                if(memory_paging_delete_va_for_frame_ext(task->page_table, frm_va, frm) != 0 ) {
+                    PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for allocated frame at va 0x%llx",
+                             frm_va);
+
+                    if(task->page_table) {
+                        PRINTLOG(TASKING, LOG_ERROR, "page table 0x%p", task->page_table->page_table);
+                    }
+
+                    cpu_hlt();
+                }
+
+                if(frm->frame_address) {
+                    if(fa->release_frame(fa, frm) != 0) {
+                        PRINTLOG(TASKING, LOG_ERROR, "cannot release allocated frame at 0x%llx with count 0x%llx",
+                                 frm->frame_address, frm->frame_count);
+                        cpu_hlt();
+                    }
+                }
+            }
+        }
+
+        list_destroy(task->allocated_frames);
+    }
+
 
     memory_free_ext(task->creator_heap, task->registers);
     memory_free_ext(task->creator_heap, task);
@@ -625,12 +660,13 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
         return -1;
     }
 
+    frame_allocator_t* fa = frame_get_allocator();
 
     frame_t* stack_frames;
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
     stack_size = stack_frames_cnt * FRAME_SIZE;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
         memory_free_ext(heap, new_task);
         memory_free_ext(heap, registers);
@@ -642,10 +678,10 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     uint64_t heap_frames_cnt = (heap_size + FRAME_SIZE - 1) / FRAME_SIZE;
     heap_size = heap_frames_cnt * FRAME_SIZE;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), heap_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &heap_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, heap_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &heap_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate heap with frame count 0x%llx", heap_frames_cnt);
 
-        if(frame_get_allocator()->release_frame(frame_get_allocator(), stack_frames) != 0) {
+        if(fa->release_frame(fa, stack_frames) != 0) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx", stack_frames->frame_address, stack_frames->frame_count);
 
             cpu_hlt();
@@ -833,14 +869,14 @@ static int8_t task_create_idle_task(void) {
         return -1;
     }
 
+    frame_allocator_t* fa = frame_get_allocator();
+
     uint64_t stack_size = 1 << 20;
-
-
     frame_t* stack_frames;
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
     stack_size = stack_frames_cnt * FRAME_SIZE;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
         memory_free_ext(heap, new_task);
         memory_free_ext(heap, registers);
@@ -1009,9 +1045,11 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     task_max_tick_count_limit = TASK_MAX_TICK_COUNT * time_timer_get_rdtsc_delta();
 
+    frame_allocator_t* fa = frame_get_allocator();
+
     frame_t* kernel_gs_frames = NULL;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 4, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &kernel_gs_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, 4, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &kernel_gs_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 4");
 
         return -1;
@@ -1060,7 +1098,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     frame_t* stack_frames = NULL;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), frame_count, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, frame_count, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 0x%llx", frame_count);
 
         return -1;
@@ -1107,7 +1145,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     for(uint32_t i = 0; i < cpu_count; i++) {
         frame_t* task_related_heap_frames = NULL;
 
-        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 0x1000, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &task_related_heap_frames, NULL) != 0) {
+        if(fa->allocate_frame_by_count(fa, 0x1000, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &task_related_heap_frames, NULL) != 0) {
             PRINTLOG(TASKING, LOG_FATAL, "cannot allocate task related heap frames of count 0x200");
 
             return -1;
@@ -1174,7 +1212,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     {
         frame_t* task_related_heap_frames = NULL;
 
-        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 0x1000, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &task_related_heap_frames, NULL) != 0) {
+        if(fa->allocate_frame_by_count(fa, 0x1000, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &task_related_heap_frames, NULL) != 0) {
             PRINTLOG(TASKING, LOG_FATAL, "cannot allocate task related heap frames of count 0x200");
 
             return -1;
