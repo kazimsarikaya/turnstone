@@ -11,5 +11,5 @@
 
 MODULE("turnstone.kernel.cpu.apic");
 
-boolean_t local_apic_id_is_valid = false;
+volatile boolean_t local_apic_id_is_valid = false;
 volatile cpu_state_t __seg_gs * cpu_state = NULL;

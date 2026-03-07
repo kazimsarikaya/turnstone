@@ -24,17 +24,15 @@ MODULE("turnstone.kernel.cpu.apic");
 
 uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic);
 
-uint64_t ioapic_bases[2] = {0, 0};
-uint8_t ioapic_count = 0;
-uint64_t lapic_addr = 0;
-int8_t apic_enabled = 0;
+uint64_t ioapic_bases[2]           = {0, 0};
+uint8_t ioapic_count               = 0;
+uint64_t lapic_addr                = 0;
+int8_t apic_enabled                = 0;
 uint32_t lapic_initial_timer_count = 0;
-uint64_t apic_ap_count = 0;
-boolean_t apic_x2apic = false;
+uint64_t apic_ap_count             = 0;
+boolean_t apic_x2apic              = false;
 
 list_t* irq_remappings = NULL;
-
-extern volatile boolean_t task_tasking_initialized;
 
 static int8_t apic_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
@@ -42,15 +40,17 @@ static int8_t apic_isr(interrupt_frame_ext_t* frame) {
     if(local_apic_id_is_valid) {
         cpu_state->tick_count++;
 
-        if(cpu_state->local_apic_id == 0){
+        if(cpu_state->local_apic_id == 0) {
             hypervisor_vm_notify_timers(); // TODO: notify only vms on current cpu
         }
-    }
 
-    if(task_tasking_initialized && (cpu_state->tick_count % TASK_MAX_TICK_COUNT) == 0) {
-        task_task_switch_set_parameters(true);
-        task_switch_task();
-        task_task_switch_exit();
+        if(cpu_state->tasking_enabled && (cpu_state->tick_count % TASK_MAX_TICK_COUNT) == 0) {
+            task_task_switch_set_parameters(true);
+            task_switch_task();
+            task_task_switch_exit();
+        } else {
+            apic_eoi();
+        }
     } else {
         apic_eoi();
     }
@@ -152,7 +152,7 @@ int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
 }
 
 int8_t apic_init_apic(list_t* apic_entries){
-    cpu_cpuid_regs_t query = {0x1, 0, 0, 0};
+    cpu_cpuid_regs_t query  = {0x1, 0, 0, 0};
     cpu_cpuid_regs_t answer = {0, 0, 0, 0};
 
     if(cpu_cpuid(query, &answer) != 0) {
@@ -171,7 +171,7 @@ int8_t apic_init_apic(list_t* apic_entries){
     if(answer.ecx & (1 << 21)) {
         PRINTLOG(APIC, LOG_INFO, "x2apic found");
         apic_enable_flag |= APIC_MSR_ENABLE_X2APIC;
-        apic_x2apic = true;
+        apic_x2apic       = true;
     } else {
         PRINTLOG(APIC, LOG_INFO, "apic found");
     }
@@ -207,7 +207,7 @@ int8_t apic_init_apic(list_t* apic_entries){
     iter->destroy(iter);
 
     if(la == NULL) {
-        la = list_get_data_at_position(apic_entries, 0);
+        la         = list_get_data_at_position(apic_entries, 0);
         lapic_addr = la->local_apic_address.address;
     } else {
         lapic_addr = la->local_apic_address_override.address;
@@ -245,9 +245,9 @@ int8_t apic_init_apic(list_t* apic_entries){
 
     apic_write_spurious_interrupt_vector(0x10f);
 
-    apic_ap_count = apic_get_ap_count();
+    apic_ap_count                 = apic_get_ap_count();
     lock_get_local_apic_id_getter = &apic_get_local_apic_id;
-    apic_enabled = 1;
+    apic_enabled                  = 1;
 
     return 0;
 }
@@ -333,10 +333,10 @@ uint8_t apic_configure_lapic(void) {
 boolean_t apic_is_waiting_timer(void) {
     if(apic_enabled) {
         uint32_t current_lvt = apic_read_timer_lvt();
-        uint8_t timer_irq = current_lvt & 0xFF;
+        uint8_t timer_irq    = current_lvt & 0xFF;
 
         uint32_t isr_index = timer_irq / 32;
-        uint32_t isr_bit = timer_irq % 32;
+        uint32_t isr_bit   = timer_irq % 32;
 
         if(apic_x2apic) {
             uint32_t isr = cpu_read_msr(APIC_X2APIC_MSR_ISR0 + isr_index);
@@ -392,7 +392,7 @@ uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
     __volatile__ apic_ioapic_register_t* io_apic_r = (__volatile__ apic_ioapic_register_t*)ioapic_base;
 
     io_apic_r->selector = APIC_IOAPIC_REGISTER_IDENTIFICATION;
-    io_apic_r->value = (ioapic->ioapic.ioapic_id & 0xF) << 24;
+    io_apic_r->value    = (ioapic->ioapic.ioapic_id & 0xF) << 24;
 
     io_apic_r->selector = APIC_IOAPIC_REGISTER_VERSION;
 
@@ -403,9 +403,9 @@ uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
     for(uint8_t i = 0; i < max_r_e; i++) {
         uint8_t intnum = interrupt_get_next_empty_interrupt();
         io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * i;
-        io_apic_r->value = intnum | APIC_IOAPIC_INTERRUPT_DISABLED;
+        io_apic_r->value    = intnum | APIC_IOAPIC_INTERRUPT_DISABLED;
         io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * i + 1;
-        io_apic_r->value = 0;
+        io_apic_r->value    = 0;
 
         PRINTLOG(IOAPIC, LOG_DEBUG, "irq 0x%02x mapped to 0x%02x", i, intnum);
     }
@@ -418,7 +418,7 @@ int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
 
     // props |= APIC_IOAPIC_DESTINATION_MODE_LOGICAL;
     uint32_t apic_id = apic_get_local_apic_id();
-    uint32_t dest = apic_id;
+    uint32_t dest    = apic_id;
     dest = dest << 24;
 
     for(uint8_t i = 0; i < ioapic_count; i++) {
@@ -428,15 +428,15 @@ int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
         uint8_t max_r_e = APIC_IOAPIC_MAX_REDIRECTION_ENTRY(io_apic_r->value);
 
         if(irq >= max_r_e) {
-            irq -= max_r_e;
+            irq      -= max_r_e;
             base_irq += max_r_e;
             continue;
         }
 
         io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * irq;
-        io_apic_r->value = (base_irq + irq) | props;
+        io_apic_r->value    = (base_irq + irq) | props;
         io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * irq + 1;
-        io_apic_r->value = dest;
+        io_apic_r->value    = dest;
 
         PRINTLOG(IOAPIC, LOG_DEBUG, "irq 0x%02x mapped to 0x%02x", irq, base_irq + irq);
 
@@ -456,7 +456,7 @@ int8_t apic_ioapic_switch_irq(uint8_t irq, uint32_t disabled){
         uint8_t max_r_e = APIC_IOAPIC_MAX_REDIRECTION_ENTRY(io_apic_r->value);
 
         if(irq >= max_r_e) {
-            irq -= max_r_e;
+            irq      -= max_r_e;
             base_irq += max_r_e;
 
             continue;
@@ -501,7 +501,7 @@ uint32_t apic_get_local_apic_id(void) {
             return (*id >> 24) & 0xFF;
         }
     } else {
-        cpu_cpuid_regs_t query = {1, 0, 0, 0};
+        cpu_cpuid_regs_t query  = {1, 0, 0, 0};
         cpu_cpuid_regs_t answer = {0};
         cpu_cpuid(query, &answer);
         return answer.ebx >> 24;
@@ -517,15 +517,15 @@ void apic_send_init(uint8_t destination) {
                           (uint64_t)destination << 32 |
                           APIC_ICR_DELIVERY_MODE_INIT | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE);
 
-            while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+            while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING) {;}
         } else {
             volatile uint32_t* icr_high = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_HIGH);
-            volatile uint32_t* icr_low = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
+            volatile uint32_t* icr_low  = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
 
             *icr_high = destination << 24;
-            *icr_low = APIC_ICR_DELIVERY_MODE_INIT | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE;
+            *icr_low  = APIC_ICR_DELIVERY_MODE_INIT | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE;
 
-            while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+            while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING) {;}
         }
     }
 }
@@ -538,16 +538,16 @@ void apic_send_sipi(uint8_t destination, uint8_t vector) {
                           APIC_ICR_DELIVERY_MODE_STARTUP | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE |
                           vector);
 
-            while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+            while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING) {;}
         } else {
             volatile uint32_t* icr_high = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_HIGH);
-            volatile uint32_t* icr_low = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
+            volatile uint32_t* icr_low  = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
 
             *icr_high = destination << 24;
-            *icr_low = APIC_ICR_DELIVERY_MODE_STARTUP | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE |
-                       vector;
+            *icr_low  = APIC_ICR_DELIVERY_MODE_STARTUP | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE |
+                        vector;
 
-            while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+            while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING) {;}
         }
     }
 }
@@ -560,16 +560,20 @@ void apic_send_ipi(uint8_t destination, uint8_t vector, boolean_t wait) {
                           APIC_ICR_DELIVERY_MODE_FIXED | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE |
                           vector);
 
-            if(wait) while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+            if(wait) {
+                while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING) {;}
+            }
         } else {
             volatile uint32_t* icr_high = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_HIGH);
-            volatile uint32_t* icr_low = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
+            volatile uint32_t* icr_low  = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
 
             *icr_high = destination << 24;
-            *icr_low = APIC_ICR_DELIVERY_MODE_FIXED | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE |
-                       vector;
+            *icr_low  = APIC_ICR_DELIVERY_MODE_FIXED | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE |
+                        vector;
 
-            if(wait) while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+            if(wait) {
+                while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING) {;}
+            }
         }
     }
 }
@@ -581,15 +585,15 @@ void apic_send_nmi(uint8_t destination) {
                           (uint64_t)destination << 32 |
                           APIC_ICR_DELIVERY_MODE_NMI | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE);
 
-            while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+            while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING) {;}
         } else {
             volatile uint32_t* icr_high = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_HIGH);
-            volatile uint32_t* icr_low = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
+            volatile uint32_t* icr_low  = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
 
             *icr_high = destination << 24;
-            *icr_low = APIC_ICR_DELIVERY_MODE_NMI | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE;
+            *icr_low  = APIC_ICR_DELIVERY_MODE_NMI | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE;
 
-            while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+            while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING) {;}
         }
     }
 }
@@ -627,8 +631,8 @@ uint64_t apic_get_ap_count(void) {
 int32_t apic_get_first_irr_interrupt(void) {
     if(apic_enabled) {
         if(apic_x2apic) {
-            uint64_t irr = 0;
-            uint64_t intnum = 0;
+            uint64_t irr     = 0;
+            uint64_t intnum  = 0;
             uint64_t intbase = 0;
             uint64_t msrbase = APIC_X2APIC_MSR_IRR7;
 
@@ -645,7 +649,7 @@ int32_t apic_get_first_irr_interrupt(void) {
 
             return -1;
         } else {
-            uint64_t intnum = 0;
+            uint64_t intnum  = 0;
             uint64_t intbase = 0;
             uint64_t irrbase = APIC_X2APIC_MSR_IRR7; // irr needs to be read from 7 to 0 bigger is higher priority
 
@@ -670,8 +674,8 @@ int32_t apic_get_first_irr_interrupt(void) {
 int32_t apic_get_isr_interrupt(void) {
     if(apic_enabled) {
         if(apic_x2apic) {
-            uint64_t irr = 0;
-            uint64_t intnum = 0;
+            uint64_t irr     = 0;
+            uint64_t intnum  = 0;
             uint64_t intbase = 0;
             uint64_t msrbase = APIC_X2APIC_MSR_ISR0;
 
@@ -689,7 +693,7 @@ int32_t apic_get_isr_interrupt(void) {
 
             return -1;
         } else {
-            uint64_t intnum = 0;
+            uint64_t intnum  = 0;
             uint64_t intbase = 0;
             uint64_t isrbase = APIC_REGISTER_OFFSET_ISR0;
 
