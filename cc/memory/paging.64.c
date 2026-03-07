@@ -498,6 +498,130 @@ int8_t memory_paging_reserve_current_page_table_frames(void) {
 
     return 0;
 }
+memory_page_table_context_t* memory_paging_create_empty_userspace_table(
+    uint64_t gdt_fa_location, uint64_t gdt_size,
+    uint64_t tss_fa_location, uint64_t tss_size,
+    uint64_t stack_bottom_fa_location, uint64_t stack_size
+    ) {
+
+    memory_page_table_context_t* new_table_context = memory_paging_build_empty_table(0);
+
+    if(!new_table_context) {
+        PRINTLOG(PAGING, LOG_ERROR, "failed to build empty page table context for userspace");
+
+        return NULL;
+    }
+
+    const linker_metadata_at_memory_t* module_or_section = linker_get_module_at_memory(SYSTEM_INFO->interrupt_handlers_module_id);
+    const linker_section_at_memory_t* text_section       = NULL;
+    const linker_section_at_memory_t* bss_section        = NULL;
+
+    module_or_section++;
+    while(module_or_section->section.size) {
+
+        if(module_or_section->section.section_type == LINKER_SECTION_TYPE_TEXT) {
+            text_section = &module_or_section->section;
+        }
+
+        if(module_or_section->section.section_type == LINKER_SECTION_TYPE_BSS) {
+            bss_section = &module_or_section->section;
+        }
+
+        module_or_section++;
+    }
+
+    if(!text_section || !bss_section) {
+        PRINTLOG(PAGING, LOG_ERROR, "cannot find text or bss section for interrupt handlers module: text section: 0x%p bss section: 0x%p", text_section, bss_section);
+        cpu_hlt();
+
+        return NULL;
+    }
+
+    PRINTLOG(PAGING, LOG_DEBUG, "mapping interrupt handlers text section: va: 0x%llx fa: 0x%llx size: 0x%llx",
+             text_section->virtual_start, text_section->physical_start, text_section->size);
+    PRINTLOG(PAGING, LOG_DEBUG, "mapping interrupt handlers bss section: va: 0x%llx fa: 0x%llx size: 0x%llx",
+             bss_section->virtual_start, bss_section->physical_start, bss_section->size);
+
+    for(uint64_t offset = 0; offset < text_section->size; offset += MEMORY_PAGING_PAGE_SIZE) {
+        PRINTLOG(PAGING, LOG_DEBUG, "mapping interrupt handlers text section page: 0x%llx 0x%llx",
+                 text_section->virtual_start + offset,
+                 text_section->physical_start + offset);
+        memory_paging_add_page_ext(new_table_context,
+                                   text_section->virtual_start + offset,
+                                   text_section->physical_start + offset,
+                                   MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_READONLY);
+    }
+
+    for(uint64_t offset = 0; offset < bss_section->size; offset += MEMORY_PAGING_PAGE_SIZE) {
+        PRINTLOG(PAGING, LOG_DEBUG, "mapping interrupt handlers bss section page: 0x%llx 0x%llx",
+                 bss_section->virtual_start + offset,
+                 bss_section->physical_start + offset);
+        memory_paging_add_page_ext(new_table_context,
+                                   bss_section->virtual_start + offset,
+                                   bss_section->physical_start + offset,
+                                   MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY);
+    }
+
+    frame_t tmp_frame = {0};
+
+    uint16_t idt_size = sizeof(descriptor_idt_t) * 256;
+    tmp_frame.frame_address = IDT_BASE_ADDRESS;
+    tmp_frame.frame_count   = (idt_size + FRAME_SIZE - 1) / FRAME_SIZE;
+
+    memory_paging_add_va_for_frame_ext(new_table_context,
+                                       tmp_frame.frame_address,
+                                       &tmp_frame,
+                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+
+    tmp_frame.frame_address = gdt_fa_location;
+    tmp_frame.frame_count   = (gdt_size + FRAME_SIZE - 1) / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(new_table_context,
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_frame.frame_address),
+                                          &tmp_frame,
+                                          MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(PAGING, LOG_ERROR, "failed to map gdt frames for userspace page table");
+        cpu_hlt();
+
+        return NULL;
+    }
+
+    tmp_frame.frame_address = tss_fa_location;
+    tmp_frame.frame_count   = (tss_size + FRAME_SIZE - 1) / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(new_table_context,
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_frame.frame_address),
+                                          &tmp_frame,
+                                          MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(PAGING, LOG_ERROR, "failed to map tss frames for userspace page table");
+        cpu_hlt();
+
+        return NULL;
+    }
+
+    tmp_frame.frame_address = stack_bottom_fa_location;
+    tmp_frame.frame_count   = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(new_table_context,
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_frame.frame_address),
+                                          &tmp_frame,
+                                          MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(PAGING, LOG_ERROR, "failed to map stack frames for userspace page table");
+        cpu_hlt();
+
+        return NULL;
+    }
+
+    uint64_t hm_key = (uint64_t)new_table_context->page_table;
+    hm_key >>= 12; // first 12 bits are always 0 because of page alignment, so we can ignore them for hashmap key
+
+    hashmap_put(memory_paging_page_tables, (void*)hm_key, new_table_context);
+
+
+    return new_table_context;
+}
+
 
 memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_frame_address) {
     PRINTLOG(PAGING, LOG_DEBUG, "building page table started");

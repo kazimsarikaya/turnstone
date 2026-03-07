@@ -191,6 +191,11 @@ int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_context_t* table_
 
 memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_frame_address);
 int8_t                       memory_paging_reserve_current_page_table_frames(void);
+memory_page_table_context_t* memory_paging_create_empty_userspace_table(
+    uint64_t gdt_fa_location, uint64_t gdt_size,
+    uint64_t tss_fa_location, uint64_t tss_size,
+    uint64_t stack_bottom_fa_location, uint64_t stack_size
+    );
 
 #ifdef __cplusplus
 }

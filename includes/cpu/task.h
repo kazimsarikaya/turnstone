@@ -147,6 +147,7 @@ typedef struct task_t {
     uint64_t                       wake_tick; ///< tick value when task wakes up
     const char*                    task_name; ///< task name
     memory_page_table_context_t*   page_table; ///< page table
+    memory_page_table_context_t*   userspace_page_table; ///< userspace page table for task, if task has userspace page table this field is not null
     list_t*                        allocated_frames; ///< list of allocated frames for task, these frames will be freed when task is killed or ended
     buffer_t*                      input_buffer; ///< input buffer
     buffer_t*                      output_buffer; ///< output buffer
@@ -154,10 +155,10 @@ typedef struct task_t {
     uint64_t                       vmcs_physical_address; ///< vmcs physical address
     void*                          vm; ///< vm
     int32_t                        exit_code; ///< task exit code
-    cpu_registers_t*               registers; ///< task registers
+    cpu_registers_t*               registers __attribute__((aligned(0x40))); ///< task registers
 } task_t; ///< short hand for struct
 
-_Static_assert(offsetof_field(task_t, registers) == 0xE0, "task_t registers offset is at 0xE0");
+_Static_assert(offsetof_field(task_t, registers) == 0x100, "task_t registers offset is at 0x100");
 
 /**
  * @brief inits kernel tasking, configures tss and kernel task
@@ -330,6 +331,8 @@ void     task_set_vmcs_physical_address(uint64_t vmcs_physical_address);
 uint64_t task_get_vmcs_physical_address(void);
 void     task_set_vm(void* vm);
 void*    task_get_vm(void);
+
+void task_set_userspace_page_table(memory_page_table_context_t* page_table);
 
 void task_remove_task_after_fault(uint64_t task_id);
 

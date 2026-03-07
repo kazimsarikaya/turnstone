@@ -48,6 +48,8 @@ void syscall_handler(void);
 
 void syscall_init_generic_handler(void);
 
+void syscall_jump_to_userspace(uint64_t cr3, uint64_t rip, uint64_t rsp);
+
 void syscall_init(void);
 
 #ifdef __cplusplus

@@ -489,6 +489,14 @@ void task_msleep(uint64_t msecs) {
     task_current_task_sleep(cpu_state->tick_count + msecs);
 }
 
+void task_set_userspace_page_table(memory_page_table_context_t* page_table) {
+    task_t* current_task = task_get_current_task();
+
+    if(current_task) {
+        current_task->userspace_page_table = page_table;
+    }
+}
+
 int8_t task_allocate_frame_and_add_paging(uint64_t count, boolean_t is_reserved, frame_t** frame) {
     task_t* current_task = task_get_current_task();
 

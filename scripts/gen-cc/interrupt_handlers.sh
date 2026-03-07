@@ -42,6 +42,23 @@ void syscall_handlers_set_generic_handler(syscall_generic_handler_f handler) {
 }
 
 __attribute__((naked, no_stack_protector))
+void syscall_jump_to_userspace(uint64_t cr3, uint64_t rip, uint64_t rsp) {
+    UNUSED(cr3);
+    UNUSED(rip);
+    UNUSED(rsp);
+    asm volatile (
+        "xor %%rbp, %%rbp\n"
+        "mov %%rdx, %%rsp\n"
+        "mov %%rsi, %%rcx\n"
+        "mov \$0x202, %%r11\n"
+        "mov %%rdi, %%cr3\n"
+        "swapgs\n"
+        "sysretq\n"
+        ::: "memory"
+        );
+}
+
+__attribute__((naked, no_stack_protector))
 void syscall_handler(void) {
     asm volatile (
         "swapgs\n"
