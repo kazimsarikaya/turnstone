@@ -34,27 +34,30 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
 
     PRINTLOG(VIDEO, LOG_INFO, "Initializing QEMU VGA Device");
 
+    // FIXME: locking video_lock is not enough, opening tracing at frameallocator
+    // causes page faults. find a better way to handle this.
+
     lock_acquire(video_lock);
 
     uint64_t fb_bar_addr_fa = pci_get_bar_address(pci_dev, 0);
     uint64_t fb_bar_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fb_bar_addr_fa);
-    uint64_t fb_bar_size = pci_get_bar_size(pci_dev, 0);
+    uint64_t fb_bar_size    = pci_get_bar_size(pci_dev, 0);
     uint64_t fb_bar_frm_cnt = (fb_bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
     screen_info_t screen_info = screen_get_info();
 
     frame_t old_fb_frm = {
         .frame_address = SYSTEM_INFO->frame_buffer->physical_base_address,
-        .frame_count = (screen_info.pixels_per_scanline * screen_info.height * sizeof(color_t) + FRAME_SIZE - 1) / FRAME_SIZE,
-        .type = FRAME_TYPE_RESERVED,
+        .frame_count   = (screen_info.pixels_per_scanline * screen_info.height * sizeof(color_t) + FRAME_SIZE - 1) / FRAME_SIZE,
+        .type          = FRAME_TYPE_RESERVED,
     };
 
     memory_paging_delete_va_for_frame(SYSTEM_INFO->frame_buffer->virtual_base_address, &old_fb_frm);
 
     frame_t fb_bar_frm = {
         .frame_address = fb_bar_addr_fa,
-        .frame_count = fb_bar_frm_cnt,
-        .type = FRAME_TYPE_RESERVED,
+        .frame_count   = fb_bar_frm_cnt,
+        .type          = FRAME_TYPE_RESERVED,
     };
 
     memory_paging_add_va_for_frame(fb_bar_addr_va, &fb_bar_frm,
@@ -64,18 +67,18 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
 
     uint64_t mmio_bar_addr_fa = pci_get_bar_address(pci_dev, 2);
     uint64_t mmio_bar_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(mmio_bar_addr_fa);
-    uint64_t mmio_bar_size = pci_get_bar_size(pci_dev, 2);
+    uint64_t mmio_bar_size    = pci_get_bar_size(pci_dev, 2);
     uint64_t mmio_bar_frm_cnt = (mmio_bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
     frame_t mmio_bar_frm = {
         .frame_address = mmio_bar_addr_fa,
-        .frame_count = mmio_bar_frm_cnt,
-        .type = FRAME_TYPE_RESERVED,
+        .frame_count   = mmio_bar_frm_cnt,
+        .type          = FRAME_TYPE_RESERVED,
     };
 
     frame_allocator_t* fa = frame_get_allocator();
 
-    if(fa->get_reserved_frames_of_address(fa, (void*)mmio_bar_addr_fa) == NULL){
+    if(fa->get_reserved_frames_of_address(fa, (void*)mmio_bar_addr_fa) == NULL) {
         PRINTLOG(VIDEO, LOG_INFO, "QEMU VGA MMIO BAR not reserved, reserving");
         frame_get_allocator()->allocate_frame(frame_get_allocator(), &mmio_bar_frm);
     }
@@ -103,7 +106,7 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
 
     if(video_edid_get_max_resolution(edid, (uint32_t*)&qemuvga_device->max_width, (uint32_t*)&qemuvga_device->max_height) != 0) {
         PRINTLOG(VIDEO, LOG_WARNING, "Failed to get max resolution from EDID, using from screen info");
-        qemuvga_device->max_width = screen_info.width;
+        qemuvga_device->max_width  = screen_info.width;
         qemuvga_device->max_height = screen_info.height;
     }
 
@@ -113,7 +116,7 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
 
     uint16_t old_xres = mmio_read(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_XRES * 2, 2);
     uint16_t old_yres = mmio_read(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_YRES * 2, 2);
-    uint16_t old_bpp = mmio_read(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_BPP * 2, 2);
+    uint16_t old_bpp  = mmio_read(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_BPP * 2, 2);
 
     PRINTLOG(VIDEO, LOG_INFO, "QEMU VGA current resolution: %dx%d bpp %d", old_xres, old_yres, old_bpp);
 
