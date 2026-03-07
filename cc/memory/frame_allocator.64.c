@@ -34,21 +34,7 @@ typedef struct frame_allocator_context_t {
 } frame_allocator_context_t;
 
 
-int8_t       frame_allocator_cmp_by_size(const void* data1, const void* data2);
-int8_t       frame_allocator_cmp_by_address(const void* data1, const void* data2);
-int8_t       fa_reserve_system_frames(frame_allocator_t* self, frame_t* f);
-int8_t       fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size);
-int8_t       fa_allocate_frame(frame_allocator_t* self, frame_t* f);
-int8_t       fa_release_frame(frame_allocator_t* self, frame_t* f);
-int8_t       fa_release_acpi_reclaim_memory(frame_allocator_t* self);
-int8_t       fa_cleanup(frame_allocator_t* self);
-frame_t*     fa_get_reserved_frames_of_address(frame_allocator_t* self, void* address);
-frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type);
-uint64_t     fa_get_total_frame_count(frame_allocator_t* self);
-uint64_t     fa_get_free_frame_count(frame_allocator_t* self);
-uint64_t     fa_get_allocated_frame_count(frame_allocator_t* self);
-
-int8_t frame_allocator_cmp_by_size(const void* data1, const void* data2){
+static int8_t frame_allocator_cmp_by_size(const void* data1, const void* data2){
     frame_t* f1 = (frame_t*)data1;
     frame_t* f2 = (frame_t*)data2;
 
@@ -61,15 +47,15 @@ int8_t frame_allocator_cmp_by_size(const void* data1, const void* data2){
     return 0;
 }
 
-int8_t frame_allocator_cmp_by_address(const void* data1, const void* data2){
+static int8_t frame_allocator_cmp_by_address(const void* data1, const void* data2){
     frame_t* f1 = (frame_t*)data1;
     frame_t* f2 = (frame_t*)data2;
 
     uint64_t f1_start = f1->frame_address;
-    uint64_t f1_end = f1->frame_address + f1->frame_count * FRAME_SIZE - 1;
+    uint64_t f1_end   = f1->frame_address + f1->frame_count * FRAME_SIZE - 1;
 
     uint64_t f2_start = f2->frame_address;
-    uint64_t f2_end = f2->frame_address + f2->frame_count * FRAME_SIZE - 1;
+    uint64_t f2_end   = f2->frame_address + f2->frame_count * FRAME_SIZE - 1;
 
     if(f1_end < f2_start) {
         return -1;
@@ -82,7 +68,7 @@ int8_t frame_allocator_cmp_by_address(const void* data1, const void* data2){
     return 0;
 }
 
-uint64_t fa_get_total_frame_count(frame_allocator_t* self) {
+static uint64_t fa_get_total_frame_count(frame_allocator_t* self) {
     if(self == NULL) {
         return 0;
     }
@@ -92,7 +78,7 @@ uint64_t fa_get_total_frame_count(frame_allocator_t* self) {
     return ctx->total_frame_count;
 }
 
-uint64_t fa_get_free_frame_count(frame_allocator_t* self) {
+static uint64_t fa_get_free_frame_count(frame_allocator_t* self) {
     if(self == NULL) {
         return 0;
     }
@@ -102,7 +88,7 @@ uint64_t fa_get_free_frame_count(frame_allocator_t* self) {
     return ctx->free_frame_count;
 }
 
-uint64_t fa_get_allocated_frame_count(frame_allocator_t* self) {
+static uint64_t fa_get_allocated_frame_count(frame_allocator_t* self) {
     if(self == NULL) {
         return 0;
     }
@@ -112,12 +98,12 @@ uint64_t fa_get_allocated_frame_count(frame_allocator_t* self) {
     return ctx->allocated_frame_count;
 }
 
-int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
+static int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
     frame_allocator_context_t* ctx = (frame_allocator_context_t*)self->context;
 
     lock_acquire(ctx->lock);
 
-    uint64_t rem_frm_cnt = f->frame_count;
+    uint64_t rem_frm_cnt   = f->frame_count;
     uint64_t rem_frm_start = f->frame_address;
 
 
@@ -143,7 +129,7 @@ int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
         frm_alloc_cnt = frm->frame_count - frm_alloc_cnt;
 
         rem_frm_start += frm_alloc_cnt * FRAME_SIZE;
-        rem_frm_cnt -= frm_alloc_cnt;
+        rem_frm_cnt   -= frm_alloc_cnt;
     }
 
 
@@ -163,8 +149,8 @@ int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
             }
 
             new_r_frm->frame_address = rem_frm_start;
-            new_r_frm->frame_count = rem_frm_cnt;
-            new_r_frm->type = FRAME_TYPE_RESERVED;
+            new_r_frm->frame_count   = rem_frm_cnt;
+            new_r_frm->type          = FRAME_TYPE_RESERVED;
             ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_r_frm, new_r_frm, NULL);
 
             PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "no used frame found, inserted into reserveds, frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
@@ -181,11 +167,11 @@ int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
 
         if(frm_alloc_cnt < rem_frm_cnt) {
             new_frm.frame_count = frm_alloc_cnt;
-            rem_frm_cnt -= frm_alloc_cnt;
-            rem_frm_start += frm_alloc_cnt * FRAME_SIZE;
+            rem_frm_cnt        -= frm_alloc_cnt;
+            rem_frm_start      += frm_alloc_cnt * FRAME_SIZE;
         } else {
             new_frm.frame_count = rem_frm_cnt;
-            rem_frm_cnt = 0;
+            rem_frm_cnt         = 0;
         }
 
         self->allocate_frame(self, &new_frm);
@@ -198,7 +184,7 @@ int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
 }
 
 
-int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size) {
+static int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size) {
     frame_allocator_context_t* ctx = (frame_allocator_context_t*)self->context;
 
 
@@ -239,7 +225,7 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
                         break;
                     } else {
                         // we need check fit with alignment
-                        uint64_t begin_rem = item->frame_address % MEMORY_PAGING_PAGE_LENGTH_2M;
+                        uint64_t begin_rem       = item->frame_address % MEMORY_PAGING_PAGE_LENGTH_2M;
                         uint64_t begin_rem_f_cnt = begin_rem / FRAME_SIZE;
 
                         if(item->frame_count >= count + begin_rem_f_cnt) {
@@ -255,13 +241,13 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
                             }
 
                             new_begin_frm->frame_address = item->frame_address;
-                            new_begin_frm->frame_count = begin_rem_f_cnt;
+                            new_begin_frm->frame_count   = begin_rem_f_cnt;
 
                             list_sortedlist_insert(ctx->free_frames_sorted_by_size, new_begin_frm);
                             ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_begin_frm, new_begin_frm, NULL);
 
                             item->frame_address += begin_rem_f_cnt * FRAME_SIZE;
-                            item->frame_count -= begin_rem_f_cnt;
+                            item->frame_count   -= begin_rem_f_cnt;
 
                             tmp_frm = item;
 
@@ -305,12 +291,12 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
 
         uint64_t rem_frms = tmp_frm->frame_count - count;
 
-        new_frm->frame_address = tmp_frm->frame_address;
-        new_frm->frame_count = count;
+        new_frm->frame_address    = tmp_frm->frame_address;
+        new_frm->frame_count      = count;
         new_frm->frame_attributes = tmp_frm->frame_attributes;
 
         ctx->allocated_frame_count += count;
-        ctx->free_frame_count -= count;
+        ctx->free_frame_count      -= count;
 
         if(fa_type & FRAME_ALLOCATION_TYPE_OLD_RESERVED) {
             new_frm->frame_attributes |= FRAME_ATTRIBUTE_OLD_RESERVED;
@@ -335,9 +321,9 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
                 cpu_hlt();
             }
 
-            free_rem_frm->frame_address = tmp_frm->frame_address + count * FRAME_SIZE;
-            free_rem_frm->frame_count = rem_frms;
-            free_rem_frm->type = FRAME_TYPE_FREE;
+            free_rem_frm->frame_address    = tmp_frm->frame_address + count * FRAME_SIZE;
+            free_rem_frm->frame_count      = rem_frms;
+            free_rem_frm->type             = FRAME_TYPE_FREE;
             free_rem_frm->frame_attributes = tmp_frm->frame_attributes;
 
             ctx->free_frames_by_address->insert(ctx->free_frames_by_address, free_rem_frm, free_rem_frm, NULL);
@@ -363,7 +349,7 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
     return -1;
 }
 
-int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
+static int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
     if(self == NULL) {
         return -1;
     }
@@ -394,9 +380,9 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
             return -1;
         }
 
-        new_frm->frame_address = frm->frame_address;
-        new_frm->frame_count = (f->frame_address - frm->frame_address) / FRAME_SIZE;
-        new_frm->type = FRAME_TYPE_FREE;
+        new_frm->frame_address    = frm->frame_address;
+        new_frm->frame_count      = (f->frame_address - frm->frame_address) / FRAME_SIZE;
+        new_frm->type             = FRAME_TYPE_FREE;
         new_frm->frame_attributes = frm->frame_attributes;
 
         list_sortedlist_insert(ctx->free_frames_sorted_by_size, new_frm);
@@ -415,9 +401,9 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
             return -1;
         }
 
-        new_frm->frame_address = f->frame_address + f->frame_count * FRAME_SIZE;
-        new_frm->frame_count = rem_frms;
-        new_frm->type = FRAME_TYPE_FREE;
+        new_frm->frame_address    = f->frame_address + f->frame_count * FRAME_SIZE;
+        new_frm->frame_count      = rem_frms;
+        new_frm->type             = FRAME_TYPE_FREE;
         new_frm->frame_attributes = frm->frame_attributes;
 
         list_sortedlist_insert(ctx->free_frames_sorted_by_size, new_frm);
@@ -432,13 +418,13 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
         return -1;
     }
 
-    new_frm->frame_address = f->frame_address;
-    new_frm->frame_count = f->frame_count;
-    new_frm->type = f->type != FRAME_TYPE_FREE?f->type:FRAME_TYPE_USED;
+    new_frm->frame_address    = f->frame_address;
+    new_frm->frame_count      = f->frame_count;
+    new_frm->type             = f->type != FRAME_TYPE_FREE?f->type:FRAME_TYPE_USED;
     new_frm->frame_attributes = f->frame_attributes?f->frame_attributes:frm->frame_attributes;
 
     ctx->allocated_frame_count += new_frm->frame_count;
-    ctx->free_frame_count -= new_frm->frame_count;
+    ctx->free_frame_count      -= new_frm->frame_count;
 
     if(new_frm->type == FRAME_TYPE_USED) {
         ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, new_frm, new_frm, NULL);
@@ -453,7 +439,7 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
     return 0;
 }
 
-int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
+static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
     if(self == NULL) {
         return -1;
     }
@@ -479,9 +465,9 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
                 lock_release(ctx->lock);
                 return -1;
             }
-            prev_frm->frame_address = tmp_frame->frame_address;
-            prev_frm->frame_count = prev_frm_count;
-            prev_frm->type = FRAME_TYPE_USED;
+            prev_frm->frame_address    = tmp_frame->frame_address;
+            prev_frm->frame_count      = prev_frm_count;
+            prev_frm->type             = FRAME_TYPE_USED;
             prev_frm->frame_attributes = tmp_frame->frame_attributes;
 
             ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, prev_frm, prev_frm, NULL);
@@ -496,9 +482,9 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
                 lock_release(ctx->lock);
                 return -1;
             }
-            next_frm->frame_address = f->frame_address + f->frame_count * FRAME_SIZE;
-            next_frm->frame_count = rem_frms;
-            next_frm->type = FRAME_TYPE_USED;
+            next_frm->frame_address    = f->frame_address + f->frame_count * FRAME_SIZE;
+            next_frm->frame_count      = rem_frms;
+            next_frm->type             = FRAME_TYPE_USED;
             next_frm->frame_attributes = tmp_frame->frame_attributes;
 
             ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, next_frm, next_frm, NULL);
@@ -511,13 +497,13 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
             return -1;
         }
 
-        new_frm->frame_address = f->frame_address;
-        new_frm->frame_count = f->frame_count;
-        new_frm->type = FRAME_TYPE_FREE;
+        new_frm->frame_address    = f->frame_address;
+        new_frm->frame_count      = f->frame_count;
+        new_frm->type             = FRAME_TYPE_FREE;
         new_frm->frame_attributes = tmp_frame->frame_attributes;
 
         ctx->allocated_frame_count -= new_frm->frame_count;
-        ctx->free_frame_count += new_frm->frame_count;
+        ctx->free_frame_count      += new_frm->frame_count;
 
         for(uint64_t i = 0; i < f->frame_count; i++) {
             memory_paging_add_page(0x1000, f->frame_address + i * FRAME_SIZE, MEMORY_PAGING_PAGE_TYPE_4K);
@@ -552,9 +538,9 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
                 return -1;
             }
 
-            prev_frm->frame_address = tmp_frame->frame_address;
-            prev_frm->frame_count = prev_frm_count;
-            prev_frm->type = FRAME_TYPE_USED;
+            prev_frm->frame_address    = tmp_frame->frame_address;
+            prev_frm->frame_count      = prev_frm_count;
+            prev_frm->type             = FRAME_TYPE_USED;
             prev_frm->frame_attributes = tmp_frame->frame_attributes;
 
             ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, prev_frm, prev_frm, NULL);
@@ -570,9 +556,9 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
                 return -1;
             }
 
-            next_frm->frame_address = f->frame_address + f->frame_count * FRAME_SIZE;
-            next_frm->frame_count = rem_frms;
-            next_frm->type = FRAME_TYPE_USED;
+            next_frm->frame_address    = f->frame_address + f->frame_count * FRAME_SIZE;
+            next_frm->frame_count      = rem_frms;
+            next_frm->type             = FRAME_TYPE_USED;
             next_frm->frame_attributes = tmp_frame->frame_attributes;
 
             ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, next_frm, next_frm, NULL);
@@ -585,13 +571,13 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
             return -1;
         }
 
-        new_frm->frame_address = f->frame_address;
-        new_frm->frame_count = f->frame_count;
-        new_frm->type = FRAME_TYPE_FREE;
+        new_frm->frame_address    = f->frame_address;
+        new_frm->frame_count      = f->frame_count;
+        new_frm->type             = FRAME_TYPE_FREE;
         new_frm->frame_attributes = tmp_frame->frame_attributes;
 
         ctx->allocated_frame_count -= new_frm->frame_count;
-        ctx->free_frame_count += new_frm->frame_count;
+        ctx->free_frame_count      += new_frm->frame_count;
 
         for(uint64_t i = 0; i < f->frame_count; i++) {
             memory_paging_add_page(0x1000, f->frame_address + i * FRAME_SIZE, MEMORY_PAGING_PAGE_TYPE_4K);
@@ -611,7 +597,7 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
     return 0;
 }
 
-int8_t fa_release_acpi_reclaim_memory(frame_allocator_t* self) {
+static int8_t fa_release_acpi_reclaim_memory(frame_allocator_t* self) {
     if(self == NULL) {
         return -1;
     }
@@ -654,10 +640,10 @@ int8_t fa_release_acpi_reclaim_memory(frame_allocator_t* self) {
         }
 
         f->frame_attributes &= ~FRAME_ATTRIBUTE_ACPI_RECLAIM_MEMORY;
-        f->type = FRAME_TYPE_FREE;
+        f->type              = FRAME_TYPE_FREE;
 
         ctx->allocated_frame_count -= f->frame_count;
-        ctx->free_frame_count += f->frame_count;
+        ctx->free_frame_count      += f->frame_count;
 
         list_sortedlist_insert(ctx->free_frames_sorted_by_size, f);
         ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f, NULL);
@@ -674,7 +660,7 @@ int8_t fa_release_acpi_reclaim_memory(frame_allocator_t* self) {
     return 0;
 }
 
-int8_t fa_cleanup(frame_allocator_t* self) {
+static int8_t fa_cleanup(frame_allocator_t* self) {
     if(self == NULL) {
         return -1;
     }
@@ -717,10 +703,10 @@ int8_t fa_cleanup(frame_allocator_t* self) {
         }
 
         f->frame_attributes &= ~FRAME_ATTRIBUTE_OLD_RESERVED;
-        f->type = FRAME_TYPE_FREE;
+        f->type              = FRAME_TYPE_FREE;
 
         ctx->allocated_frame_count -= f->frame_count;
-        ctx->free_frame_count += f->frame_count;
+        ctx->free_frame_count      += f->frame_count;
 
         list_sortedlist_insert(ctx->free_frames_sorted_by_size, f);
         ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f, NULL);
@@ -763,10 +749,10 @@ int8_t fa_cleanup(frame_allocator_t* self) {
         }
 
         f->frame_attributes &= ~FRAME_ATTRIBUTE_OLD_RESERVED;
-        f->type = FRAME_TYPE_FREE;
+        f->type              = FRAME_TYPE_FREE;
 
         ctx->allocated_frame_count -= f->frame_count;
-        ctx->free_frame_count += f->frame_count;
+        ctx->free_frame_count      += f->frame_count;
 
         list_sortedlist_insert(ctx->free_frames_sorted_by_size, f);
         ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f, NULL);
@@ -784,7 +770,7 @@ int8_t fa_cleanup(frame_allocator_t* self) {
 }
 
 
-frame_t* fa_get_reserved_frames_of_address(frame_allocator_t* self, void* address){
+static frame_t* fa_get_reserved_frames_of_address(frame_allocator_t* self, void* address){
     if(self == NULL) {
         return NULL;
     }
@@ -798,7 +784,7 @@ frame_t* fa_get_reserved_frames_of_address(frame_allocator_t* self, void* addres
     return res;
 }
 
-frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type){
+static frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type){
     if(efi_m_type == EFI_LOADER_CODE || efi_m_type == EFI_LOADER_DATA) {
         return FRAME_TYPE_FREE;
     }
@@ -860,7 +846,7 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
         return NULL;
     }
 
-    ctx->heap = heap;
+    ctx->heap                       = heap;
     ctx->free_frames_sorted_by_size = list_create_sortedlist_with_heap(heap, frame_allocator_cmp_by_size);
     list_set_equality_comparator(ctx->free_frames_sorted_by_size, frame_allocator_cmp_by_address);
 
@@ -882,16 +868,16 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
 
     efi_memory_descriptor_t* mem_desc;
 
-    mem_desc = (efi_memory_descriptor_t*)(SYSTEM_INFO->mmap_data);
+    mem_desc = (efi_memory_descriptor_t*)(void*)(SYSTEM_INFO->mmap_data);
 
     uint64_t frame_start = mem_desc->physical_start;
     uint64_t frame_count = mem_desc->page_count;
-    frame_type_t type = fa_get_fa_type(mem_desc->type);
-    uint64_t frame_attr = mem_desc->attribute;
+    frame_type_t type    = fa_get_fa_type(mem_desc->type);
+    uint64_t frame_attr  = mem_desc->attribute;
 
     uint64_t mmap_ent_cnt = SYSTEM_INFO->mmap_size / SYSTEM_INFO->mmap_descriptor_size;
     for(size_t i = 1; i < mmap_ent_cnt; i++) {
-        mem_desc = (efi_memory_descriptor_t*)(SYSTEM_INFO->mmap_data + (i * SYSTEM_INFO->mmap_descriptor_size));
+        mem_desc = (efi_memory_descriptor_t*)(void*)(SYSTEM_INFO->mmap_data + (i * SYSTEM_INFO->mmap_descriptor_size));
 
         if(type == fa_get_fa_type(mem_desc->type) && (frame_start + frame_count * FRAME_SIZE) == mem_desc->physical_start && frame_attr == mem_desc->attribute) {
             frame_count += mem_desc->page_count;
@@ -908,13 +894,13 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
             }
 
 
-            f->frame_address = frame_start;
-            f->frame_count = frame_count;
-            f->type = type;
+            f->frame_address    = frame_start;
+            f->frame_count      = frame_count;
+            f->type             = type;
             f->frame_attributes = mem_desc->attribute;
 
             if((frame_start + frame_count * FRAME_SIZE) <= (1 << 20)) {
-                type = FRAME_TYPE_RESERVED;
+                type    = FRAME_TYPE_RESERVED;
                 f->type = type;
             }
 
@@ -949,22 +935,22 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
 
             frame_start = mem_desc->physical_start;
             frame_count = mem_desc->page_count;
-            type = fa_get_fa_type(mem_desc->type);
+            type        = fa_get_fa_type(mem_desc->type);
         }
 
     }
 
-    fa->context = ctx;
-    fa->allocate_frame_by_count = fa_allocate_frame_by_count;
-    fa->allocate_frame = fa_allocate_frame;
-    fa->release_frame = fa_release_frame;
-    fa->cleanup = fa_cleanup;
+    fa->context                        = ctx;
+    fa->allocate_frame_by_count        = fa_allocate_frame_by_count;
+    fa->allocate_frame                 = fa_allocate_frame;
+    fa->release_frame                  = fa_release_frame;
+    fa->cleanup                        = fa_cleanup;
     fa->get_reserved_frames_of_address = fa_get_reserved_frames_of_address;
-    fa->reserve_system_frames = fa_reserve_system_frames;
-    fa->release_acpi_reclaim_memory = fa_release_acpi_reclaim_memory;
-    fa->get_free_frame_count = fa_get_free_frame_count;
-    fa->get_total_frame_count = fa_get_total_frame_count;
-    fa->get_allocated_frame_count = fa_get_allocated_frame_count;
+    fa->reserve_system_frames          = fa_reserve_system_frames;
+    fa->release_acpi_reclaim_memory    = fa_release_acpi_reclaim_memory;
+    fa->get_free_frame_count           = fa_get_free_frame_count;
+    fa->get_total_frame_count          = fa_get_total_frame_count;
+    fa->get_allocated_frame_count      = fa_get_allocated_frame_count;
 
     return fa;
 }
