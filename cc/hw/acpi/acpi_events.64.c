@@ -21,27 +21,27 @@ int8_t acpi_events_isr(interrupt_frame_ext_t* frame);
 int8_t acpi_events_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
 
-    boolean_t os_poweroff = 0;
-    boolean_t os_reset = 0;
-    boolean_t irq_handled = 0;
+    boolean_t os_poweroff = false;
+    boolean_t os_sleep    = false;
+    boolean_t irq_handled = false;
 
     if(ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address) {
         PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1a address %i 0x%llx %i", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.bit_width);
 
         if(ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
-
+            PRINTLOG(ACPI, LOG_ERROR, "pm1a event block address space is memory, not supported yet");
         } else if(ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IO) {
             uint16_t pm1a_port = (uint16_t)ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address;
-            uint16_t value = inw(pm1a_port);
+            uint16_t value     = inw(pm1a_port);
             if(value) {
                 PRINTLOG(ACPI, LOG_DEBUG, "pm1a event 0x%04x", value);
 
                 if(value & 0x100) {
                     PRINTLOG(ACPI, LOG_DEBUG, "pm1a event is poweroff");
-                    os_poweroff = 1;
+                    os_poweroff = true;
                 } else if(value & 0x200) {
-                    PRINTLOG(ACPI, LOG_DEBUG, "pm1a event is reset");
-                    os_reset = 1;
+                    PRINTLOG(ACPI, LOG_DEBUG, "pm1a event is sleep");
+                    os_sleep = true;
                 } else {
                     PRINTLOG(ACPI, LOG_ERROR, "pm1a event is unknown 0x%04x", value);
                 }
@@ -52,26 +52,26 @@ int8_t acpi_events_isr(interrupt_frame_ext_t* frame){
             PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1a 0x%x", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space);
         }
 
-        irq_handled = 1;
+        irq_handled = true;
     }
 
     if(ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address) {
         PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1b address %i 0x%llx %i", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.bit_width);
 
         if(ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
-
+            PRINTLOG(ACPI, LOG_ERROR, "pm1b event block address space is memory, not supported yet");
         } else if(ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IO) {
             uint16_t pm1b_port = (uint16_t)ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address;
-            uint16_t value = inw(pm1b_port);
+            uint16_t value     = inw(pm1b_port);
             if(value) {
                 PRINTLOG(ACPI, LOG_DEBUG, "pm1b event 0x%04x", value);
 
                 if(value & 0x100) {
                     PRINTLOG(ACPI, LOG_DEBUG, "pm1b event is poweroff");
-                    os_poweroff = 1;
+                    os_poweroff = true;
                 } else if(value & 0x200) {
-                    PRINTLOG(ACPI, LOG_DEBUG, "pm1b event is reset");
-                    os_reset = 1;
+                    PRINTLOG(ACPI, LOG_DEBUG, "pm1b event is sleep");
+                    os_sleep = true;
                 } else {
                     PRINTLOG(ACPI, LOG_ERROR, "pm1b event is unknown 0x%04x", value);
                 }
@@ -82,17 +82,17 @@ int8_t acpi_events_isr(interrupt_frame_ext_t* frame){
             PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1b 0x%x", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space);
         }
 
-        irq_handled = 1;
+        irq_handled = true;
     }
 
     if(ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address) {
         PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe0 address %i 0x%llx %i", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.bit_width);
 
         if(ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
-
+            PRINTLOG(ACPI, LOG_ERROR, "gpe0 event block address space is memory, not supported yet");
         } else if(ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IO) {
             uint16_t gpe0_port = (uint16_t)ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address;
-            uint16_t value = inb(gpe0_port);
+            uint16_t value     = inb(gpe0_port);
             if(value) {
                 PRINTLOG(ACPI, LOG_ERROR, "gpe0 event 0x%02x", value);
                 outb(gpe0_port, 0xFF);
@@ -101,17 +101,17 @@ int8_t acpi_events_isr(interrupt_frame_ext_t* frame){
             PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe0 0x%x", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space);
         }
 
-        irq_handled = 1;
+        irq_handled = true;
     }
 
     if(ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address) {
         PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe1 address %i 0x%llx %i", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.bit_width);
 
         if(ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
-
+            PRINTLOG(ACPI, LOG_ERROR, "gpe1 event block address space is memory, not supported yet");
         } else if(ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IO) {
             uint16_t gpe1_port = (uint16_t)ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address;
-            uint16_t value = inb(gpe1_port);
+            uint16_t value     = inb(gpe1_port);
             if(value) {
                 PRINTLOG(ACPI, LOG_ERROR, "gpe1 event 0x%02x", value);
                 outb(gpe1_port, 0xFF);
@@ -120,17 +120,19 @@ int8_t acpi_events_isr(interrupt_frame_ext_t* frame){
             PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe1 0x%x", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space);
         }
 
-        irq_handled = 1;
+        irq_handled = true;
     }
+
+    PRINTLOG(ACPI, LOG_DEBUG, "acpi event handled %i poweroff %i sleep %i", irq_handled, os_poweroff, os_sleep);
 
     if(os_poweroff) {
         acpi_poweroff();
         cpu_hlt();
     }
 
-    if(os_reset) {
-        acpi_reset();
-        cpu_hlt();
+    if(os_sleep) {
+        PRINTLOG(ACPI, LOG_WARNING, "sleep is not supported yet");
+        return 0;
     }
 
     if(irq_handled) {
@@ -164,7 +166,7 @@ int8_t acpi_setup_events(void) {
         PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1a address %i 0x%llx %i", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.bit_width);
 
         if(ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
-
+            PRINTLOG(ACPI, LOG_ERROR, "pm1a event block address space is memory, not supported yet");
         } else if(ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IO) {
             uint16_t pm1a_port = (uint16_t)ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address;
             outw(pm1a_port, 0xFFFF);
@@ -184,7 +186,7 @@ int8_t acpi_setup_events(void) {
         PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1b address %i 0x%llx %i", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.bit_width);
 
         if(ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
-
+            PRINTLOG(ACPI, LOG_ERROR, "pm1b event block address space is memory, not supported yet");
         } else if(ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IO) {
             uint16_t pm1b_port = (uint16_t)ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address;
             outw(pm1b_port, 0xFFFF);
@@ -204,7 +206,7 @@ int8_t acpi_setup_events(void) {
         PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe0 address %i 0x%llx %i", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.bit_width);
 
         if(ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
-
+            PRINTLOG(ACPI, LOG_ERROR, "gpe0 event block address space is memory, not supported yet");
         } else if(ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IO) {
             uint16_t gpe0_port = (uint16_t)ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address;
             outb(gpe0_port, 0xFF);
@@ -221,7 +223,7 @@ int8_t acpi_setup_events(void) {
         PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe1 address %i 0x%llx %i", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.bit_width);
 
         if(ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
-
+            PRINTLOG(ACPI, LOG_ERROR, "gpe1 event block address space is memory, not supported yet");
         } else if(ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IO) {
             uint16_t gpe1_port = (uint16_t)ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address;
             outb(gpe1_port, 0xFF);
