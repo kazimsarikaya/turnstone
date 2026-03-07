@@ -65,7 +65,7 @@ static boolean_t tosdb_key_memtable_get(const tosdb_table_t* tbl, const tosdb_me
 
     boolean_t error = false;
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const void* not_typed_ii = iter->get_item(iter);
 
         tosdb_record_t* rec = tosdb_table_create_record((tosdb_table_t*)tbl);
@@ -82,18 +82,18 @@ static boolean_t tosdb_key_memtable_get(const tosdb_table_t* tbl, const tosdb_me
         if(idx_type == TOSDB_INDEX_PRIMARY || idx_type == TOSDB_INDEX_UNIQUE) {
             const tosdb_memtable_index_item_t* ii = not_typed_ii;
             ctx->sstable_id = ii->sstable_id;
-            ctx->level = ii->level;
-            ctx->record_id = ii->record_id;
-            ctx->offset = ii->offset;
-            ctx->length = ii->length;
+            ctx->level      = ii->level;
+            ctx->record_id  = ii->record_id;
+            ctx->offset     = ii->offset;
+            ctx->length     = ii->length;
 
         } else if(idx_type == TOSDB_INDEX_SECONDARY) {
             const tosdb_memtable_secondary_index_item_t* ii = not_typed_ii;
             ctx->sstable_id = ii->sstable_id;
-            ctx->level = ii->level;
-            ctx->record_id = ii->record_id;
-            ctx->offset = ii->offset;
-            ctx->length = ii->length;
+            ctx->level      = ii->level;
+            ctx->record_id  = ii->record_id;
+            ctx->offset     = ii->offset;
+            ctx->length     = ii->length;
 
         }
 
@@ -118,7 +118,7 @@ static boolean_t tosdb_key_memtable_get(const tosdb_table_t* tbl, const tosdb_me
 static boolean_t tosdb_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_block_sstable_list_item_t* sli,
                                                 uint64_t key_index, set_t* keys, list_t* old_keys) {
 
-    uint64_t idx_loc = 0;
+    uint64_t idx_loc  = 0;
     uint64_t idx_size = 0;
 
     const tosdb_index_t* idx = hashmap_get(tbl->indexes, (void*)key_index);
@@ -133,7 +133,7 @@ static boolean_t tosdb_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_
 
     for(uint64_t i = 0; i < sli->index_count; i++) {
         if(key_index == sli->indexes[i].index_id) {
-            idx_loc = sli->indexes[i].index_location;
+            idx_loc  = sli->indexes[i].index_location;
             idx_size = sli->indexes[i].index_size;
 
         }
@@ -148,18 +148,18 @@ static boolean_t tosdb_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_
     tosdb_cache_t* tdb_cache = tbl->db->tdb->cache;
 
     tosdb_cache_key_t cache_key = {0};
-    cache_key.type = TOSDB_CACHE_ITEM_TYPE_INDEX_DATA;
+    cache_key.type        = TOSDB_CACHE_ITEM_TYPE_INDEX_DATA;
     cache_key.database_id = tbl->db->id;
-    cache_key.table_id = tbl->id;
-    cache_key.index_id = key_index;
-    cache_key.level = sli->level;
-    cache_key.sstable_id = sli->sstable_id;
+    cache_key.table_id    = tbl->id;
+    cache_key.index_id    = key_index;
+    cache_key.level       = sli->level;
+    cache_key.sstable_id  = sli->sstable_id;
 
     tosdb_cached_index_data_t* c_id = NULL;
 
-    void** st_idx_items = NULL;
+    void** st_idx_items   = NULL;
     uint64_t record_count = 0;
-    uint8_t* idx_data = NULL;
+    uint8_t* idx_data     = NULL;
 
     if(tdb_cache) {
         c_id = (void*)tosdb_cache_get(tdb_cache, &cache_key);
@@ -184,7 +184,7 @@ static boolean_t tosdb_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_
 
         record_count = st_idx->record_count;
 
-        idx_loc = st_idx->index_data_location;
+        idx_loc  = st_idx->index_data_location;
         idx_size = st_idx->index_data_size;
 
         memory_free(st_idx);
@@ -198,7 +198,7 @@ static boolean_t tosdb_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_
 
         }
 
-        buffer_t* buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
+        buffer_t* buf_idx_in  = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
         buffer_t* buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
 
         const compression_t* compression = tbl->db->tdb->compression;
@@ -276,9 +276,9 @@ static boolean_t tosdb_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_
                 c_id->secondary_index_items = (tosdb_memtable_secondary_index_item_t**)st_idx_items;
             }
 
-            c_id->record_count = record_count;
-            c_id->valuelog_location = sli->valuelog_location;
-            c_id->valuelog_size = sli->valuelog_size;
+            c_id->record_count        = record_count;
+            c_id->valuelog_location   = sli->valuelog_location;
+            c_id->valuelog_size       = sli->valuelog_size;
             c_id->cache_key.data_size = sizeof(tosdb_cached_index_data_t) + index_data_unpacked_size + st_idx_items_len;
 
             tosdb_cache_put(tdb_cache, (tosdb_cache_key_t*)c_id);
@@ -316,18 +316,18 @@ static boolean_t tosdb_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_
         if(idx_type == TOSDB_INDEX_PRIMARY || idx_type == TOSDB_INDEX_UNIQUE) {
             const tosdb_memtable_index_item_t* ii = st_idx_items[i];
             ctx->sstable_id = sli->sstable_id;
-            ctx->level = sli->level;
-            ctx->record_id = ii->record_id;
-            ctx->offset = ii->offset;
-            ctx->length = ii->length;
+            ctx->level      = sli->level;
+            ctx->record_id  = ii->record_id;
+            ctx->offset     = ii->offset;
+            ctx->length     = ii->length;
 
         } else if(idx_type == TOSDB_INDEX_SECONDARY) {
             const tosdb_memtable_secondary_index_item_t* ii = st_idx_items[i];
             ctx->sstable_id = sli->sstable_id;
-            ctx->level = sli->level;
-            ctx->record_id = ii->record_id;
-            ctx->offset = ii->offset;
-            ctx->length = ii->length;
+            ctx->level      = sli->level;
+            ctx->record_id  = ii->record_id;
+            ctx->offset     = ii->offset;
+            ctx->length     = ii->length;
 
         }
 

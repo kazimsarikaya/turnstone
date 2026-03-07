@@ -70,7 +70,7 @@ int8_t compiler_ast_node_destroy(compiler_ast_node_t * node) {
             if(node->type_data->field_map) {
                 iterator_t * it = hashmap_iterator_create(node->type_data->field_map);
 
-                while(it->end_of_iterator(it) != 0) {
+                while(!it->end_of_iterator(it)) {
                     compiler_type_field_t * field = (compiler_type_field_t*)it->get_item(it);
 
                     memory_free((void*)field->name);

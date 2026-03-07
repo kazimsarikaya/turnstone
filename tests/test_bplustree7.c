@@ -243,7 +243,7 @@ int32_t main(int32_t argc, char_t** argv){
     argv++;
 
     int32_t max_key_count = 32;
-    int32_t item_count = sizeof(test_data) / sizeof(int32_t);
+    int32_t item_count    = sizeof(test_data) / sizeof(int32_t);
 
     if(argc == 1) {
         item_count = atoi(argv[0]);
@@ -305,7 +305,7 @@ int32_t main(int32_t argc, char_t** argv){
     }
 
     for(int32_t i = 0; i < item_count / 8; i++) {
-        tosdb_memtable_index_item_t key = {.key_hash = test_data[i]};
+        tosdb_memtable_index_item_t key   = {.key_hash = test_data[i]};
         tosdb_memtable_index_item_t* item = NULL;
 
         idx->delete(idx, &key, (void**)&item);
@@ -329,9 +329,9 @@ int32_t main(int32_t argc, char_t** argv){
 
     uint64_t prev = 0;
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_memtable_index_item_t* item = (tosdb_memtable_index_item_t*)iter->get_item(iter);
-        tosdb_memtable_index_item_t* key = (tosdb_memtable_index_item_t*)iter->get_extra_data(iter);
+        tosdb_memtable_index_item_t* key  = (tosdb_memtable_index_item_t*)iter->get_extra_data(iter);
 
         if(item->key_hash < prev) {
             print_error("key hash 0x%llx < prev 0x%llx", item->key_hash, prev);

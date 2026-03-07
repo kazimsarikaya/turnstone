@@ -78,7 +78,7 @@ void linker_print_modules_at_memory(void) {
         return;
     }
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const linker_metadata_at_memory_t* module_or_section = iter->get_item(iter);
 
         if(!module_or_section) {

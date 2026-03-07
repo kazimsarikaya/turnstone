@@ -40,7 +40,7 @@ int8_t compiler_print_symbol_table(compiler_t * compiler) {
             return -1;
         }
 
-        while (iter->end_of_iterator(iter) != 0) {
+        while(!iter->end_of_iterator(iter)) {
             const compiler_symbol_t* symbol = iter->get_item(iter);
 
             if (symbol == NULL) {
@@ -88,7 +88,7 @@ int8_t compiler_build_stack(compiler_t* compiler) {
         return -1;
     }
 
-    while (iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const compiler_symbol_t* symbol = iter->get_item(iter);
 
         if (symbol == NULL) {
@@ -173,17 +173,17 @@ int8_t compiler_symbol_destroyer(memory_heap_t* heap, void* symbol) {
 
 int8_t compiler_define_symbol(compiler_t* compiler, compiler_symbol_t* symbol, size_t symbol_size) {
     const char_t* sec_name_prefix = "data";
-    buffer_t* buffer = compiler->data_buffer;
+    buffer_t* buffer              = compiler->data_buffer;
 
     if(symbol->is_const) {
         sec_name_prefix = "rodata";
-        buffer = compiler->rodata_buffer;
+        buffer          = compiler->rodata_buffer;
     } else if(symbol->initilized) {
         sec_name_prefix = "data";
-        buffer = compiler->data_buffer;
+        buffer          = compiler->data_buffer;
     } else {
         sec_name_prefix = "bss";
-        buffer = compiler->bss_buffer;
+        buffer          = compiler->bss_buffer;
     }
 
     const char_t* symbol_name = symbol->name;
@@ -213,7 +213,7 @@ int8_t compiler_destroy_external_symbols(compiler_t* compiler) {
         return -1;
     }
 
-    while (iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         compiler_symbol_t* symbol = (compiler_symbol_t*)iter->get_item(iter);
 
         if (symbol == NULL) {
@@ -242,9 +242,9 @@ int8_t compiler_add_external_symbol(compiler_t* compiler, const char_t* name, co
         return -1;
     }
 
-    symbol->name = name;
-    symbol->type = type;
-    symbol->size = size;
+    symbol->name     = name;
+    symbol->type     = type;
+    symbol->size     = size;
     symbol->is_const = is_const;
 
     if (hashmap_put(compiler->external_symbols, (void*)name, symbol) != 0) {

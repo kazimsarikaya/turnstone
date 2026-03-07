@@ -57,7 +57,7 @@ int32_t main(void){
             return -1;
         }
 
-        item->key = test_data[i];
+        item->key  = test_data[i];
         item->data = (i << 32) | test_data[i];
 
         printf("try to insert item: %llx %llx\n", item->key, item->data);
@@ -86,8 +86,8 @@ int32_t main(void){
 
     size_t found_count = 0;
 
-    while(iter->end_of_iterator(iter) != 0) {
-        size_t k = (size_t)iter->get_extra_data(iter);
+    while(!iter->end_of_iterator(iter)) {
+        size_t k  = (size_t)iter->get_extra_data(iter);
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
@@ -130,8 +130,8 @@ int32_t main(void){
 
     printf("iterator created: %p\n", iter);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        size_t k = (size_t)iter->get_extra_data(iter);
+    while(!iter->end_of_iterator(iter)) {
+        size_t k  = (size_t)iter->get_extra_data(iter);
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
@@ -157,8 +157,8 @@ int32_t main(void){
 
     printf("iterator created: %p\n", iter);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        size_t k = (size_t)iter->get_extra_data(iter);
+    while(!iter->end_of_iterator(iter)) {
+        size_t k  = (size_t)iter->get_extra_data(iter);
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
@@ -184,8 +184,8 @@ int32_t main(void){
 
     printf("iterator created: %p\n", iter);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        size_t k = (size_t)iter->get_extra_data(iter);
+    while(!iter->end_of_iterator(iter)) {
+        size_t k  = (size_t)iter->get_extra_data(iter);
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
@@ -211,8 +211,8 @@ int32_t main(void){
 
     printf("iterator created: %p\n", iter);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        size_t k = (size_t)iter->get_extra_data(iter);
+    while(!iter->end_of_iterator(iter)) {
+        size_t k  = (size_t)iter->get_extra_data(iter);
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
@@ -238,8 +238,8 @@ int32_t main(void){
 
     printf("iterator created: %p\n", iter);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        size_t k = (size_t)iter->get_extra_data(iter);
+    while(!iter->end_of_iterator(iter)) {
+        size_t k  = (size_t)iter->get_extra_data(iter);
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
@@ -265,8 +265,8 @@ int32_t main(void){
 
     printf("iterator created: %p\n", iter);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        size_t k = (size_t)iter->get_extra_data(iter);
+    while(!iter->end_of_iterator(iter)) {
+        size_t k  = (size_t)iter->get_extra_data(iter);
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
@@ -292,8 +292,8 @@ int32_t main(void){
 
     printf("iterator created: %p\n", iter);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        size_t k = (size_t)iter->get_extra_data(iter);
+    while(!iter->end_of_iterator(iter)) {
+        size_t k  = (size_t)iter->get_extra_data(iter);
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
@@ -319,8 +319,8 @@ int32_t main(void){
 
     printf("iterator created: %p\n", iter);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        size_t k = (size_t)iter->get_extra_data(iter);
+    while(!iter->end_of_iterator(iter)) {
+        size_t k  = (size_t)iter->get_extra_data(iter);
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
@@ -346,8 +346,8 @@ int32_t main(void){
 
     printf("iterator created: %p\n", iter);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        size_t k = (size_t)iter->get_extra_data(iter);
+    while(!iter->end_of_iterator(iter)) {
+        size_t k  = (size_t)iter->get_extra_data(iter);
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
@@ -374,7 +374,7 @@ int32_t main(void){
 
     printf("iterator created: %p\n", iter);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         item_t* d = (item_t*)iter->get_item(iter);
 
         memory_free(d);

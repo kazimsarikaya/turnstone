@@ -157,7 +157,7 @@ static void network_arp_cache_cleanup(void) {
 
     iterator_t* it = hashmap_iterator_create(network_arp_cache);
     if(it) {
-        while(it->end_of_iterator(it) != 0) {
+        while(!it->end_of_iterator(it)) {
             network_arp_cache_entry_t* entry = (network_arp_cache_entry_t*)it->get_item(it);
             if(entry) {
                 // remove entries that are older than 5 minutes
@@ -415,7 +415,7 @@ void network_listener_destroy(network_listener_t* listener) {
     if(listener->connections) {
         iterator_t* it = hashmap_iterator_create(listener->connections);
         if(it) {
-            while(it->end_of_iterator(it) != 0) {
+            while(!it->end_of_iterator(it)) {
                 network_connection_t* connection = (network_connection_t*)it->get_item(it);
                 if(connection) {
                     if(connection->read_pipeline) {

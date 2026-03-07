@@ -185,7 +185,7 @@ int8_t apic_init_apic(list_t* apic_entries){
 
     iterator_t* iter = list_iterator_create(apic_entries);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const acpi_table_madt_entry_t* e = iter->get_item(iter);
 
         if(e->info.type == ACPI_MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS_OVERRIDE) {
@@ -255,7 +255,7 @@ int8_t apic_init_apic(list_t* apic_entries){
 uint8_t apic_get_irq_override(uint8_t old_irq){
     iterator_t* iter = list_iterator_create(irq_remappings);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const acpi_table_madt_entry_t* e = iter->get_item(iter);
 
         if(e->interrupt_source_override.irq_source == old_irq) {
@@ -609,7 +609,7 @@ uint64_t apic_get_ap_count(void) {
 
     iterator_t* iter = list_iterator_create(apic_entries);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const acpi_table_madt_entry_t* e = iter->get_item(iter);
 
         if(e->info.type == ACPI_MADT_ENTRY_TYPE_PROCESSOR_LOCAL_APIC) {

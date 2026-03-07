@@ -190,7 +190,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
     uint64_t r_consumed = 0;
 
     uint64_t namelen = acpi_aml_len_namestring(ctx);
-    char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
+    char_t* name     = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
     if(name == NULL) {
         return -1;
@@ -328,7 +328,7 @@ uint8_t acpi_aml_parser_defaults[] =
 
 int8_t acpi_aml_object_name_comparator(const void* data1, const void* data2) {
     char_t* name1 = (char_t*)data1;
-    char_t* name2  = (char_t*)data2;
+    char_t* name2 = (char_t*)data2;
 
     return strcmp(name1, name2);
 }
@@ -349,13 +349,13 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 
     acpi_aml_parser_defaults[sizeof(acpi_aml_parser_defaults) - 1] = revision;
 
-    ctx->heap = heap;
-    ctx->data = acpi_aml_parser_defaults;
-    ctx->length = sizeof(acpi_aml_parser_defaults);
-    ctx->remaining = sizeof(acpi_aml_parser_defaults);
+    ctx->heap         = heap;
+    ctx->data         = acpi_aml_parser_defaults;
+    ctx->length       = sizeof(acpi_aml_parser_defaults);
+    ctx->remaining    = sizeof(acpi_aml_parser_defaults);
     ctx->scope_prefix = (char_t*)"\\";
-    ctx->symbols = bplustree_create_index_with_heap_and_unique(heap, 32, acpi_aml_object_name_comparator, true);
-    ctx->revision = revision;
+    ctx->symbols      = bplustree_create_index_with_heap_and_unique(heap, 32, acpi_aml_object_name_comparator, true);
+    ctx->revision     = revision;
 
     if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
         memory_free_ext(heap, ctx);
@@ -367,10 +367,10 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 
 int8_t acpi_aml_parser_parse_table(acpi_aml_parser_context_t* ctx, acpi_sdt_header_t* table) {
     int64_t aml_size = table->length - sizeof(acpi_sdt_header_t);
-    uint8_t* aml = (uint8_t*)(table + 1);
+    uint8_t* aml     = (uint8_t*)(table + 1);
 
-    ctx->data = aml;
-    ctx->length = aml_size;
+    ctx->data      = aml;
+    ctx->length    = aml_size;
     ctx->remaining = aml_size;
 
     return acpi_aml_parse_all_items(ctx, NULL, NULL);
@@ -380,7 +380,7 @@ void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t* ctx) {
 
     if(ctx->devices) {
         iterator_t* iter = list_iterator_create(ctx->devices);
-        while(iter->end_of_iterator(iter) != 0) {
+        while(!iter->end_of_iterator(iter)) {
             acpi_aml_device_t* d = (acpi_aml_device_t*)iter->get_item(iter);
             memory_free_ext(ctx->heap, d);
 

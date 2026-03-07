@@ -105,12 +105,6 @@ time_t         fat32_file_get_last_access_time(file_t* self);
 time_t         fat32_file_get_last_modification_time(file_t* self);
 const path_t*  fat32_directory_get_path(const directory_t* self);
 int8_t         fat32_directory_close(directory_t* self);
-const void*    fat32_dir_list_iter_notimpelemented(iterator_t* iter);
-int8_t         fat32_dir_list_iter_destroy(iterator_t* iter);
-iterator_t*    fat32_dir_list_iter_next(iterator_t* iter);
-int8_t         fat32_dir_list_iter_end_of_iterator(iterator_t* iter);
-const void*    fat32_dir_list_iter_get_item(iterator_t* iter);
-const void*    fat32_dir_list_iter_get_extra_data(iterator_t* iter);
 iterator_t*    fat32_directory_list(directory_t* self);
 directory_t*   fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno, uint32_t clusterno, const path_t* p, time_t ct);
 fs_stat_type_t fat32_directory_get_type(directory_t* self);
@@ -228,24 +222,24 @@ fat32_dirent_shortname_t* fat32_gen_dirents(const path_t* p, fs_stat_type_t type
     memory_memcopy(ext, &res[last_idx].name[8], strlen(ext));
     memory_free(ext);
 
-    res[last_idx].create_time.hours = tp->hours;
+    res[last_idx].create_time.hours   = tp->hours;
     res[last_idx].create_time.minutes = tp->minutes;
     res[last_idx].create_time.seconds = tp->seconds / 2;
-    res[last_idx].create_date.year = tp->year - FAT32_YEAR_START;
-    res[last_idx].create_date.month = tp->month;
-    res[last_idx].create_date.day = tp->day;
+    res[last_idx].create_date.year    = tp->year - FAT32_YEAR_START;
+    res[last_idx].create_date.month   = tp->month;
+    res[last_idx].create_date.day     = tp->day;
 
 
-    res[last_idx].last_accessed_date.year = tp->year - FAT32_YEAR_START;
+    res[last_idx].last_accessed_date.year  = tp->year - FAT32_YEAR_START;
     res[last_idx].last_accessed_date.month = tp->month;
-    res[last_idx].last_accessed_date.day = tp->day;
+    res[last_idx].last_accessed_date.day   = tp->day;
 
-    res[last_idx].last_modification_time.hours = tp->hours;
+    res[last_idx].last_modification_time.hours   = tp->hours;
     res[last_idx].last_modification_time.minutes = tp->minutes;
     res[last_idx].last_modification_time.seconds = tp->seconds / 2;
-    res[last_idx].last_modification_date.year = tp->year - FAT32_YEAR_START;
-    res[last_idx].last_modification_date.month = tp->month;
-    res[last_idx].last_modification_date.day = tp->day;
+    res[last_idx].last_modification_date.year    = tp->year - FAT32_YEAR_START;
+    res[last_idx].last_modification_date.month   = tp->month;
+    res[last_idx].last_modification_date.day     = tp->day;
 
     if(type == FS_STAT_TYPE_DIR) {
         res[last_idx].attributes = FAT32_DIRENT_TYPE_DIRECTORY;
@@ -272,18 +266,18 @@ int8_t fat32_file_close(file_t* self) {
 }
 
 int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
-    file_context_t* ctx = self->context;
+    file_context_t* ctx          = self->context;
     filesystem_context_t* fs_ctx = ctx->fs->context;
 
     int64_t w_cnt = 0;
     int64_t w_cnt_iter;
-    int64_t rem = buflen;
-    int64_t buf_offset = 0;
+    int64_t rem               = buflen;
+    int64_t buf_offset        = 0;
     int64_t cluster_data_size = fs_ctx->bpb->sectors_per_cluster * fs_ctx->bpb->bytes_per_sector;
 
     int64_t pos = ctx->current_position;
 
-    int64_t cluster_offset = pos / cluster_data_size;
+    int64_t cluster_offset      = pos / cluster_data_size;
     int64_t cluster_data_offset = pos % cluster_data_size;
 
     uint32_t clusterno = ctx->clusterno;
@@ -296,7 +290,7 @@ int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
             fs_ctx->table[clusterno] = FAT32_CLUSTER_END2;
             directory_context_t* dir_ctx = ctx->dir->context;
             dir_ctx->dirents[ctx->dirent_idx].fat_number_high = clusterno >> 16;
-            dir_ctx->dirents[ctx->dirent_idx].fat_number_low = clusterno;
+            dir_ctx->dirents[ctx->dirent_idx].fat_number_low  = clusterno;
 
             ctx->clusterno = clusterno;
         }
@@ -310,7 +304,7 @@ int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
             if(clusterno != -1U) {
                 fs_ctx->fsinfo->last_allocated_cluster = clusterno;
                 fs_ctx->fsinfo->free_cluster_count--;
-                fs_ctx->table[clusterno] = FAT32_CLUSTER_END2;
+                fs_ctx->table[clusterno]     = FAT32_CLUSTER_END2;
                 fs_ctx->table[old_clusterno] = clusterno;
             }
         }else {
@@ -350,8 +344,8 @@ int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
 
         cluster_data_offset = 0;
 
-        w_cnt += w_cnt_iter;
-        rem -= w_cnt_iter;
+        w_cnt      += w_cnt_iter;
+        rem        -= w_cnt_iter;
         buf_offset += w_cnt_iter;
 
         uint32_t old_clusterno = clusterno;
@@ -361,7 +355,7 @@ int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
             if(clusterno != -1U) {
                 fs_ctx->fsinfo->last_allocated_cluster = clusterno;
                 fs_ctx->fsinfo->free_cluster_count--;
-                fs_ctx->table[clusterno] = FAT32_CLUSTER_END2;
+                fs_ctx->table[clusterno]     = FAT32_CLUSTER_END2;
                 fs_ctx->table[old_clusterno] = clusterno;
             }
         }
@@ -386,13 +380,13 @@ int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
 }
 
 int64_t fat32_file_read(file_t* self, uint8_t* buf, int64_t buflen) {
-    file_context_t* ctx = self->context;
+    file_context_t* ctx          = self->context;
     filesystem_context_t* fs_ctx = ctx->fs->context;
 
     int64_t r_cnt = 0;
     int64_t r_cnt_iter;
-    int64_t rem = buflen;
-    int64_t buf_offset = 0;
+    int64_t rem               = buflen;
+    int64_t buf_offset        = 0;
     int64_t cluster_data_size = fs_ctx->bpb->sectors_per_cluster * fs_ctx->bpb->bytes_per_sector;
 
     int64_t pos = ctx->current_position;
@@ -405,9 +399,9 @@ int64_t fat32_file_read(file_t* self, uint8_t* buf, int64_t buflen) {
         return rem;
     }
 
-    int64_t cluster_offset = pos / cluster_data_size;
+    int64_t cluster_offset      = pos / cluster_data_size;
     int64_t cluster_data_offset = pos % cluster_data_size;
-    int64_t cluster_data_rem = cluster_data_size - cluster_data_offset;
+    int64_t cluster_data_rem    = cluster_data_size - cluster_data_offset;
 
     uint32_t clusterno = ctx->clusterno;
 
@@ -431,11 +425,11 @@ int64_t fat32_file_read(file_t* self, uint8_t* buf, int64_t buflen) {
 
         memory_free_ext(fs_ctx->disk->get_heap(fs_ctx->disk), tmp_data);
 
-        r_cnt += r_cnt_iter;
-        rem -= r_cnt_iter;
-        buf_offset += r_cnt_iter;
+        r_cnt              += r_cnt_iter;
+        rem                -= r_cnt_iter;
+        buf_offset         += r_cnt_iter;
         cluster_data_offset = 0;
-        cluster_data_rem = cluster_data_size - cluster_data_offset;
+        cluster_data_rem    = cluster_data_size - cluster_data_offset;
 
         clusterno = fs_ctx->table[clusterno];
         if(clusterno >= FAT32_CLUSTER_BAD) {
@@ -524,14 +518,14 @@ file_t* fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, 
         return NULL;
     }
 
-    ctx->fs = fs;
-    ctx->dir = dir;
-    ctx->dirent_idx = dirent_idx;
-    ctx->clusterno = clusterno;
-    ctx->file_path = p;
-    ctx->size = size;
-    ctx->create_time = ct;
-    ctx->last_accessed_time = lat;
+    ctx->fs                     = fs;
+    ctx->dir                    = dir;
+    ctx->dirent_idx             = dirent_idx;
+    ctx->clusterno              = clusterno;
+    ctx->file_path              = p;
+    ctx->size                   = size;
+    ctx->create_time            = ct;
+    ctx->last_accessed_time     = lat;
     ctx->last_modification_time = lmt;
 
     file_t* f = memory_malloc(sizeof(file_t));
@@ -542,17 +536,17 @@ file_t* fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, 
         return NULL;
     }
 
-    f->context = ctx;
-    f->get_path = fat32_file_get_path;
-    f->close = fat32_file_close;
-    f->write = fat32_file_write;
-    f->read = fat32_file_read;
-    f->seek = fat32_file_seek;
-    f->tell = fat32_file_tell;
-    f->flush = fat32_file_flush;
-    f->get_type = fat32_file_get_type;
-    f->get_create_time = fat32_file_get_create_time;
-    f->get_last_access_time = fat32_file_get_last_access_time;
+    f->context                    = ctx;
+    f->get_path                   = fat32_file_get_path;
+    f->close                      = fat32_file_close;
+    f->write                      = fat32_file_write;
+    f->read                       = fat32_file_read;
+    f->seek                       = fat32_file_seek;
+    f->tell                       = fat32_file_tell;
+    f->flush                      = fat32_file_flush;
+    f->get_type                   = fat32_file_get_type;
+    f->get_create_time            = fat32_file_get_create_time;
+    f->get_last_access_time       = fat32_file_get_last_access_time;
     f->get_last_modification_time = fat32_file_get_last_modification_time;
 
     return f;
@@ -577,20 +571,20 @@ int8_t fat32_directory_close(directory_t* self) {
     return 0;
 }
 
-const void* fat32_dir_list_iter_notimpelemented(iterator_t* iter){
+static const void* fat32_dir_list_iter_notimpelemented(iterator_t* iter){
     UNUSED(iter);
 
     return NULL;
 }
 
-int8_t fat32_dir_list_iter_destroy(iterator_t* iter){
+static int8_t fat32_dir_list_iter_destroy(iterator_t* iter){
     memory_free(iter->metadata);
     memory_free(iter);
 
     return 0;
 }
 
-iterator_t* fat32_dir_list_iter_next(iterator_t* iter){
+static iterator_t* fat32_dir_list_iter_next(iterator_t* iter){
     fat32_dir_list_iter_metadata_t* metadata = (fat32_dir_list_iter_metadata_t*)iter->metadata;
 
     metadata->current_idx++;
@@ -598,17 +592,17 @@ iterator_t* fat32_dir_list_iter_next(iterator_t* iter){
     return iter;
 }
 
-int8_t fat32_dir_list_iter_end_of_iterator(iterator_t* iter){
+static boolean_t fat32_dir_list_iter_end_of_iterator(iterator_t* iter){
     fat32_dir_list_iter_metadata_t* metadata = (fat32_dir_list_iter_metadata_t*)iter->metadata;
-    directory_context_t* ctx = metadata->dir->context;
+    directory_context_t* ctx                 = metadata->dir->context;
 
-    return metadata->current_idx >= ctx->dirent_count?0:1;
+    return metadata->current_idx >= ctx->dirent_count;
 }
 
 
-const void* fat32_dir_list_iter_get_item(iterator_t* iter){
+static const void* fat32_dir_list_iter_get_item(iterator_t* iter){
     fat32_dir_list_iter_metadata_t* metadata = (fat32_dir_list_iter_metadata_t*)iter->metadata;
-    directory_context_t* ctx = metadata->dir->context;
+    directory_context_t* ctx                 = metadata->dir->context;
 
 
     uint32_t cur_idx = metadata->current_idx;
@@ -676,7 +670,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
             cur_idx++;
         }
 
-        char16_t* wname = memory_malloc(sizeof(char16_t) * 256);
+        char16_t* wname   = memory_malloc(sizeof(char16_t) * 256);
         int64_t wname_idx = 0;
 
         while(list_size(name_parts)) {
@@ -700,7 +694,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
 
     if(dirent_name == NULL) {
         char_t* name = strtrim_right(strndup(dirent->name, 8));
-        char_t* ext = strtrim_right(strndup(dirent->name + 8, 3));
+        char_t* ext  = strtrim_right(strndup(dirent->name + 8, 3));
 
 
         if(strlen(ext)) {
@@ -718,7 +712,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
     }
 
     char_t* base_path_string = ctx->directory_path->get_fullpath(ctx->directory_path);
-    int64_t bp_len = strlen(base_path_string);
+    int64_t bp_len           = strlen(base_path_string);
 
     char_t max_path[256];
     memory_memclean(max_path, 256);
@@ -732,7 +726,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
     memory_memcopy(dirent_name, max_path + bp_len, strlen(dirent_name));
     memory_free(dirent_name);
 
-    path_t* dir_p = filesystem_new_path(ctx->fs, max_path);
+    path_t* dir_p     = filesystem_new_path(ctx->fs, max_path);
     fs_stat_type_t st = FS_STAT_TYPE_FILE;
 
 
@@ -744,7 +738,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
 
     uint32_t clusterno = ctx->dirents[cur_idx].fat_number_high;
     clusterno <<= 16;
-    clusterno |=  ctx->dirents[cur_idx].fat_number_low;
+    clusterno  |=  ctx->dirents[cur_idx].fat_number_low;
     int64_t size = ctx->dirents[cur_idx].file_size;
 
     timeparsed_t ct = {ctx->dirents[cur_idx].create_date.year + FAT32_YEAR_START, ctx->dirents[cur_idx].create_date.month,
@@ -761,8 +755,8 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
                         ctx->dirents[cur_idx].last_modification_time.minutes, ctx->dirents[cur_idx].last_modification_time.seconds * 2};
     metadata->extra_data.lmt = timeparsed_to_time(&lmt);
 
-    metadata->extra_data.clusterno = clusterno;
-    metadata->extra_data.size = size;
+    metadata->extra_data.clusterno  = clusterno;
+    metadata->extra_data.size       = size;
     metadata->extra_data.dirent_idx = cur_idx;
 
     metadata->current_idx = cur_idx;
@@ -776,7 +770,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
     return pi;
 }
 
-const void* fat32_dir_list_iter_get_extra_data(iterator_t* iter){
+static const void* fat32_dir_list_iter_get_extra_data(iterator_t* iter){
     fat32_dir_list_iter_metadata_t* metadata = (fat32_dir_list_iter_metadata_t*)iter->metadata;
     return &metadata->extra_data;
 }
@@ -787,13 +781,13 @@ iterator_t* fat32_directory_list(directory_t* self) {
 
     iterator_t* iter = memory_malloc(sizeof(iterator_t));
 
-    iter->metadata = metadata;
-    iter->destroy = fat32_dir_list_iter_destroy;
-    iter->next = fat32_dir_list_iter_next;
+    iter->metadata        = metadata;
+    iter->destroy         = fat32_dir_list_iter_destroy;
+    iter->next            = fat32_dir_list_iter_next;
     iter->end_of_iterator = fat32_dir_list_iter_end_of_iterator;
-    iter->get_item = fat32_dir_list_iter_get_item;
-    iter->delete_item = fat32_dir_list_iter_notimpelemented;
-    iter->get_extra_data = fat32_dir_list_iter_get_extra_data;
+    iter->get_item        = fat32_dir_list_iter_get_item;
+    iter->delete_item     = fat32_dir_list_iter_notimpelemented;
+    iter->get_extra_data  = fat32_dir_list_iter_get_extra_data;
 
 
     return iter;
@@ -814,7 +808,7 @@ path_interface_t* fat32_create_or_open_directory_or_file(directory_t* self, cons
 
     iterator_t* iter = self->list(self);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
 
         const path_interface_t* pi = iter->get_item(iter);
 
@@ -867,8 +861,8 @@ path_interface_t* fat32_create_or_open_directory_or_file(directory_t* self, cons
 
 uint32_t fat32_get_empty_cluster(filesystem_t* fs) {
     filesystem_context_t* ctx = fs->context;
-    uint32_t lac = ctx->fsinfo->last_allocated_cluster + 1;
-    uint32_t cluster_count = ctx->bpb->sectors_per_fat * ctx->bpb->bytes_per_sector / sizeof(uint32_t);
+    uint32_t lac              = ctx->fsinfo->last_allocated_cluster + 1;
+    uint32_t cluster_count    = ctx->bpb->sectors_per_fat * ctx->bpb->bytes_per_sector / sizeof(uint32_t);
 
     while(ctx->table[lac] != 0 && ctx->fsinfo->free_cluster_count) {
         lac++;
@@ -883,19 +877,19 @@ uint32_t fat32_get_empty_cluster(filesystem_t* fs) {
 
 
 int8_t  fat32_directory_write(directory_t* self, time_t mt) {
-    directory_context_t* ctx = self->context;
+    directory_context_t* ctx     = self->context;
     filesystem_context_t* fs_ctx = ctx->fs->context;
 
     if(mt != 0) {
         timeparsed_t* tp = time_to_timeparsed(mt);
 
         if(strncmp(ctx->dirents[0].name, ". ", 2) == 0) {
-            ctx->dirents[0].last_modification_time.hours = tp->hours;
+            ctx->dirents[0].last_modification_time.hours   = tp->hours;
             ctx->dirents[0].last_modification_time.minutes = tp->minutes;
             ctx->dirents[0].last_modification_time.seconds = tp->seconds / 2;
-            ctx->dirents[0].last_modification_date.year = tp->year - FAT32_YEAR_START;
-            ctx->dirents[0].last_modification_date.month = tp->month;
-            ctx->dirents[0].last_modification_date.day = tp->day;
+            ctx->dirents[0].last_modification_date.year    = tp->year - FAT32_YEAR_START;
+            ctx->dirents[0].last_modification_date.month   = tp->month;
+            ctx->dirents[0].last_modification_date.day     = tp->day;
         }
 
         memory_free(tp);
@@ -904,16 +898,16 @@ int8_t  fat32_directory_write(directory_t* self, time_t mt) {
 
     uint32_t data_size = ctx->dirent_count * sizeof(fat32_dirent_shortname_t);
     uint32_t clusterno = ctx->clusterno;
-    uint32_t iter_len = fs_ctx->bpb->bytes_per_sector * fs_ctx->bpb->sectors_per_cluster;
-    uint8_t* data = (uint8_t*)ctx->dirents;
-    uint32_t offset = 0;
+    uint32_t iter_len  = fs_ctx->bpb->bytes_per_sector * fs_ctx->bpb->sectors_per_cluster;
+    uint8_t* data      = (uint8_t*)ctx->dirents;
+    uint32_t offset    = 0;
 
     while(data_size) {
 
         fs_ctx->disk->write(fs_ctx->disk, fs_ctx->data_start_lba + clusterno, fs_ctx->bpb->sectors_per_cluster, data + offset);
 
         data_size -= iter_len;
-        offset += iter_len;
+        offset    += iter_len;
 
         clusterno = fs_ctx->table[clusterno];
 
@@ -922,7 +916,7 @@ int8_t  fat32_directory_write(directory_t* self, time_t mt) {
 
             fs_ctx->fsinfo->free_cluster_count--;
             fs_ctx->fsinfo->last_allocated_cluster = clusterno;
-            fs_ctx->table[clusterno] = FAT32_CLUSTER_END2;
+            fs_ctx->table[clusterno]               = FAT32_CLUSTER_END2;
         }
     }
 
@@ -966,7 +960,7 @@ directory_t* fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno,
     }
 
     dirents[0].fat_number_high = clusterno >> 16;
-    dirents[0].fat_number_low = clusterno;
+    dirents[0].fat_number_low  = clusterno;
 
     memory_memcopy(dirents, dir_dirents, sizeof(fat32_dirent_shortname_t));
 
@@ -986,7 +980,7 @@ directory_t* fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno,
 
     if(parent_clusterno != FAT32_ROOT_DIR_CLUSTER_NUMBER) {
         dirents[0].fat_number_high = parent_clusterno >> 16;
-        dirents[0].fat_number_low = parent_clusterno;
+        dirents[0].fat_number_low  = parent_clusterno;
     }
 
     memory_memcopy(dirents, dir_dirents + 1, sizeof(fat32_dirent_shortname_t));
@@ -1020,7 +1014,7 @@ path_interface_t* fat32_directory_or_file_create(directory_t* parent, const path
     timeparsed(&tp);
     time_t ct = timeparsed_to_time(&tp);
 
-    int32_t dirent_cnt = 0;
+    int32_t dirent_cnt                = 0;
     fat32_dirent_shortname_t* dirents = fat32_gen_dirents(child, type, &tp, &dirent_cnt);
 
     if(dirents == NULL) {
@@ -1045,7 +1039,7 @@ path_interface_t* fat32_directory_or_file_create(directory_t* parent, const path
 
     if(idx + dirent_cnt >= ctx->dirent_count) {
         filesystem_context_t* fs_ctx = ctx->fs->context;
-        uint32_t inc = fs_ctx->bpb->bytes_per_sector * fs_ctx->bpb->sectors_per_cluster / sizeof(fat32_dirent_shortname_t);
+        uint32_t inc                 = fs_ctx->bpb->bytes_per_sector * fs_ctx->bpb->sectors_per_cluster / sizeof(fat32_dirent_shortname_t);
 
         uint8_t* data = (uint8_t*)ctx->dirents;
         ctx->dirents = memory_malloc(sizeof(fat32_dirent_shortname_t) * (ctx->dirent_count + inc));
@@ -1067,7 +1061,7 @@ path_interface_t* fat32_directory_or_file_create(directory_t* parent, const path
         clusterno = fat32_get_empty_cluster(ctx->fs);
 
         dirents[dirent_cnt - 1].fat_number_high = clusterno >> 16;
-        dirents[dirent_cnt - 1].fat_number_low = clusterno;
+        dirents[dirent_cnt - 1].fat_number_low  = clusterno;
     } else {
         clusterno = 0;
     }
@@ -1130,8 +1124,8 @@ directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, const pat
     filesystem_context_t* fs_ctx = fs->context;
 
     uint32_t cluster_count = fat32_cluster_count(fs, clusterno);
-    uint32_t cluster_size = fs_ctx->bpb->sectors_per_cluster;
-    uint32_t sector_size = fs_ctx->bpb->bytes_per_sector;
+    uint32_t cluster_size  = fs_ctx->bpb->sectors_per_cluster;
+    uint32_t sector_size   = fs_ctx->bpb->bytes_per_sector;
 
     directory_context_t* ctx = memory_malloc(sizeof(directory_context_t));
 
@@ -1139,12 +1133,12 @@ directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, const pat
         return NULL;
     }
 
-    ctx->fs = fs;
-    ctx->clusterno = clusterno;
-    ctx->directory_path = p;
-    ctx->dirent_count = cluster_count * cluster_size * sector_size / sizeof(fat32_dirent_shortname_t);
-    ctx->create_time = ct;
-    ctx->last_accessed_time = lat;
+    ctx->fs                     = fs;
+    ctx->clusterno              = clusterno;
+    ctx->directory_path         = p;
+    ctx->dirent_count           = cluster_count * cluster_size * sector_size / sizeof(fat32_dirent_shortname_t);
+    ctx->create_time            = ct;
+    ctx->last_accessed_time     = lat;
     ctx->last_modification_time = lmt;
 
     char_t* data = memory_malloc(cluster_count * cluster_size * sector_size);
@@ -1212,15 +1206,15 @@ directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, const pat
         return NULL;
     }
 
-    d->context = ctx;
-    d->get_path = fat32_directory_get_path;
-    d->list = fat32_directory_list;
-    d->create_or_open_directory = fat32_create_or_open_directory;
-    d->create_or_open_file = fat32_create_or_open_file;
-    d->close = fat32_directory_close;
-    d->get_type = fat32_directory_get_type;
-    d->get_create_time = fat32_directory_get_create_time;
-    d->get_last_access_time = fat32_directory_get_last_access_time;
+    d->context                    = ctx;
+    d->get_path                   = fat32_directory_get_path;
+    d->list                       = fat32_directory_list;
+    d->create_or_open_directory   = fat32_create_or_open_directory;
+    d->create_or_open_file        = fat32_create_or_open_file;
+    d->close                      = fat32_directory_close;
+    d->get_type                   = fat32_directory_get_type;
+    d->get_create_time            = fat32_directory_get_create_time;
+    d->get_last_access_time       = fat32_directory_get_last_access_time;
     d->get_last_modification_time = fat32_directory_get_last_modification_time;
 
     return d;
@@ -1271,7 +1265,7 @@ int8_t fat32_remove(filesystem_t* self, const path_t* p) {
 directory_t* fat32_get_root_directory(filesystem_t* self) {
     filesystem_context_t* fs_ctx = self->context;
 
-    path_t* root_path = filesystem_new_path(self, "/");
+    path_t* root_path                = filesystem_new_path(self, "/");
     uint32_t root_dir_cluster_number = fs_ctx->bpb->root_dir_cluster_number;
 
     return fat32_new_directory(self, root_dir_cluster_number, root_path, 0, 0, 0);
@@ -1327,11 +1321,11 @@ filesystem_t* fat32_get_or_create_fs(disk_or_partition_t* d, const char_t* volna
             return NULL;
         }
 
-        ctx->disk = d;
+        ctx->disk           = d;
         ctx->data_start_lba = fat32_bpb->reserved_sectors + 2 * fat32_bpb->sectors_per_fat - 2;
-        ctx->bpb = fat32_bpb;
-        ctx->fsinfo = fat32_fsinfo;
-        ctx->table = fat32_table;
+        ctx->bpb            = fat32_bpb;
+        ctx->fsinfo         = fat32_fsinfo;
+        ctx->table          = fat32_table;
 
         filesystem_t* fs = memory_malloc(sizeof(filesystem_t));
 
@@ -1342,15 +1336,15 @@ filesystem_t* fat32_get_or_create_fs(disk_or_partition_t* d, const char_t* volna
             return NULL;
         }
 
-        fs->context = ctx;
-        fs->get_root_directory = fat32_get_root_directory;
-        fs->get_total_size = fat32_get_total_size;
-        fs->get_free_size = fat32_get_free_size;
+        fs->context                  = ctx;
+        fs->get_root_directory       = fat32_get_root_directory;
+        fs->get_total_size           = fat32_get_total_size;
+        fs->get_free_size            = fat32_get_free_size;
         fs->create_or_open_directory = fs_create_or_open_directory;
-        fs->create_or_open_file = fs_create_or_open_file;
-        fs->stat = fat32_stat;
-        fs->remove = fat32_remove;
-        fs->close = fat32_close;
+        fs->create_or_open_file      = fs_create_or_open_file;
+        fs->stat                     = fat32_stat;
+        fs->remove                   = fat32_remove;
+        fs->close                    = fat32_close;
 
         return fs;
     }
@@ -1359,39 +1353,39 @@ filesystem_t* fat32_get_or_create_fs(disk_or_partition_t* d, const char_t* volna
     fat32_bpb->jump[0] = 0x58;
     fat32_bpb->jump[0] = 0x90;
     memory_memcopy(FAT32_OEM_ID, fat32_bpb->oem_id, 8);
-    fat32_bpb->bytes_per_sector = FAT32_BYTES_PER_SECTOR;
-    fat32_bpb->sectors_per_cluster = 0x1;
-    fat32_bpb->reserved_sectors = FAT32_RESERVED_SECTORS;
-    fat32_bpb->fat_count = FAT32_FAT_COUNT;
-    fat32_bpb->dirent_count = 0x0;
-    fat32_bpb->sector_count = 0x0;
-    fat32_bpb->media_descriptor_type = FAT32_MEDIA_DESCRIPTOR_TYPE;
-    fat32_bpb->sectors_per_fat_unused = 0x0;
-    fat32_bpb->sectors_per_track = FAT32_SECTORS_PER_TRACK;
-    fat32_bpb->head_count = FAT32_HEAD_COUNT;
-    fat32_bpb->hidden_sector_count = 0;
-    fat32_bpb->sectors_per_fat = (fat_part_end_lba + 1 - fat32_bpb->reserved_sectors) / 130;
-    fat32_bpb->large_sector_count =   fat32_bpb->sectors_per_fat * 128 + 2 * fat32_bpb->sectors_per_fat +  fat32_bpb->reserved_sectors - 2;
-    fat32_bpb->flags = 0x0;
-    fat32_bpb->version_number = 0x0;
+    fat32_bpb->bytes_per_sector        = FAT32_BYTES_PER_SECTOR;
+    fat32_bpb->sectors_per_cluster     = 0x1;
+    fat32_bpb->reserved_sectors        = FAT32_RESERVED_SECTORS;
+    fat32_bpb->fat_count               = FAT32_FAT_COUNT;
+    fat32_bpb->dirent_count            = 0x0;
+    fat32_bpb->sector_count            = 0x0;
+    fat32_bpb->media_descriptor_type   = FAT32_MEDIA_DESCRIPTOR_TYPE;
+    fat32_bpb->sectors_per_fat_unused  = 0x0;
+    fat32_bpb->sectors_per_track       = FAT32_SECTORS_PER_TRACK;
+    fat32_bpb->head_count              = FAT32_HEAD_COUNT;
+    fat32_bpb->hidden_sector_count     = 0;
+    fat32_bpb->sectors_per_fat         = (fat_part_end_lba + 1 - fat32_bpb->reserved_sectors) / 130;
+    fat32_bpb->large_sector_count      =   fat32_bpb->sectors_per_fat * 128 + 2 * fat32_bpb->sectors_per_fat +  fat32_bpb->reserved_sectors - 2;
+    fat32_bpb->flags                   = 0x0;
+    fat32_bpb->version_number          = 0x0;
     fat32_bpb->root_dir_cluster_number = FAT32_ROOT_DIR_CLUSTER_NUMBER;
-    fat32_bpb->fsinfo_sector = FAT32_FSINFO_SECTOR;
-    fat32_bpb->backup_bpb = FAT32_BACKUP_BPB;
-    fat32_bpb->drive_number = FAT32_DRIVE_NUMBER;
-    fat32_bpb->signature = FAT32_SIGNATURE;
-    fat32_bpb->serial_number = rand();
+    fat32_bpb->fsinfo_sector           = FAT32_FSINFO_SECTOR;
+    fat32_bpb->backup_bpb              = FAT32_BACKUP_BPB;
+    fat32_bpb->drive_number            = FAT32_DRIVE_NUMBER;
+    fat32_bpb->signature               = FAT32_SIGNATURE;
+    fat32_bpb->serial_number           = rand();
     memory_memcopy(volname, fat32_bpb->volume_label, 11);
     memory_memcopy(FAT32_IDENTIFIER, fat32_bpb->identifier, 8);
     fat32_bpb->boot_signature = FAT32_BOOT_SIGNATURE;
 
-    fat32_fsinfo->signature0 = FAT32_FSINFO_SIGNATURE0;
-    fat32_fsinfo->signature1 = FAT32_FSINFO_SIGNATURE1;
-    fat32_fsinfo->signature2 = FAT32_FSINFO_SIGNATURE2;
+    fat32_fsinfo->signature0             = FAT32_FSINFO_SIGNATURE0;
+    fat32_fsinfo->signature1             = FAT32_FSINFO_SIGNATURE1;
+    fat32_fsinfo->signature2             = FAT32_FSINFO_SIGNATURE2;
     fat32_fsinfo->last_allocated_cluster = FAT32_ROOT_DIR_CLUSTER_NUMBER;
-    fat32_fsinfo->free_cluster_count =  fat32_bpb->sectors_per_fat * 128 - FAT32_ROOT_DIR_CLUSTER_NUMBER - 1;
+    fat32_fsinfo->free_cluster_count     =  fat32_bpb->sectors_per_fat * 128 - FAT32_ROOT_DIR_CLUSTER_NUMBER - 1;
 
     uint64_t fat32_table_size = fat32_bpb->bytes_per_sector *  fat32_bpb->sectors_per_fat;
-    uint32_t* fat32_table = memory_malloc(fat32_table_size);
+    uint32_t* fat32_table     = memory_malloc(fat32_table_size);
 
     if(fat32_table == NULL) {
         PRINTLOG(FAT, LOG_ERROR, "cannot create fat32 table");
@@ -1425,23 +1419,23 @@ filesystem_t* fat32_get_or_create_fs(disk_or_partition_t* d, const char_t* volna
 
     volid->create_time.seconds = tp.seconds / 2;
     volid->create_time.minutes = tp.minutes;
-    volid->create_time.hours = tp.hours;
+    volid->create_time.hours   = tp.hours;
 
-    volid->create_date.day = tp.day;
+    volid->create_date.day   = tp.day;
     volid->create_date.month = tp.month;
-    volid->create_date.year = tp.year - FAT32_YEAR_START;
+    volid->create_date.year  = tp.year - FAT32_YEAR_START;
 
-    volid->last_accessed_date.day = tp.day;
+    volid->last_accessed_date.day   = tp.day;
     volid->last_accessed_date.month = tp.month;
-    volid->last_accessed_date.year = tp.year - FAT32_YEAR_START;
+    volid->last_accessed_date.year  = tp.year - FAT32_YEAR_START;
 
     volid->last_modification_time.seconds = tp.seconds / 2;
     volid->last_modification_time.minutes = tp.minutes;
-    volid->last_modification_time.hours = tp.hours;
+    volid->last_modification_time.hours   = tp.hours;
 
-    volid->last_modification_date.day = tp.day;
+    volid->last_modification_date.day   = tp.day;
     volid->last_modification_date.month = tp.month;
-    volid->last_modification_date.year = tp.year - FAT32_YEAR_START;
+    volid->last_modification_date.year  = tp.year - FAT32_YEAR_START;
 
 
     d->write(d, 0, sizeof(fat32_bpb_t) / 512, (uint8_t*)fat32_bpb);
@@ -1474,11 +1468,11 @@ filesystem_t* fat32_get_or_create_fs(disk_or_partition_t* d, const char_t* volna
         return NULL;
     }
 
-    ctx->disk = d;
+    ctx->disk           = d;
     ctx->data_start_lba = fat32_bpb->reserved_sectors + 2 * fat32_bpb->sectors_per_fat - 2;
-    ctx->bpb = fat32_bpb;
-    ctx->fsinfo = fat32_fsinfo;
-    ctx->table = fat32_table;
+    ctx->bpb            = fat32_bpb;
+    ctx->fsinfo         = fat32_fsinfo;
+    ctx->table          = fat32_table;
 
     filesystem_t* fs = memory_malloc(sizeof(filesystem_t));
 
@@ -1491,15 +1485,15 @@ filesystem_t* fat32_get_or_create_fs(disk_or_partition_t* d, const char_t* volna
         return NULL;
     }
 
-    fs->context = ctx;
-    fs->get_root_directory = fat32_get_root_directory;
-    fs->get_total_size = fat32_get_total_size;
-    fs->get_free_size = fat32_get_free_size;
+    fs->context                  = ctx;
+    fs->get_root_directory       = fat32_get_root_directory;
+    fs->get_total_size           = fat32_get_total_size;
+    fs->get_free_size            = fat32_get_free_size;
     fs->create_or_open_directory = fs_create_or_open_directory;
-    fs->create_or_open_file = fs_create_or_open_file;
-    fs->stat = fat32_stat;
-    fs->remove = fat32_remove;
-    fs->close = fat32_close;
+    fs->create_or_open_file      = fs_create_or_open_file;
+    fs->stat                     = fat32_stat;
+    fs->remove                   = fat32_remove;
+    fs->close                    = fat32_close;
 
     fat32_write_cluster_data(fs);
 

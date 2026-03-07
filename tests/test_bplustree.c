@@ -24,8 +24,8 @@ int8_t int_comparator(const void* i, const void* j){
 int32_t main(void){
     int test_data[] = {25, 40,   29,   50,   39,   58,   92,    48,    11,  33,  35,  66,  14,  21, 71, 93, 98,  91
                        ,   20,   87,   46,   30,   54,   49,    45,    17,  31,  75,  12,  47,  10, 38, 3,  59,  13, 5
-                       ,   80,   77,   97,   1,    6,    79,    19};//, 62, 43, 27, 84, 99, 86, 44, 65, 26, 57, 37, 36};
-    //int test_data[] = {10, 3, 8, 1, 15, 23, 16, 2, 9, 17, 29, 5, 6, 35, 41};
+                       ,   80,   77,   97,   1,    6,    79,    19}; // , 62, 43, 27, 84, 99, 86, 44, 65, 26, 57, 37, 36};
+    // int test_data[] = {10, 3, 8, 1, 15, 23, 16, 2, 9, 17, 29, 5, 6, 35, 41};
     int max_key_count = 8;
 
 
@@ -61,7 +61,7 @@ int32_t main(void){
     iterator_t* iter = idx->create_iterator(idx);
     printf("iterator created: %p\n", iter);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         int* k = (int*)iter->get_extra_data(iter);
         int* d = (int*)iter->get_item(iter);
 
@@ -93,7 +93,7 @@ int32_t main(void){
 
     print_success("b+ tree builded for deletion test");
 
-    int d_key = 101;
+    int d_key         = 101;
     int* deleted_data = 0;
     printf("try to delete not existed key: %i\n", d_key );
 
@@ -123,7 +123,7 @@ int32_t main(void){
 
         iter = idx->create_iterator(idx);
 
-        while(iter->end_of_iterator(iter) != 0) {
+        while(!iter->end_of_iterator(iter)) {
             int* k = (int*)iter->get_extra_data(iter);
             int* d = (int*)iter->get_item(iter);
 

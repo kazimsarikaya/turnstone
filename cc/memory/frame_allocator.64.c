@@ -206,7 +206,7 @@ static int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count
 
         frame_t* tmp_frm = NULL;
 
-        while(iter->end_of_iterator(iter) != 0) {
+        while(!iter->end_of_iterator(iter)) {
             frame_t* item = (frame_t*)iter->get_item(iter);
 
             if(item->frame_count >= count) {
@@ -643,7 +643,7 @@ static int8_t fa_release_acpi_reclaim_memory(frame_allocator_t* self) {
 
     iter = ctx->reserved_frames_by_address->create_iterator(ctx->reserved_frames_by_address);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         if((f->frame_attributes & FRAME_ATTRIBUTE_ACPI_RECLAIM_MEMORY) && !(f->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED)) {
@@ -657,7 +657,7 @@ static int8_t fa_release_acpi_reclaim_memory(frame_allocator_t* self) {
 
     iter = list_iterator_create(frms);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         ctx->reserved_frames_by_address->delete(ctx->reserved_frames_by_address, f, NULL);
@@ -706,7 +706,7 @@ static int8_t fa_cleanup(frame_allocator_t* self) {
 
     iter = ctx->reserved_frames_by_address->create_iterator(ctx->reserved_frames_by_address);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         if(f->frame_attributes & FRAME_ATTRIBUTE_OLD_RESERVED) {
@@ -720,7 +720,7 @@ static int8_t fa_cleanup(frame_allocator_t* self) {
 
     iter = list_iterator_create(frms);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         ctx->reserved_frames_by_address->delete(ctx->reserved_frames_by_address, f, NULL);
@@ -752,7 +752,7 @@ static int8_t fa_cleanup(frame_allocator_t* self) {
 
     iter = ctx->allocated_frames_by_address->create_iterator(ctx->allocated_frames_by_address);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         if(f->frame_attributes & FRAME_ATTRIBUTE_OLD_RESERVED) {
@@ -766,7 +766,7 @@ static int8_t fa_cleanup(frame_allocator_t* self) {
 
     iter = list_iterator_create(frms);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         ctx->allocated_frames_by_address->delete(ctx->allocated_frames_by_address, f, NULL);
@@ -999,7 +999,7 @@ void frame_allocator_print(frame_allocator_t* fa) {
 
     printf("free frames by address\n");
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         printf("0x%016llx \t 0x%016llx \t 0x%016llx\n", f->frame_address, f->frame_count, f->frame_attributes);
@@ -1013,7 +1013,7 @@ void frame_allocator_print(frame_allocator_t* fa) {
 
     printf("free frames by size\n");
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         printf("0x%016llx \t 0x%016llx \t 0x%016llx\n", f->frame_address, f->frame_count, f->frame_attributes);
@@ -1027,7 +1027,7 @@ void frame_allocator_print(frame_allocator_t* fa) {
 
     printf("used frames by address\n");
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         printf("0x%016llx \t 0x%016llx \t 0x%016llx\n", f->frame_address, f->frame_count, f->frame_attributes);
@@ -1041,7 +1041,7 @@ void frame_allocator_print(frame_allocator_t* fa) {
 
     printf("reserved frames by address\n");
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         printf("0x%016llx \t 0x%016llx \t 0x%016llx\n", f->frame_address, f->frame_count, f->frame_attributes);
@@ -1055,7 +1055,7 @@ void frame_allocator_print(frame_allocator_t* fa) {
 
     printf("acpi code/data frames by address\n");
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         printf("0x%016llx \t 0x%016llx \t 0x%016llx\n", f->frame_address, f->frame_count, f->frame_attributes);
@@ -1076,7 +1076,7 @@ void frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t* fa) {
 
     iterator_t* iter = list_iterator_create(ctx->acpi_frames);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         if(f->type == FRAME_TYPE_ACPI_CODE) {

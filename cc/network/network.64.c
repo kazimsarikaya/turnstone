@@ -179,7 +179,7 @@ int8_t network_init(void) {
 
     iterator_t* iter = list_iterator_create(pci_get_context()->network_controllers);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const pci_dev_t* pci_netdev = iter->get_item(iter);
 
         pci_common_header_t* pci_header = pci_netdev->pci_header;

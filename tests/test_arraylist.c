@@ -110,7 +110,7 @@ int32_t main(uint32_t argc, char_t** argv, char_t** en) {
     }
 
     int64_t expected_item = 0;
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const void* item = iter->get_item(iter);
         if(expected_item != (int64_t)item) {
             print_error("Item from iterator is not %lld, but %lld", expected_item, (int64_t)item);
@@ -148,7 +148,7 @@ int32_t main(uint32_t argc, char_t** argv, char_t** en) {
     }
 
     expected_item = 0;
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const void* item = iter->get_item(iter);
 
         if(expected_item != (int64_t)item) {
@@ -307,7 +307,7 @@ int32_t main(uint32_t argc, char_t** argv, char_t** en) {
     }
 
     last_val = -1;
-    while(s_iter->end_of_iterator(s_iter) != 0) {
+    while(!s_iter->end_of_iterator(s_iter)) {
         const void* item = s_iter->get_item(s_iter);
         val = (int64_t)item;
         if(val < last_val) {
@@ -317,7 +317,7 @@ int32_t main(uint32_t argc, char_t** argv, char_t** en) {
             return -1;
         }
         last_val = val;
-        s_iter = s_iter->next(s_iter);
+        s_iter   = s_iter->next(s_iter);
     }
 
     s_iter->destroy(s_iter);
@@ -366,7 +366,7 @@ int32_t main(uint32_t argc, char_t** argv, char_t** en) {
     }
 
     last_val = -1;
-    while(s_iter->end_of_iterator(s_iter) != 0) {
+    while(!s_iter->end_of_iterator(s_iter)) {
         const void* item = s_iter->delete_item(s_iter);
         val = (int64_t)item;
         if(val < last_val) {
@@ -376,7 +376,7 @@ int32_t main(uint32_t argc, char_t** argv, char_t** en) {
             return -1;
         }
         last_val = val;
-        s_iter = s_iter->next(s_iter);
+        s_iter   = s_iter->next(s_iter);
     }
 
     s_iter->destroy(s_iter);

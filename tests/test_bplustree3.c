@@ -68,7 +68,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
             return -1;
         }
 
-        item->key = test_key[i];
+        item->key  = test_key[i];
         item->data = (i << 16) | test_data[i];
 
         printf("try to insert item: %llx %llx\n", item->key, item->data);
@@ -101,7 +101,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     iterator_t* iter = idx->create_iterator(idx);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         item_t* d = (item_t*)iter->get_item(iter);
 
         printf("%llx: %05llx\n", d->key, d->data);

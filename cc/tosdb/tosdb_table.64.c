@@ -39,7 +39,7 @@ const tosdb_column_t* tosdb_table_get_column_by_index_id(const tosdb_table_t* tb
 
     const tosdb_column_t* col = NULL;
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         const tosdb_column_t* t_col = (const tosdb_column_t*)it->get_item(it);
 
         if(idx->column_id == t_col->id) {
@@ -81,7 +81,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
         }
     }
 
-    uint64_t st_list_loc = tbl->sstable_list_location;
+    uint64_t st_list_loc  = tbl->sstable_list_location;
     uint64_t st_list_size = tbl->sstable_list_size;
 
     while(st_list_loc != 0) {
@@ -144,7 +144,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
             break;
         }
 
-        st_list_loc = st_list->header.previous_block_location;
+        st_list_loc  = st_list->header.previous_block_location;
         st_list_size = st_list->header.previous_block_size;
 
         memory_free(st_list);
@@ -163,7 +163,7 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
         return false;
     }
 
-    tbl->indexes = hashmap_integer(128);
+    tbl->indexes          = hashmap_integer(128);
     tbl->index_column_map = hashmap_integer(128);
 
     if(!tbl->indexes) {
@@ -172,7 +172,7 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
         return false;
     }
 
-    uint64_t idx_list_loc = tbl->index_list_location;
+    uint64_t idx_list_loc  = tbl->index_list_location;
     uint64_t idx_list_size = tbl->index_list_size;
 
     while(idx_list_loc != 0) {
@@ -199,10 +199,10 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
                 return false;
             }
 
-            idx->id = idx_list->indexes[i].id;
+            idx->id         = idx_list->indexes[i].id;
             idx->is_deleted = idx_list->indexes[i].deleted;
-            idx->type = idx_list->indexes[i].type;
-            idx->column_id = idx_list->indexes[i].column_id;
+            idx->type       = idx_list->indexes[i].type;
+            idx->column_id  = idx_list->indexes[i].column_id;
 
             hashmap_put(tbl->indexes, (void*)idx->id, idx);
             hashmap_put(tbl->index_column_map, (void*)idx->column_id, idx);
@@ -215,7 +215,7 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
             break;
         }
 
-        idx_list_loc = idx_list->header.previous_block_location;
+        idx_list_loc  = idx_list->header.previous_block_location;
         idx_list_size = idx_list->header.previous_block_size;
 
         memory_free(idx_list);
@@ -239,7 +239,7 @@ boolean_t tosdb_table_load_columns(tosdb_table_t* tbl) {
         return false;
     }
 
-    uint64_t col_list_loc = tbl->column_list_location;
+    uint64_t col_list_loc  = tbl->column_list_location;
     uint64_t col_list_size = tbl->column_list_size;
 
     while(col_list_loc != 0) {
@@ -270,10 +270,10 @@ boolean_t tosdb_table_load_columns(tosdb_table_t* tbl) {
                 return false;
             }
 
-            col->id = col_list->columns[i].id;
-            col->name = strdup(name_buf);
+            col->id         = col_list->columns[i].id;
+            col->name       = strdup(name_buf);
             col->is_deleted = col_list->columns[i].deleted;
-            col->type = col_list->columns[i].type;
+            col->type       = col_list->columns[i].type;
 
             hashmap_put(tbl->columns, col->name, col);
         }
@@ -285,7 +285,7 @@ boolean_t tosdb_table_load_columns(tosdb_table_t* tbl) {
             break;
         }
 
-        col_list_loc = col_list->header.previous_block_location;
+        col_list_loc  = col_list->header.previous_block_location;
         col_list_size = col_list->header.previous_block_size;
 
         memory_free(col_list);
@@ -326,29 +326,29 @@ tosdb_table_t* tosdb_table_load_table(tosdb_table_t* tbl) {
     }
 
     tbl->column_list_location = tbl_block->column_list_location;
-    tbl->column_list_size = tbl_block->column_list_size;
-    tbl->column_next_id = tbl_block->column_next_id;
+    tbl->column_list_size     = tbl_block->column_list_size;
+    tbl->column_next_id       = tbl_block->column_next_id;
 
     if(!tosdb_table_load_columns(tbl)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot load columns of table %s", tbl->name);
     }
 
     tbl->index_list_location = tbl_block->index_list_location;
-    tbl->index_list_size = tbl_block->index_list_size;
-    tbl->index_next_id = tbl_block->index_next_id;
+    tbl->index_list_size     = tbl_block->index_list_size;
+    tbl->index_next_id       = tbl_block->index_next_id;
 
     if(!tosdb_table_load_indexes(tbl)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot load indexes of table %s", tbl->name);
     }
 
-    tbl->primary_column_id = tbl_block->primary_column_id;
-    tbl->primary_index_id = tbl_block->primary_index_id;
-    tbl->primary_column_type = tbl_block->primary_column_type;
+    tbl->primary_column_id        = tbl_block->primary_column_id;
+    tbl->primary_index_id         = tbl_block->primary_index_id;
+    tbl->primary_column_type      = tbl_block->primary_column_type;
     tbl->compaction_index_id_hint = tbl_block->compaction_index_id_hint;
 
-    tbl->memtable_next_id = tbl_block->memtable_next_id;
+    tbl->memtable_next_id      = tbl_block->memtable_next_id;
     tbl->sstable_list_location = tbl_block->sstable_list_location;
-    tbl->sstable_list_size = tbl_block->sstable_list_size;
+    tbl->sstable_list_size     = tbl_block->sstable_list_size;
 
     if(!tosdb_table_load_sstables(tbl)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot load lazy load sstables of table %s", tbl->name);
@@ -391,8 +391,8 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, const char_t* na
             return tbl;
         }
 
-        tbl->max_record_count = max_record_count;
-        tbl->max_valuelog_size = max_valuelog_size;
+        tbl->max_record_count   = max_record_count;
+        tbl->max_valuelog_size  = max_valuelog_size;
         tbl->max_memtable_count = max_memtable_count;
 
         PRINTLOG(TOSDB, LOG_DEBUG, "table %s will be lazy loaded", tbl->name);
@@ -430,23 +430,23 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, const char_t* na
     db->table_next_id++;
     db->is_dirty = true;
 
-    tbl->db = db;
+    tbl->db   = db;
     tbl->name = strdup(name);
 
-    tbl->is_open = true;
+    tbl->is_open  = true;
     tbl->is_dirty = true;
 
     tbl->column_next_id = 1;
-    tbl->columns = hashmap_string(128);
+    tbl->columns        = hashmap_string(128);
 
-    tbl->index_next_id = 1;
-    tbl->indexes = hashmap_integer(128);
+    tbl->index_next_id    = 1;
+    tbl->indexes          = hashmap_integer(128);
     tbl->index_column_map = hashmap_integer(128);
 
     tbl->memtable_next_id = 1;
 
-    tbl->max_record_count = max_record_count;
-    tbl->max_valuelog_size = max_valuelog_size;
+    tbl->max_record_count   = max_record_count;
+    tbl->max_valuelog_size  = max_valuelog_size;
     tbl->max_memtable_count = max_memtable_count;
 
     tbl->compaction_index_id_hint = -1ULL;
@@ -492,7 +492,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             return false;
         }
 
-        while(iter->end_of_iterator(iter) != 0) {
+        while(!iter->end_of_iterator(iter)) {
             tosdb_column_t* col = (tosdb_column_t*)iter->get_item(iter);
 
             memory_free(col->name);
@@ -517,7 +517,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             return false;
         }
 
-        while(iter->end_of_iterator(iter) != 0) {
+        while(!iter->end_of_iterator(iter)) {
             tosdb_index_t* idx = (tosdb_index_t*)iter->get_item(iter);
 
             memory_free(idx);
@@ -529,7 +529,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
 
         hashmap_destroy(tbl->indexes);
         hashmap_destroy(tbl->index_column_map);
-        tbl->indexes = NULL;
+        tbl->indexes          = NULL;
         tbl->index_column_map = NULL;
 
         PRINTLOG(TOSDB, LOG_TRACE, "indexes of table %s destroyed", tbl->name);
@@ -543,7 +543,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
                 return false;
             }
 
-            while(iter->end_of_iterator(iter) != 0) {
+            while(!iter->end_of_iterator(iter)) {
                 tosdb_memtable_t* mt = (tosdb_memtable_t*)iter->delete_item(iter);
 
                 if(!tosdb_memtable_free(mt)) {
@@ -556,7 +556,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             iter->destroy(iter);
 
             list_destroy(tbl->memtables);
-            tbl->memtables = NULL;
+            tbl->memtables        = NULL;
             tbl->current_memtable = NULL;
         }
 
@@ -571,7 +571,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
                 return false;
             }
 
-            while(stl_iter->end_of_iterator(stl_iter) != 0) {
+            while(!stl_iter->end_of_iterator(stl_iter)) {
                 list_t* st_list = (list_t*)stl_iter->get_item(stl_iter);
 
                 list_destroy_with_data(st_list);
@@ -613,7 +613,7 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create column iterator");
             error = true;
         } else {
-            while(iter->end_of_iterator(iter) != 0) {
+            while(!iter->end_of_iterator(iter)) {
                 tosdb_column_t* col = (tosdb_column_t*)iter->get_item(iter);
 
                 memory_free(col->name);
@@ -637,7 +637,7 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
 
             error = true;
         } else {
-            while(iter->end_of_iterator(iter) != 0) {
+            while(!iter->end_of_iterator(iter)) {
                 tosdb_index_t* idx = (tosdb_index_t*)iter->get_item(iter);
 
                 memory_free(idx);
@@ -661,7 +661,7 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
 
             error = true;
         } else {
-            while(iter->end_of_iterator(iter) != 0) {
+            while(!iter->end_of_iterator(iter)) {
                 tosdb_memtable_t* mt = (tosdb_memtable_t*)iter->get_item(iter);
 
                 if(!tosdb_memtable_free(mt)) {
@@ -692,7 +692,7 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
 
             error = true;
         } else {
-            while(stl_iter->end_of_iterator(stl_iter) != 0) {
+            while(!stl_iter->end_of_iterator(stl_iter)) {
                 list_t* st_list = (list_t*)stl_iter->get_item(stl_iter);
 
                 list_destroy_with_data(st_list);
@@ -731,13 +731,13 @@ boolean_t tosdb_table_index_persist(tosdb_table_t* tbl) {
         return false;
     }
 
-    block->header.block_type = TOSDB_BLOCK_TYPE_INDEX_LIST;
-    block->header.block_size = metadata_size;
+    block->header.block_type              = TOSDB_BLOCK_TYPE_INDEX_LIST;
+    block->header.block_size              = metadata_size;
     block->header.previous_block_location = tbl->index_list_location;
-    block->header.previous_block_size = tbl->index_list_size;
+    block->header.previous_block_size     = tbl->index_list_size;
 
     block->database_id = tbl->db->id;
-    block->table_id = tbl->id;
+    block->table_id    = tbl->id;
 
     iterator_t* iter = list_iterator_create(tbl->index_new);
 
@@ -753,13 +753,13 @@ boolean_t tosdb_table_index_persist(tosdb_table_t* tbl) {
 
     uint64_t idx_idx = 0;
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_index_t* idx = (tosdb_index_t*)iter->delete_item(iter);
 
-        block->indexes[idx_idx].id = idx->id;
+        block->indexes[idx_idx].id        = idx->id;
         block->indexes[idx_idx].column_id = idx->column_id;
-        block->indexes[idx_idx].deleted = idx->is_deleted;
-        block->indexes[idx_idx].type = idx->type;
+        block->indexes[idx_idx].deleted   = idx->is_deleted;
+        block->indexes[idx_idx].type      = idx->type;
 
         iter = iter->next(iter);
 
@@ -777,7 +777,7 @@ boolean_t tosdb_table_index_persist(tosdb_table_t* tbl) {
     }
 
     tbl->index_list_location = loc;
-    tbl->index_list_size = block->header.block_size;
+    tbl->index_list_size     = block->header.block_size;
 
     memory_free(block);
 
@@ -803,13 +803,13 @@ boolean_t tosdb_table_column_persist(tosdb_table_t* tbl) {
         return false;
     }
 
-    block->header.block_type = TOSDB_BLOCK_TYPE_COLUMN_LIST;
-    block->header.block_size = metadata_size;
+    block->header.block_type              = TOSDB_BLOCK_TYPE_COLUMN_LIST;
+    block->header.block_size              = metadata_size;
     block->header.previous_block_location = tbl->column_list_location;
-    block->header.previous_block_size = tbl->column_list_size;
+    block->header.previous_block_size     = tbl->column_list_size;
 
     block->database_id = tbl->db->id;
-    block->table_id = tbl->id;
+    block->table_id    = tbl->id;
 
     iterator_t* iter = list_iterator_create(tbl->column_new);
 
@@ -825,13 +825,13 @@ boolean_t tosdb_table_column_persist(tosdb_table_t* tbl) {
 
     uint64_t col_idx = 0;
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_column_t* col = (tosdb_column_t*)iter->delete_item(iter);
 
         block->columns[col_idx].id = col->id;
         strcopy(col->name, block->columns[col_idx].name);
         block->columns[col_idx].deleted = col->is_deleted;
-        block->columns[col_idx].type = col->type;
+        block->columns[col_idx].type    = col->type;
 
         iter = iter->next(iter);
 
@@ -849,7 +849,7 @@ boolean_t tosdb_table_column_persist(tosdb_table_t* tbl) {
     }
 
     tbl->column_list_location = loc;
-    tbl->column_list_size = block->header.block_size;
+    tbl->column_list_size     = block->header.block_size;
 
     memory_free(block);
 
@@ -928,27 +928,27 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
             return false;
         }
 
-        block->header.block_size = TOSDB_PAGE_SIZE;
-        block->header.block_type = TOSDB_BLOCK_TYPE_TABLE;
-        block->header.previous_block_invalid = true;
+        block->header.block_size              = TOSDB_PAGE_SIZE;
+        block->header.block_type              = TOSDB_BLOCK_TYPE_TABLE;
+        block->header.previous_block_invalid  = true;
         block->header.previous_block_location = tbl->metadata_location;
-        block->header.previous_block_size = tbl->metadata_size;
+        block->header.previous_block_size     = tbl->metadata_size;
 
-        block->id = tbl->id;
+        block->id          = tbl->id;
         block->database_id = tbl->db->id;
         strcopy(tbl->name, block->name);
-        block->column_next_id = tbl->column_next_id;
-        block->index_next_id = tbl->index_next_id;
-        block->column_list_location = tbl->column_list_location;
-        block->column_list_size = tbl->column_list_size;
-        block->index_list_location = tbl->index_list_location;
-        block->index_list_size = tbl->index_list_size;
-        block->memtable_next_id = tbl->memtable_next_id;
+        block->column_next_id        = tbl->column_next_id;
+        block->index_next_id         = tbl->index_next_id;
+        block->column_list_location  = tbl->column_list_location;
+        block->column_list_size      = tbl->column_list_size;
+        block->index_list_location   = tbl->index_list_location;
+        block->index_list_size       = tbl->index_list_size;
+        block->memtable_next_id      = tbl->memtable_next_id;
         block->sstable_list_location = tbl->sstable_list_location;
-        block->sstable_list_size = tbl->sstable_list_size;
-        block->primary_column_id = tbl->primary_column_id;
-        block->primary_index_id = tbl->primary_index_id;
-        block->primary_column_type = tbl->primary_column_type;
+        block->sstable_list_size     = tbl->sstable_list_size;
+        block->primary_column_id     = tbl->primary_column_id;
+        block->primary_index_id      = tbl->primary_index_id;
+        block->primary_column_type   = tbl->primary_column_type;
 
         // if compaction index id hint is not set, use primary index id
         if(tbl->compaction_index_id_hint != -1ULL) {
@@ -966,7 +966,7 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         }
 
         tbl->metadata_location = loc;
-        tbl->metadata_size = block->header.block_size;
+        tbl->metadata_size     = block->header.block_size;
 
         if(!tbl->db->table_new) {
             tbl->db->table_new = hashmap_integer(128);
@@ -982,7 +982,7 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
 
         PRINTLOG(TOSDB, LOG_DEBUG, "table %s is persisted at loc 0x%llx size 0x%llx", tbl->name, loc, block->header.block_size);
 
-        tbl->is_dirty = false;
+        tbl->is_dirty     = false;
         tbl->db->is_dirty = true;
 
         memory_free(block);
@@ -1090,11 +1090,11 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, const char_t* colname, to
     tbl->index_next_id++;
 
     idx->column_id = col->id;
-    idx->type = type;
+    idx->type      = type;
 
     if(type == TOSDB_INDEX_PRIMARY) {
-        tbl->primary_column_id = col->id;
-        tbl->primary_index_id = idx->id;
+        tbl->primary_column_id   = col->id;
+        tbl->primary_index_id    = idx->id;
         tbl->primary_column_type = col->type;
     }
 
@@ -1181,7 +1181,7 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
 
     uint64_t stli_cnt = list_size(tbl->sstable_list_items);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_block_sstable_list_item_t* stli = (tosdb_block_sstable_list_item_t*)iter->delete_item(iter);
 
         uint64_t size = sizeof(tosdb_block_sstable_list_item_t) + sizeof(tosdb_block_sstable_list_item_index_pair_t) * stli->index_count;
@@ -1209,13 +1209,13 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
         return false;
     }
 
-    block->header.block_size = block_size;
-    block->header.block_type = TOSDB_BLOCK_TYPE_SSTABLE_LIST;
+    block->header.block_size              = block_size;
+    block->header.block_type              = TOSDB_BLOCK_TYPE_SSTABLE_LIST;
     block->header.previous_block_location = tbl->sstable_list_location;
-    block->header.previous_block_size = tbl->sstable_list_size;
-    block->database_id = tbl->db->id;
-    block->table_id = tbl->id;
-    block->sstable_count = stli_cnt;
+    block->header.previous_block_size     = tbl->sstable_list_size;
+    block->database_id                    = tbl->db->id;
+    block->table_id                       = tbl->id;
+    block->sstable_count                  = stli_cnt;
 
     uint8_t* ssts_loc = (uint8_t*)&block->sstables[0];
 
@@ -1235,9 +1235,9 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
 
     PRINTLOG(TOSDB, LOG_DEBUG, "sstable list for table %s persisted at 0x%llx(0x%llx)", tbl->name, block_loc, block_size);
 
-    tbl->sstable_list_size = block_size;
+    tbl->sstable_list_size     = block_size;
     tbl->sstable_list_location = block_loc;
-    tbl->is_dirty = true;
+    tbl->is_dirty              = true;
 
     tbl->current_memtable = NULL;
 
@@ -1271,7 +1271,7 @@ boolean_t tosdb_table_set_compaction_index_id_hint(tosdb_table_t* tbl, uint64_t 
         return true;
     }
 
-    tbl->compaction_index_id_hint = index_id;
+    tbl->compaction_index_id_hint        = index_id;
     tbl->compaction_index_id_hint_is_set = true;
 
     tbl->is_dirty = true;

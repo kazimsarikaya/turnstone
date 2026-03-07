@@ -34,7 +34,7 @@ indexer_t* indexer_create_with_heap(memory_heap_t* heap){
         return NULL;
     }
 
-    idxer->heap = heap;
+    idxer->heap    = heap;
     idxer->indexes = list_create_list_with_heap(heap);
 
     if(idxer->indexes == NULL) {
@@ -71,10 +71,10 @@ int8_t indexer_register_index(indexer_t* idxer, uint64_t idx_id, index_t* idx, i
         return -1;
     }
 
-    pair->idx_id = idx_id;
-    pair->idx = idx;
+    pair->idx_id      = idx_id;
+    pair->idx         = idx;
     pair->key_creator = key_creator;
-    pair->keyarg = keyarg;
+    pair->keyarg      = keyarg;
     list_list_insert(idxer->indexes, pair);
     return 0;
 }
@@ -91,9 +91,9 @@ int8_t indexer_index(indexer_t* idxer, const void* key, const void* data){
         return -1;
     }
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const indexer_idx_kc_internal_t* pair = iter->get_item(iter);
-        void* r_key = pair->key_creator(key, pair->keyarg);
+        void* r_key                           = pair->key_creator(key, pair->keyarg);
 
         if(r_key != NULL) {
             pair->idx->insert(pair->idx, r_key, data, NULL);
@@ -112,16 +112,16 @@ const void* indexer_delete(indexer_t* idxer, const void* key){
         return NULL;
     }
 
-    void* data = NULL;
+    void* data       = NULL;
     iterator_t* iter = list_iterator_create(idxer->indexes);
 
     if(iter == NULL) {
         return NULL;
     }
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const indexer_idx_kc_internal_t* pair = iter->get_item(iter);
-        void* r_key = pair->key_creator(key, pair->keyarg);
+        void* r_key                           = pair->key_creator(key, pair->keyarg);
 
         if(r_key != NULL) {
             void* tmp_data;
@@ -153,7 +153,7 @@ iterator_t* indexer_search(indexer_t* idxer, uint64_t idx_id, const void* key1, 
         return NULL;
     }
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const indexer_idx_kc_internal_t* pair = iter->get_item(iter);
 
         if(pair->idx_id == idx_id) {

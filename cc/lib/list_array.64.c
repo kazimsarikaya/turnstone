@@ -57,18 +57,18 @@ list_t* arraylist_create_with_type(memory_heap_t* heap, list_type_t type,
         return NULL;
     }
 
-    list->heap = heap;
-    list->type = type;
+    list->heap       = heap;
+    list->type       = type;
     list->comparator = comparator;
 
     if(list->comparator == NULL) {
         list->comparator = &list_default_data_comparator;
     }
 
-    list->indexer = indexer;
-    list->capacity = 128;
-    list->head = list->capacity - 1;
-    list->tail = list->capacity - 1;
+    list->indexer    = indexer;
+    list->capacity   = 128;
+    list->head       = list->capacity - 1;
+    list->tail       = list->capacity - 1;
     list->item_count = 0;
 
     list->lock = lock_create_with_heap(heap);
@@ -118,13 +118,13 @@ int8_t arraylist_set_capacity(list_t* list, size_t capacity) {
 
     for(size_t i = 0; i < list->item_count; i++) {
         new_items[i].data = list->items[idx].data;
-        idx = (idx + 1) % list->capacity;
+        idx               = (idx + 1) % list->capacity;
     }
 
-    list->items = new_items;
+    list->items    = new_items;
     list->capacity = capacity;
-    list->head = 0;
-    list->tail = list->item_count - 1;
+    list->head     = 0;
+    list->tail     = list->item_count - 1;
 
     lock_release(list->lock);
 
@@ -203,7 +203,7 @@ size_t arraylist_insert_at(list_t* list, const void* data, list_insert_delete_at
     }
 
     size_t insert_pos = 0;
-    size_t result = -1ULL;
+    size_t result     = -1ULL;
 
     // 1. Determine the logical insertion position
     if (where == LIST_INSERT_AT_HEAD) {
@@ -231,20 +231,20 @@ size_t arraylist_insert_at(list_t* list, const void* data, list_insert_delete_at
 
     // 2. Handle Insert Logic
     if (list->item_count == 0) {
-        list->head = 0;
-        list->tail = 0;
+        list->head          = 0;
+        list->tail          = 0;
         list->items[0].data = data;
-        result = 0;
+        result              = 0;
     } else if (insert_pos == 0) {
         // Simple Head Insert
-        list->head = (list->head == 0) ? list->capacity - 1 : list->head - 1;
+        list->head                   = (list->head == 0) ? list->capacity - 1 : list->head - 1;
         list->items[list->head].data = data;
-        result = 0;
+        result                       = 0;
     } else if (insert_pos == list->item_count) {
         // Simple Tail Insert
-        list->tail = (list->tail + 1) % list->capacity;
+        list->tail                   = (list->tail + 1) % list->capacity;
         list->items[list->tail].data = data;
-        result = list->item_count;
+        result                       = list->item_count;
     } else {
         // Middle Insert: Choose most efficient shift
         size_t target_idx = (list->head + insert_pos) % list->capacity;
@@ -254,7 +254,7 @@ size_t arraylist_insert_at(list_t* list, const void* data, list_insert_delete_at
             list->head = (list->head == 0) ? list->capacity - 1 : list->head - 1;
             for (size_t i = 0; i < insert_pos; i++) {
                 size_t dest = (list->head + i) % list->capacity;
-                size_t src = (list->head + i + 1) % list->capacity;
+                size_t src  = (list->head + i + 1) % list->capacity;
                 list->items[dest].data = list->items[src].data;
             }
             // Correct target_idx after head move
@@ -263,13 +263,13 @@ size_t arraylist_insert_at(list_t* list, const void* data, list_insert_delete_at
             // Shift Tail-side forwards
             for (size_t i = list->item_count; i > insert_pos; i--) {
                 size_t dest = (list->head + i) % list->capacity;
-                size_t src = (list->head + i - 1) % list->capacity;
+                size_t src  = (list->head + i - 1) % list->capacity;
                 list->items[dest].data = list->items[src].data;
             }
             list->tail = (list->tail + 1) % list->capacity;
         }
         list->items[target_idx].data = data;
-        result = insert_pos;
+        result                       = insert_pos;
     }
 
     if (result != -1ULL) {
@@ -313,7 +313,7 @@ const void* arraylist_delete_at(list_t* list, const void* data, list_insert_dele
     }
 
     // 2. Extract data
-    size_t item_idx = (list->head + delete_pos) % list->capacity;
+    size_t item_idx          = (list->head + delete_pos) % list->capacity;
     const void* deleted_data = list->items[item_idx].data;
 
     // 3. Shift elements
@@ -321,20 +321,20 @@ const void* arraylist_delete_at(list_t* list, const void* data, list_insert_dele
         // Shift elements between Head and delete_pos forward
         for (size_t i = delete_pos; i > 0; i--) {
             size_t dest = (list->head + i) % list->capacity;
-            size_t src = (list->head + i - 1) % list->capacity;
+            size_t src  = (list->head + i - 1) % list->capacity;
             list->items[dest].data = list->items[src].data;
         }
         list->items[list->head].data = NULL;
-        list->head = (list->head + 1) % list->capacity;
+        list->head                   = (list->head + 1) % list->capacity;
     } else {
         // Shift elements between delete_pos and Tail backward
         for (size_t i = delete_pos; i < list->item_count - 1; i++) {
             size_t dest = (list->head + i) % list->capacity;
-            size_t src = (list->head + i + 1) % list->capacity;
+            size_t src  = (list->head + i + 1) % list->capacity;
             list->items[dest].data = list->items[src].data;
         }
         list->items[list->tail].data = NULL;
-        list->tail = (list->tail == 0) ? list->capacity - 1 : list->tail - 1;
+        list->tail                   = (list->tail == 0) ? list->capacity - 1 : list->tail - 1;
     }
 
     list->item_count--;
@@ -359,14 +359,14 @@ list_t* arraylist_duplicate_list_with_heap(memory_heap_t* heap, list_t* list) {
         return NULL;
     }
 
-    new_list->heap = memory_get_heap(heap); // get rid of the null heap, so heap is always stable.
-    new_list->type = list->type;
-    new_list->comparator = list->comparator;
+    new_list->heap                = memory_get_heap(heap); // get rid of the null heap, so heap is always stable.
+    new_list->type                = list->type;
+    new_list->comparator          = list->comparator;
     new_list->equality_comparator = list->equality_comparator;
-    new_list->item_count = list->item_count;
-    new_list->capacity = list->capacity;
-    new_list->head = list->head;
-    new_list->tail = list->tail;
+    new_list->item_count          = list->item_count;
+    new_list->capacity            = list->capacity;
+    new_list->head                = list->head;
+    new_list->tail                = list->tail;
 
     new_list->lock = lock_create_with_heap(heap);
 
@@ -387,7 +387,7 @@ list_t* arraylist_duplicate_list_with_heap(memory_heap_t* heap, list_t* list) {
 
     for(size_t i = 0; i < list->item_count; i++) {
         new_list->items[i].data = list->items[idx].data;
-        idx = (idx + 1) % list->capacity;
+        idx                     = (idx + 1) % list->capacity;
     }
 
     // If the original list was not empty, the new list's items are copied starting from index 0.
@@ -411,23 +411,23 @@ typedef struct arraylist_iterator_internal_t {
     size_t  current_deleted; ///< the current deleted position in the list
 } arraylist_iterator_internal_t;
 
-static int8_t arraylist_iterator_end_of_list(iterator_t* iterator) {
+static boolean_t arraylist_iterator_end_of_list(iterator_t* iterator) {
     if(iterator == NULL) {
-        return 0;
+        return true; // end of list
     }
 
     arraylist_iterator_internal_t* iter = (arraylist_iterator_internal_t*)iterator->metadata;
 
     if(iter == NULL) {
-        return 0;
+        return true; // end of list
     }
 
     // if current is equal to item_count, we are at the end of the list.
     if(iter->current >= iter->list->item_count) {
-        return 0; // end of list
+        return true; // end of list
     }
 
-    return 1; // not end of list
+    return false; // not end of list
 }
 
 static const void* arraylist_iterator_get_item(iterator_t* iterator) {
@@ -504,20 +504,20 @@ static const void* arraylist_iterator_delete_item(iterator_t* iterator) {
         // Shift elements between Head and current forward
         for (size_t i = iter->current; i > 0; i--) {
             size_t dest = (iter->list->head + i) % iter->list->capacity;
-            size_t src = (iter->list->head + i - 1) % iter->list->capacity;
+            size_t src  = (iter->list->head + i - 1) % iter->list->capacity;
             iter->list->items[dest].data = iter->list->items[src].data;
         }
         iter->list->items[iter->list->head].data = NULL;
-        iter->list->head = (iter->list->head + 1) % iter->list->capacity;
+        iter->list->head                         = (iter->list->head + 1) % iter->list->capacity;
     } else {
         // Shift elements between current and Tail backward
         for (size_t i = iter->current; i < iter->list->item_count - 1; i++) {
             size_t dest = (iter->list->head + i) % iter->list->capacity;
-            size_t src = (iter->list->head + i + 1) % iter->list->capacity;
+            size_t src  = (iter->list->head + i + 1) % iter->list->capacity;
             iter->list->items[dest].data = iter->list->items[src].data;
         }
         iter->list->items[iter->list->tail].data = NULL;
-        iter->list->tail = (iter->list->tail == 0) ? iter->list->capacity - 1 : iter->list->tail - 1;
+        iter->list->tail                         = (iter->list->tail == 0) ? iter->list->capacity - 1 : iter->list->tail - 1;
     }
     iter->list->item_count--;
 
@@ -583,16 +583,16 @@ iterator_t* arraylist_iterator_create(list_t* list) {
     iter->list = list;
     // Initialize current to 0, representing the first logical element.
     // The actual index in the circular buffer is calculated using head.
-    iter->current = 0;
+    iter->current         = 0;
     iter->current_deleted = 0; // Initialize deleted flag
 
-    iterator->metadata = iter;
-    iterator->destroy = &arraylist_iterator_destroy;
-    iterator->next = &arraylist_iterator_next;
+    iterator->metadata        = iter;
+    iterator->destroy         = &arraylist_iterator_destroy;
+    iterator->next            = &arraylist_iterator_next;
     iterator->end_of_iterator = &arraylist_iterator_end_of_list;
-    iterator->get_item = &arraylist_iterator_get_item;
-    iterator->delete_item = &arraylist_iterator_delete_item;
-    iterator->get_extra_data = NULL; // Not used in this implementation
+    iterator->get_item        = &arraylist_iterator_get_item;
+    iterator->delete_item     = &arraylist_iterator_delete_item;
+    iterator->get_extra_data  = NULL; // Not used in this implementation
 
     return iterator;
 }

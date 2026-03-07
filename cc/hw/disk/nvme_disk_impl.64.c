@@ -49,23 +49,23 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
         return -1;
     }
 
-    uint64_t buffer_len = count * ctx->block_size;
+    uint64_t buffer_len      = count * ctx->block_size;
     uint64_t real_buffer_len = buffer_len;
-    uint8_t* write_buf = data;
-    boolean_t need_to_free = false;
+    uint8_t* write_buf       = data;
+    boolean_t need_to_free   = false;
 
     if(real_buffer_len % 0x1000 || (uint64_t)write_buf % 0x1000) {
         real_buffer_len += 0x1000 - (real_buffer_len % 0x1000);
-        write_buf = memory_malloc_ext(ctx->nvme_disk->heap, real_buffer_len, 0x1000);
+        write_buf        = memory_malloc_ext(ctx->nvme_disk->heap, real_buffer_len, 0x1000);
         memory_memcopy(data, write_buf, buffer_len);
         need_to_free = true;
     }
 
 
-    uint64_t offset = 0;
+    uint64_t offset  = 0;
     uint16_t rem_lba = count;
     uint64_t max_lba = MIN(512, ctx->nvme_disk->max_prp_entries);
-    future_t* fut = NULL;
+    future_t* fut    = NULL;
 
     list_t* futs = list_create_list_with_heap(ctx->nvme_disk->heap);
 
@@ -78,8 +78,8 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
 
         list_list_insert(futs, fut);
 
-        lba += iter_read_size;
-        offset += iter_read_size * ctx->block_size;
+        lba     += iter_read_size;
+        offset  += iter_read_size * ctx->block_size;
         rem_lba -= iter_read_size;
     }
 
@@ -89,7 +89,7 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
 
     iterator_t* iter = list_iterator_create(futs);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         fut = (future_t*)iter->get_item(iter);
 
         future_get_data_and_destroy(fut);
@@ -118,10 +118,10 @@ int8_t nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     }
 
     uint8_t* read_buf = *data;
-    uint64_t offset = 0;
-    uint64_t rem_lba = count;
-    uint64_t max_lba = MIN(512, ctx->nvme_disk->max_prp_entries);
-    future_t* fut = NULL;
+    uint64_t offset   = 0;
+    uint64_t rem_lba  = count;
+    uint64_t max_lba  = MIN(512, ctx->nvme_disk->max_prp_entries);
+    future_t* fut     = NULL;
 
     list_t* futs = list_create_list_with_heap(ctx->nvme_disk->heap);
 
@@ -134,14 +134,14 @@ int8_t nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
 
         list_list_insert(futs, fut);
 
-        lba += iter_read_size;
-        offset += iter_read_size * ctx->block_size;
+        lba     += iter_read_size;
+        offset  += iter_read_size * ctx->block_size;
         rem_lba -= iter_read_size;
     }
 
     iterator_t* iter = list_iterator_create(futs);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         fut = (future_t*)iter->get_item(iter);
 
         future_get_data_and_destroy(fut);
@@ -190,7 +190,7 @@ disk_t* nvme_disk_impl_open(nvme_disk_t* nvme_disk) {
         return NULL;
     }
 
-    ctx->nvme_disk = nvme_disk;
+    ctx->nvme_disk  = nvme_disk;
     ctx->block_size = nvme_disk->lba_size;
 
     disk_t* d = memory_malloc_ext(nvme_disk->heap, sizeof(disk_t), 0);
@@ -201,14 +201,14 @@ disk_t* nvme_disk_impl_open(nvme_disk_t* nvme_disk) {
         return NULL;
     }
 
-    d->disk.context = ctx;
-    d->disk.get_heap = nvme_disk_impl_get_heap;
-    d->disk.get_size = nvme_disk_impl_get_size;
+    d->disk.context        = ctx;
+    d->disk.get_heap       = nvme_disk_impl_get_heap;
+    d->disk.get_size       = nvme_disk_impl_get_size;
     d->disk.get_block_size = nvme_disk_impl_get_block_size;
-    d->disk.write = nvme_disk_impl_write;
-    d->disk.read = nvme_disk_impl_read;
-    d->disk.flush = nvme_disk_impl_flush;
-    d->disk.close = nvme_disk_impl_close;
+    d->disk.write          = nvme_disk_impl_write;
+    d->disk.read           = nvme_disk_impl_read;
+    d->disk.flush          = nvme_disk_impl_flush;
+    d->disk.close          = nvme_disk_impl_close;
 
     return d;
 }

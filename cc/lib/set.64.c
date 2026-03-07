@@ -136,7 +136,7 @@ boolean_t set_destroy_with_callback(set_t* s, set_destroy_callback_f cb) {
         iterator_t* iter = set_create_iterator(s);
 
         if(iter) {
-            while(iter->end_of_iterator(iter) != 0) {
+            while(!iter->end_of_iterator(iter)) {
                 void* item = (void*)iter->get_item(iter);
 
                 error |= !cb(item);

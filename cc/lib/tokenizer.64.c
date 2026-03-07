@@ -27,12 +27,8 @@ typedef struct tokenizer_iterator_ctx_t {
     void*                         extra_data;
 } tokenizer_iterator_ctx_t;
 
-int8_t      tokenizer_destroy(iterator_t* iter);
-int8_t      tokenizer_end_of_iterator(iterator_t* iter);
-iterator_t* tokenizer_next(iterator_t* iter);
-const void* tokenizer_get_item(iterator_t* iter);
-const void* tokenizer_get_extra_data(iterator_t* iter);
-boolean_t   tokenizer_is_in_list(iterator_t* iter, uint8_t c, const token_delimiter_type_t* list, token_delimiter_type_t* type);
+int8_t    tokenizer_destroy(iterator_t* iter);
+boolean_t tokenizer_is_in_list(iterator_t* iter, uint8_t c, const token_delimiter_type_t* list, token_delimiter_type_t* type);
 
 boolean_t   tokenizer_is_in_list(iterator_t* iter, uint8_t c, const token_delimiter_type_t* list, token_delimiter_type_t* type) {
     if(!iter) {
@@ -78,27 +74,27 @@ int8_t tokenizer_destroy(iterator_t* iter) {
     return 0;
 }
 
-int8_t tokenizer_end_of_iterator(iterator_t* iter) {
+static boolean_t tokenizer_end_of_iterator(iterator_t* iter) {
     if(!iter) {
-        return -1;
+        return true;
     }
 
     tokenizer_iterator_ctx_t* ctx = iter->metadata;
 
     if(!ctx) {
-        return -2;
+        return true;
     }
 
     if(!ctx->item) {
-        return 0;
+        return true;
     }
 
-    return 1;
+    return false;
 }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-iterator_t* tokenizer_next(iterator_t* iter) {
+static iterator_t* tokenizer_next(iterator_t* iter) {
     if(!iter) {
         return iter;
     }
@@ -120,9 +116,9 @@ iterator_t* tokenizer_next(iterator_t* iter) {
         return iter;
     }
 
-    //TODO: tokenize
+    // TODO: tokenize
 
-    uint8_t c = buffer_peek_byte_at_position(ctx->buf, pos);
+    uint8_t c                   = buffer_peek_byte_at_position(ctx->buf, pos);
     token_delimiter_type_t type = TOKEN_DELIMETER_TYPE_NULL;
 
     while(tokenizer_is_in_list(iter, c, ctx->whitespaces, &type)) {
@@ -156,10 +152,10 @@ iterator_t* tokenizer_next(iterator_t* iter) {
 
         buffer_get_byte(ctx->buf);
 
-        token->type = TOKEN_TYPE_DELIMETER;
-        token->delimiter_type = type;
+        token->type            = TOKEN_TYPE_DELIMETER;
+        token->delimiter_type  = type;
         token->position.offset = ctx->position.offset;
-        token->position.line = ctx->position.line;
+        token->position.line   = ctx->position.line;
 
         ctx->position.offset++;
 
@@ -169,7 +165,7 @@ iterator_t* tokenizer_next(iterator_t* iter) {
         }
 
         token->value_length = 1;
-        token->value[0] = token_delimeter_chars[type];
+        token->value[0]     = token_delimeter_chars[type];
 
         ctx->item = token;
 
@@ -223,8 +219,8 @@ iterator_t* tokenizer_next(iterator_t* iter) {
         return iter;
     }
 
-    item->type = TOKEN_TYPE_IDENTIFIER;
-    item->position.line = res_pos.line;
+    item->type            = TOKEN_TYPE_IDENTIFIER;
+    item->position.line   = res_pos.line;
     item->position.offset = res_pos.offset;
 
     uint8_t* res_data = buffer_get_all_bytes(res_buf, &item->value_length);
@@ -240,7 +236,7 @@ iterator_t* tokenizer_next(iterator_t* iter) {
 }
 #pragma GCC diagnostic pop
 
-const void* tokenizer_get_item(iterator_t* iter) {
+static const void* tokenizer_get_item(iterator_t* iter) {
     if(!iter) {
         return NULL;
     }
@@ -257,7 +253,7 @@ const void* tokenizer_get_item(iterator_t* iter) {
     return res;
 }
 
-const void* tokenizer_get_extra_data(iterator_t* iter) {
+static const void* tokenizer_get_extra_data(iterator_t* iter) {
     if(!iter) {
         return NULL;
     }
@@ -280,8 +276,8 @@ iterator_t* tokenizer_new(buffer_t* buf, const token_delimiter_type_t* delimeter
         return NULL;
     }
 
-    ctx->buf = buf;
-    ctx->delimeters = delimeters;
+    ctx->buf         = buf;
+    ctx->delimeters  = delimeters;
     ctx->whitespaces = whitespaces;
 
     iterator_t* res = memory_malloc(sizeof(iterator_t));
@@ -290,12 +286,12 @@ iterator_t* tokenizer_new(buffer_t* buf, const token_delimiter_type_t* delimeter
         return NULL;
     }
 
-    res->metadata = ctx;
-    res->destroy = tokenizer_destroy;
+    res->metadata        = ctx;
+    res->destroy         = tokenizer_destroy;
     res->end_of_iterator = tokenizer_end_of_iterator;
-    res->next = tokenizer_next;
-    res->get_item = tokenizer_get_item;
-    res->get_extra_data = tokenizer_get_extra_data;
+    res->next            = tokenizer_next;
+    res->get_item        = tokenizer_get_item;
+    res->get_extra_data  = tokenizer_get_extra_data;
 
     return res->next(res);
 }

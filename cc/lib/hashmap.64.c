@@ -551,16 +551,16 @@ static int8_t hashmap_iterator_destroy(iterator_t* iter) {
 /**
  * @brief checks if iterator is at end
  * @param[in] iter iterator
- * @return 0 if iterator is at end, 1 otherwise
+ * @return true if iterator is at end, false otherwise
  */
-static int8_t hashmap_iterator_end_of_iterator(iterator_t* iter) {
+static boolean_t hashmap_iterator_end_of_iterator(iterator_t* iter) {
     if(!iter) {
         return NULL;
     }
 
     hashmap_iterator_metadata_t* iter_md = iter->metadata;
 
-    return iter_md->current_segment == NULL?0:1;
+    return iter_md->current_segment == NULL;
 }
 
 static const void* hashmap_iterator_delete_item(iterator_t* iter) {

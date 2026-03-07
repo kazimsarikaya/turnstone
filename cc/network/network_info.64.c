@@ -128,7 +128,7 @@ network_info_t* network_get_network_info_of_owned_ipv4_address(network_ipv4_addr
 
     iterator_t* it = map_create_iterator(network_info_map);
     if(it) {
-        while(it->end_of_iterator(it) != 0) {
+        while(!it->end_of_iterator(it)) {
             network_info_t* ni = (network_info_t*)it->get_item(it);
             if(ni) {
                 if(network_ipv4_is_address_eq(ni->ipv4_address, ipv4_address)) {
@@ -154,7 +154,7 @@ network_info_t* network_get_network_info_by_ipv4_address(network_ipv4_address_t 
 
     iterator_t* it = map_create_iterator(network_info_map);
     if(it) {
-        while(it->end_of_iterator(it) != 0) {
+        while(!it->end_of_iterator(it)) {
             network_info_t* ni = (network_info_t*)it->get_item(it);
             if(ni) {
                 last_network_info = ni;

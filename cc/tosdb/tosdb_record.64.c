@@ -218,7 +218,7 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
         return false;
     }
 
-    name->type = DATA_TYPE_INT64;
+    name->type  = DATA_TYPE_INT64;
     name->value = (void*)col_id;
 
     data_t* col_value = memory_malloc(sizeof(data_t));
@@ -251,8 +251,8 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
         col_value->value = (void*)value;
     }
 
-    col_value->name = name;
-    col_value->type = type;
+    col_value->name   = name;
+    col_value->type   = type;
     col_value->length = len;
 
     uint64_t idx_id = tosdb_record_get_index_id(record, col_id);
@@ -262,7 +262,7 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
 
         if(type < DATA_TYPE_STRING) {
             key_hash = (uint64_t)value;
-            len = 0;
+            len      = 0;
         } else {
             key_hash = xxhash64_hash(l_value, len);
         }
@@ -276,11 +276,11 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
             return false;
         }
 
-        r_key->column_id = col_id;
-        r_key->index_id = idx_id;
-        r_key->key_hash = key_hash;
+        r_key->column_id  = col_id;
+        r_key->index_id   = idx_id;
+        r_key->key_hash   = key_hash;
         r_key->key_length = len;
-        r_key->key = (uint8_t*)l_value;
+        r_key->key        = (uint8_t*)l_value;
 
         tosdb_record_key_t* old_r_key = (tosdb_record_key_t*)hashmap_put(ctx->keys, (void*)idx_id, (void*)r_key);
 
@@ -518,7 +518,7 @@ list_t* tosdb_record_search(tosdb_record_t* record) {
         return NULL;
     }
 
-    uint8_t* search_key = NULL;
+    uint8_t* search_key     = NULL;
     uint64_t search_key_len = 0;
 
     if(!tosdb_record_get_data_with_colid(record, col->id, col->type, &search_key_len, (void**)&search_key)) {
@@ -592,14 +592,14 @@ list_t* tosdb_record_search(tosdb_record_t* record) {
         dont_add = true;
     }
 
-    while(f_iter->end_of_iterator(f_iter) != 0) {
+    while(!f_iter->end_of_iterator(f_iter)) {
         tosdb_memtable_index_item_t* item = (tosdb_memtable_index_item_t*)f_iter->get_item(f_iter);
 
         if(!dont_add) {
             tosdb_record_t* rec = tosdb_table_create_record(r_ctx->table);
 
             uint64_t len = item->key_length;
-            void* value = item->key;
+            void* value  = item->key;
 
             if(len == 0) {
                 switch(r_ctx->table->primary_column_type) {
@@ -643,7 +643,7 @@ list_t* tosdb_record_search(tosdb_record_t* record) {
                     rec->destroy(rec);
                 } else if(rec->get_record(rec)) {
                     uint8_t* res_key_data = NULL;
-                    uint64_t res_key_len = 0;
+                    uint64_t res_key_len  = 0;
 
                     if(item->is_deleted) {
                         PRINTLOG(TOSDB, LOG_INFO, "record is deleted rec id %llx", (uint64_t)item->record_id);
@@ -760,7 +760,7 @@ boolean_t tosdb_record_destroy(tosdb_record_t * record){
 
     iterator_t* iter = hashmap_iterator_create(ctx->columns);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         data_t* d = (data_t*)iter->get_item(iter);
 
         if(d->type >= DATA_TYPE_STRING) {
@@ -783,7 +783,7 @@ boolean_t tosdb_record_destroy(tosdb_record_t * record){
 
     iter = hashmap_iterator_create(ctx->keys);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_record_key_t* key = (tosdb_record_key_t*)iter->get_item(iter);
         memory_free(key->key);
         memory_free(key);
@@ -819,7 +819,7 @@ data_t* tosdb_record_serialize(tosdb_record_t* record) {
 
     data_t s_data = {0};
 
-    s_data.type = DATA_TYPE_DATA;
+    s_data.type   = DATA_TYPE_DATA;
     s_data.length = hashmap_size(ctx->columns);
 
     data_t* s_items = memory_malloc(sizeof(data_t) * s_data.length);
@@ -836,13 +836,13 @@ data_t* tosdb_record_serialize(tosdb_record_t* record) {
 
     iterator_t* iter = hashmap_iterator_create(ctx->columns);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         data_t* d = (data_t*)iter->get_item(iter);
 
         s_items[idx].length = d->length;
-        s_items[idx].name = d->name;
-        s_items[idx].type = d->type;
-        s_items[idx].value = d->value;
+        s_items[idx].name   = d->name;
+        s_items[idx].type   = d->type;
+        s_items[idx].value  = d->value;
 
         idx++;
         iter = iter->next(iter);
@@ -899,7 +899,7 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
         return NULL;
     }
 
-    ctx->table = tbl;
+    ctx->table   = tbl;
     ctx->columns = hashmap_integer(128);
 
     if(!ctx->columns) {
@@ -923,7 +923,7 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
 
     uint128_t rec_id = time_ns(NULL);
     rec_id <<= 64;
-    rec_id |= rand64();
+    rec_id  |= rand64();
 
     xxhash64_context_t* hash_ctx = xxhash64_init(0);
     xxhash64_update(hash_ctx, ctx->table->db->name, strlen(ctx->table->db->name));
@@ -933,49 +933,49 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
 
     rec_id |= hash;
 
-    ctx->record_id = rec_id;
-    ctx->level = -1ULL;
+    ctx->record_id  = rec_id;
+    ctx->level      = -1ULL;
     ctx->sstable_id = -1ULL;
-    ctx->offset = -1ULL;
-    ctx->length = 0;
+    ctx->offset     = -1ULL;
+    ctx->length     = 0;
 
-    rec->context = ctx;
-    rec->set_boolean = tosdb_record_set_boolean;
-    rec->get_boolean = tosdb_record_get_boolean;
-    rec->set_char = tosdb_record_set_char;
-    rec->get_char = tosdb_record_get_char;
-    rec->set_int8 = tosdb_record_set_int8;
-    rec->get_int8 = tosdb_record_get_int8;
-    rec->set_uint8 = tosdb_record_set_uint8;
-    rec->get_uint8 = tosdb_record_get_uint8;
-    rec->set_int16 = tosdb_record_set_int16;
-    rec->get_int16 = tosdb_record_get_int16;
-    rec->set_uint16 = tosdb_record_set_uint16;
-    rec->get_uint16 = tosdb_record_get_uint16;
-    rec->set_int32 = tosdb_record_set_int32;
-    rec->get_int32 = tosdb_record_get_int32;
-    rec->set_uint32 = tosdb_record_set_uint32;
-    rec->get_uint32 = tosdb_record_get_uint32;
-    rec->set_int64 = tosdb_record_set_int64;
-    rec->get_int64 = tosdb_record_get_int64;
-    rec->set_uint64 = tosdb_record_set_uint64;
-    rec->get_uint64 = tosdb_record_get_uint64;
-    rec->set_string = tosdb_record_set_string;
-    rec->get_string = tosdb_record_get_string;
-    rec->set_float32 = tosdb_record_set_float32;
-    rec->get_float32 = tosdb_record_get_float32;
-    rec->set_float64 = tosdb_record_set_float64;
-    rec->get_float64 = tosdb_record_get_float64;
+    rec->context       = ctx;
+    rec->set_boolean   = tosdb_record_set_boolean;
+    rec->get_boolean   = tosdb_record_get_boolean;
+    rec->set_char      = tosdb_record_set_char;
+    rec->get_char      = tosdb_record_get_char;
+    rec->set_int8      = tosdb_record_set_int8;
+    rec->get_int8      = tosdb_record_get_int8;
+    rec->set_uint8     = tosdb_record_set_uint8;
+    rec->get_uint8     = tosdb_record_get_uint8;
+    rec->set_int16     = tosdb_record_set_int16;
+    rec->get_int16     = tosdb_record_get_int16;
+    rec->set_uint16    = tosdb_record_set_uint16;
+    rec->get_uint16    = tosdb_record_get_uint16;
+    rec->set_int32     = tosdb_record_set_int32;
+    rec->get_int32     = tosdb_record_get_int32;
+    rec->set_uint32    = tosdb_record_set_uint32;
+    rec->get_uint32    = tosdb_record_get_uint32;
+    rec->set_int64     = tosdb_record_set_int64;
+    rec->get_int64     = tosdb_record_get_int64;
+    rec->set_uint64    = tosdb_record_set_uint64;
+    rec->get_uint64    = tosdb_record_get_uint64;
+    rec->set_string    = tosdb_record_set_string;
+    rec->get_string    = tosdb_record_get_string;
+    rec->set_float32   = tosdb_record_set_float32;
+    rec->get_float32   = tosdb_record_get_float32;
+    rec->set_float64   = tosdb_record_set_float64;
+    rec->get_float64   = tosdb_record_get_float64;
     rec->set_bytearray = tosdb_record_set_bytearray;
     rec->get_bytearray = tosdb_record_get_bytearray;
-    rec->get_data = tosdb_record_get_data;
-    rec->set_data = tosdb_record_set_data;
-    rec->destroy = tosdb_record_destroy;
-    rec->get_record = tosdb_record_get;
+    rec->get_data      = tosdb_record_get_data;
+    rec->set_data      = tosdb_record_set_data;
+    rec->destroy       = tosdb_record_destroy;
+    rec->get_record    = tosdb_record_get;
     rec->upsert_record = tosdb_record_upsert;
     rec->delete_record = tosdb_record_delete;
     rec->search_record = tosdb_record_search;
-    rec->is_deleted = tosdb_record_is_deleted;
+    rec->is_deleted    = tosdb_record_is_deleted;
 
     return rec;
 }
@@ -993,10 +993,10 @@ boolean_t tosdb_record_set_cached_level_and_sstable_id_offset_length(tosdb_recor
 
     tosdb_record_context_t* ctx = record->context;
 
-    ctx->level = level;
+    ctx->level      = level;
     ctx->sstable_id = sstable_id;
-    ctx->offset = offset;
-    ctx->length = length;
+    ctx->offset     = offset;
+    ctx->length     = length;
 
     return true;
 }

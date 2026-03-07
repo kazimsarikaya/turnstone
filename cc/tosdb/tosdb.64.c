@@ -35,9 +35,9 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend, compression_type_t compression_type
         return NULL;
     }
 
-    boolean_t need_format = false;
-    boolean_t need_repair = false;
-    boolean_t main_superblock_failed = true;
+    boolean_t need_format              = false;
+    boolean_t need_repair              = false;
+    boolean_t main_superblock_failed   = true;
     boolean_t backup_superblock_failed = true;
 
     if(strcmp(main_sb->header.signature, TOSDB_SUPERBLOCK_SIGNATURE) == 0) {
@@ -132,7 +132,7 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend, compression_type_t compression_type
         return NULL;
     }
 
-    res->backend = backend;
+    res->backend    = backend;
     res->superblock = main_sb;
 
     if(main_sb->compression_type == COMPRESSION_TYPE_NONE) {
@@ -189,7 +189,7 @@ boolean_t tosdb_load_databases(tosdb_t* tdb) {
         return false;
     }
 
-    uint64_t db_list_loc = tdb->superblock->database_list_location;
+    uint64_t db_list_loc  = tdb->superblock->database_list_location;
     uint64_t db_list_size = tdb->superblock->database_list_size;
 
     while(db_list_loc != 0) {
@@ -220,13 +220,13 @@ boolean_t tosdb_load_databases(tosdb_t* tdb) {
                 return false;
             }
 
-            db->tdb = tdb;
-            db->id = db_list->databases[i].id;
-            db->name = strdup(name_buf);
-            db->lock = lock_create();
-            db->is_deleted = db_list->databases[i].deleted;
+            db->tdb               = tdb;
+            db->id                = db_list->databases[i].id;
+            db->name              = strdup(name_buf);
+            db->lock              = lock_create();
+            db->is_deleted        = db_list->databases[i].deleted;
             db->metadata_location = db_list->databases[i].metadata_location;
-            db->metadata_size = db_list->databases[i].metadata_size;
+            db->metadata_size     = db_list->databases[i].metadata_size;
 
             hashmap_put(tdb->databases, db->name, db);
 
@@ -238,7 +238,7 @@ boolean_t tosdb_load_databases(tosdb_t* tdb) {
             break;
         }
 
-        db_list_loc = db_list->header.previous_block_location;
+        db_list_loc  = db_list->header.previous_block_location;
         db_list_size = db_list->header.previous_block_size;
 
         memory_free(db_list);
@@ -271,7 +271,7 @@ boolean_t tosdb_close(tosdb_t* tdb) {
 
     iterator_t* iter = hashmap_iterator_create(tdb->databases);
 
-    while (iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_database_t * db = (tosdb_database_t *)iter->get_item(iter);
 
         if (!tosdb_database_close(db)) {
@@ -320,7 +320,7 @@ boolean_t tosdb_free(tosdb_t * tdb) {
 
     iterator_t* iter = hashmap_iterator_create(tdb->databases);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_database_t* db = (tosdb_database_t*)iter->get_item(iter);
 
         if(!tosdb_database_free(db)) {
@@ -448,10 +448,10 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
         return false;
     }
 
-    block->header.block_type = TOSDB_BLOCK_TYPE_DATABASE_LIST;
-    block->header.block_size = metadata_size;
+    block->header.block_type              = TOSDB_BLOCK_TYPE_DATABASE_LIST;
+    block->header.block_size              = metadata_size;
     block->header.previous_block_location = tdb->superblock->database_list_location;
-    block->header.previous_block_size = tdb->superblock->database_list_size;
+    block->header.previous_block_size     = tdb->superblock->database_list_size;
 
     iterator_t* iter = hashmap_iterator_create(tdb->database_new);
 
@@ -467,7 +467,7 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
 
     uint64_t db_idx = 0;
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_database_t* db = (tosdb_database_t*)iter->get_item(iter);
 
         if(db->is_dirty) {
@@ -484,7 +484,7 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
 
         if(!db->is_deleted) {
             block->databases[db_idx].metadata_location = db->metadata_location;
-            block->databases[db_idx].metadata_size = db->metadata_size;
+            block->databases[db_idx].metadata_size     = db->metadata_size;
         }
 
         iter = iter->next(iter);
@@ -513,7 +513,7 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
     }
 
     tdb->superblock->database_list_location = loc;
-    tdb->superblock->database_list_size = block->header.block_size;
+    tdb->superblock->database_list_size     = block->header.block_size;
 
     PRINTLOG(TOSDB, LOG_DEBUG, "database list loc 0x%llx size 0x%llx", loc, block->header.block_size);
 

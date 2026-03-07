@@ -440,33 +440,33 @@ boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, 
     }
 
     *has_displacement = op.displacement_size != 0 || op.label != NULL;
-    *disp_size = 0;
+    *disp_size        = 0;
 
     if(*has_displacement) {
         *need_sib = true;
     }
 
     if(*need_sib) {
-        boolean_t has_base = false;
+        boolean_t has_base  = false;
         boolean_t has_index = false;
 
         if(op.registers[ASM_REGISTER_TYPE_BASE].register_size) {
             has_base = true;
-            *sib |= op.registers[ASM_REGISTER_TYPE_BASE].register_index & 0x07;
+            *sib    |= op.registers[ASM_REGISTER_TYPE_BASE].register_index & 0x07;
 
             if(op.registers[ASM_REGISTER_TYPE_BASE].register_index > 7) {
                 *need_rex = true;
-                *rex |= 0x01;
+                *rex     |= 0x01;
             }
         }
 
         if(op.registers[ASM_REGISTER_TYPE_INDEX].register_size) {
             has_index = true;
-            *sib |= (op.registers[ASM_REGISTER_TYPE_INDEX].register_index & 0x7) << 3;
+            *sib     |= (op.registers[ASM_REGISTER_TYPE_INDEX].register_index & 0x7) << 3;
 
             if(op.registers[ASM_REGISTER_TYPE_INDEX].register_index > 7) {
                 *need_rex = true;
-                *rex |= 0x02;
+                *rex     |= 0x02;
             }
         }
 
@@ -474,10 +474,10 @@ boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, 
             if(has_index) {
                 if(*has_displacement) {
                     if(op.signed_displacement_size == 8) {
-                        *modrm |= 0x40;
+                        *modrm    |= 0x40;
                         *disp_size = 1;
                     } else if(op.signed_displacement_size == 32 || op.label) {
-                        *modrm |= 0x80;
+                        *modrm    |= 0x80;
                         *disp_size = 4;
                     } else {
                         PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid displacement size %d", op.signed_displacement_size);
@@ -495,10 +495,10 @@ boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, 
                     *modrm |= op.registers[ASM_REGISTER_TYPE_BASE].register_index & 0x07;
 
                     if(op.signed_displacement_size == 8) {
-                        *modrm |= 0x40;
+                        *modrm    |= 0x40;
                         *disp_size = 1;
                     } else if(op.signed_displacement_size == 16 || op.signed_displacement_size == 32 || op.label) {
-                        *modrm |= 0x80;
+                        *modrm    |= 0x80;
                         *disp_size = 4;
                     } else {
                         PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid displacement size %d", op.signed_displacement_size);
@@ -555,7 +555,7 @@ static void asm_encoder_destroy_symbols(hashmap_t* symbols) {
         return;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         asm_symbol_t* symbol = (asm_symbol_t*)it->get_item(it);
 
         memory_free(symbol->name);
@@ -579,7 +579,7 @@ int8_t asm_encoder_destroy_context(asm_encoder_ctx_t* ctx) {
         iterator_t* it = hashmap_iterator_create(ctx->sections);
 
         if(it) {
-            while(it->end_of_iterator(it) != 0) {
+            while(!it->end_of_iterator(it)) {
                 asm_section_t* section = (asm_section_t*)it->get_item(it);
 
                 if(section->data) {
@@ -631,7 +631,7 @@ int8_t asm_encoder_dump(asm_encoder_ctx_t* ctx, buffer_t* outbuf) {
         return -1;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         const asm_section_t* section = it->get_item(it);
 
         buffer_seek(section->data, 0, BUFFER_SEEK_DIRECTION_START);
@@ -670,7 +670,7 @@ static int8_t asm_encode_directive(asm_encoder_ctx_t* ctx, iterator_t* it) {
     if(tok->directive_type == ASM_DIRECTIVE_TYPE_SECTION) {
         it = it->next(it);
 
-        if(it->end_of_iterator(it) == 0) {
+        if(it->end_of_iterator(it)) {
             PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
             return -1;
         }
@@ -746,7 +746,7 @@ static int8_t asm_encode_directive(asm_encoder_ctx_t* ctx, iterator_t* it) {
               tok->directive_type == ASM_DIRECTIVE_TYPE_LOCAL) {
         it = it->next(it);
 
-        if(it->end_of_iterator(it) == 0) {
+        if(it->end_of_iterator(it)) {
             PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
             return -1;
         }
@@ -788,7 +788,7 @@ static int8_t asm_encode_directive(asm_encoder_ctx_t* ctx, iterator_t* it) {
     } else if(tok->directive_type == ASM_DIRECTIVE_TYPE_TYPE) {
         it = it->next(it);
 
-        if(it->end_of_iterator(it) == 0) {
+        if(it->end_of_iterator(it)) {
             PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
             return -1;
         }
@@ -814,7 +814,7 @@ static int8_t asm_encode_directive(asm_encoder_ctx_t* ctx, iterator_t* it) {
 
         it = it->next(it);
 
-        if(it->end_of_iterator(it) == 0) {
+        if(it->end_of_iterator(it)) {
             PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
             return -1;
         }
@@ -837,7 +837,7 @@ static int8_t asm_encode_directive(asm_encoder_ctx_t* ctx, iterator_t* it) {
     } else if(tok->directive_type == ASM_DIRECTIVE_TYPE_SIZE) {
         it = it->next(it);
 
-        if(it->end_of_iterator(it) == 0) {
+        if(it->end_of_iterator(it)) {
             PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
             return -1;
         }
@@ -863,7 +863,7 @@ static int8_t asm_encode_directive(asm_encoder_ctx_t* ctx, iterator_t* it) {
 
         it = it->next(it);
 
-        if(it->end_of_iterator(it) == 0) {
+        if(it->end_of_iterator(it)) {
             PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
             return -1;
         }
@@ -962,7 +962,7 @@ boolean_t asm_encode_instructions(asm_encoder_ctx_t* ctx) {
 
     boolean_t result = true;
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         const asm_token_t* tok = it->get_item(it);
 
         PRINTLOG(COMPILER_ASSEMBLER, LOG_INFO, "token type: %d tok directive type: %d value: %s", tok->token_type, tok->directive_type, tok->token_value);
@@ -984,9 +984,9 @@ boolean_t asm_encode_instructions(asm_encoder_ctx_t* ctx) {
                 }
 
                 symbol->offset = buffer_get_position(ctx->current_section->data);
-                symbol->scope = LINKER_SYMBOL_SCOPE_LOCAL;
-                symbol->type = LINKER_SYMBOL_TYPE_SYMBOL;
-                symbol->name = strdup(tok->token_value);
+                symbol->scope  = LINKER_SYMBOL_SCOPE_LOCAL;
+                symbol->type   = LINKER_SYMBOL_TYPE_SYMBOL;
+                symbol->name   = strdup(tok->token_value);
 
                 hashmap_put(ctx->current_section->symbols, symbol->name, symbol);
             } else {
@@ -1052,7 +1052,7 @@ boolean_t asm_encode_instructions(asm_encoder_ctx_t* ctx) {
 void asm_encoder_print_relocs(list_t* relocs) {
     iterator_t* iter = list_iterator_create(relocs);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const asm_relocation_t* reloc = iter->get_item(iter);
 
         printf("reloc %i %s %llx %llx\n", reloc->type, reloc->label, reloc->offset, reloc->addend);
@@ -1066,7 +1066,7 @@ void asm_encoder_print_relocs(list_t* relocs) {
 void asm_encoder_destroy_relocs(list_t* relocs) {
     iterator_t* iter = list_iterator_create(relocs);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const asm_relocation_t* reloc = iter->get_item(iter);
 
         memory_free((void*)reloc->label);
@@ -1084,26 +1084,26 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
 
     const asm_token_t* tok_operand = it->get_item(it);
 
-    char_t* mnemonic_str = strdup(tok_operand->token_value);
+    char_t* mnemonic_str      = strdup(tok_operand->token_value);
     uint64_t mnemonic_str_len = strlen(mnemonic_str) - 1;
-    uint8_t operand_size = 0;
-    uint8_t mem_operand_size = 0;
+    uint8_t operand_size      = 0;
+    uint8_t mem_operand_size  = 0;
 
     if(strends(mnemonic_str, "b") == 0) {
-        operand_size = 8;
-        mem_operand_size = 8;
+        operand_size                   = 8;
+        mem_operand_size               = 8;
         mnemonic_str[mnemonic_str_len] = '\0';
     } else if(strends(mnemonic_str, "w") == 0) {
-        operand_size = 16;
-        mem_operand_size = 16;
+        operand_size                   = 16;
+        mem_operand_size               = 16;
         mnemonic_str[mnemonic_str_len] = '\0';
     } else if(strends(mnemonic_str, "l") == 0) {
-        operand_size = 32;
-        mem_operand_size = 32;
+        operand_size                   = 32;
+        mem_operand_size               = 32;
         mnemonic_str[mnemonic_str_len] = '\0';
     } else if(strends(mnemonic_str, "q") == 0) {
-        operand_size = 64;
-        mem_operand_size = 64;
+        operand_size                   = 64;
+        mem_operand_size               = 64;
         mnemonic_str[mnemonic_str_len] = '\0';
     }
 
@@ -1124,7 +1124,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
     while(true) {
         it = it->next(it);
 
-        if(it->end_of_iterator(it) == 0) {
+        if(it->end_of_iterator(it)) {
             break;
         }
 
@@ -1215,7 +1215,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
     }
 
     boolean_t need_rex = instr->has_rex;
-    uint8_t rex = 0;
+    uint8_t rex        = 0;
 
     if(need_rex) {
         rex |= 0x40;
@@ -1225,30 +1225,30 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
         }
     }
 
-    uint8_t modrm = 0;
+    uint8_t modrm      = 0;
     boolean_t need_sib = false;
-    uint8_t sib = 0;
+    uint8_t sib        = 0;
 
     boolean_t has_displacement = false;
-    uint8_t disp_size = 0;
+    uint8_t disp_size          = 0;
 
 
-    asm_instruction_param_t op_mem = {0};
+    asm_instruction_param_t op_mem     = {0};
     asm_instruction_param_t op_regs[2] = {0};
-    asm_instruction_param_t op_imm = {0};
-    uint8_t op_reg_count = 0;
+    asm_instruction_param_t op_imm     = {0};
+    uint8_t op_reg_count               = 0;
 
     boolean_t has_mem_operand = false;
     boolean_t has_imm_operand = false;
 
     for(int64_t i = 0; i < param_count; i++) {
         if(params[i].type == ASM_INSTRUCTION_PARAM_TYPE_MEMORY) {
-            op_mem = params[i];
+            op_mem          = params[i];
             has_mem_operand = true;
         } else if(params[i].type == ASM_INSTRUCTION_PARAM_TYPE_REGISTER) {
             op_regs[op_reg_count++] = params[i];
         } else if(params[i].type == ASM_INSTRUCTION_PARAM_TYPE_IMMEDIATE) {
-            op_imm = params[i];
+            op_imm          = params[i];
             has_imm_operand = true;
         }
     }
@@ -1272,7 +1272,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
 
         if(op_regs[0].registers[0].register_index > 7) {
             need_rex = true;
-            rex |= 0x01;
+            rex     |= 0x01;
         }
     } else if(instr->has_modrm) {
         if(instr->modrm != 'r') {
@@ -1283,7 +1283,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
 
                 if(op_regs[0].registers[0].register_index > 7) {
                     need_rex = true;
-                    rex |= 0x01;
+                    rex     |= 0x01;
                 }
             }
 
@@ -1298,7 +1298,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
 
                 if(op_mem.registers[ASM_REGISTER_TYPE_BASE].register_index > 7) {
                     need_rex = true;
-                    rex |= 0x01;
+                    rex     |= 0x01;
                 }
             }
 
@@ -1316,18 +1316,18 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
 
                 if(op_regs[0].registers[0].register_index > 7) {
                     need_rex = true;
-                    rex |= 0x04;
+                    rex     |= 0x04;
                 }
             } else {
                 int64_t modrm_reg = 0;
-                int64_t modrm_rm = 0;
+                int64_t modrm_rm  = 0;
 
                 if(instr->operand_encode == ASM_INSTRUCTION_OPERAND_ENCODE_RM_REG) {
                     modrm_reg = 0;
-                    modrm_rm = 1;
+                    modrm_rm  = 1;
                 } else if(instr->operand_encode == ASM_INSTRUCTION_OPERAND_ENCODE_REG_RM) {
                     modrm_reg = 1;
-                    modrm_rm = 0;
+                    modrm_rm  = 0;
                 } else {
                     PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid operand encoding");
 
@@ -1338,19 +1338,19 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
 
                 if(op_regs[modrm_rm].registers[0].register_index > 7) {
                     need_rex = true;
-                    rex |= 0x01;
+                    rex     |= 0x01;
                 }
 
                 if(op_regs[modrm_reg].registers[0].register_index > 7) {
                     need_rex = true;
-                    rex |= 0x04;
+                    rex     |= 0x04;
                 }
             }
         }
     } else if(op_reg_count == 1) {
         if(op_regs[0].registers[0].register_index > 7) {
             need_rex = true;
-            rex |= 0x04;
+            rex     |= 0x04;
         }
     } else if(instr->operand_encode == ASM_INSTRUCTION_OPERAND_ENCODE_IMM && !has_imm_operand) {
         PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Instruction requires immediate operand");
@@ -1397,8 +1397,8 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
 
             reloc->addend = 0;
             reloc->offset = buffer_get_position(outbuf);
-            reloc->type = disp_size == 1?LINKER_RELOCATION_TYPE_64_8:
-                          disp_size == 4?LINKER_RELOCATION_TYPE_64_32:LINKER_RELOCATION_TYPE_64_64;
+            reloc->type   = disp_size == 1?LINKER_RELOCATION_TYPE_64_8:
+                            disp_size == 4?LINKER_RELOCATION_TYPE_64_32:LINKER_RELOCATION_TYPE_64_64;
             reloc->label = op_mem.label;
 
             list_queue_push(relocs, reloc);
@@ -1422,7 +1422,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
             reloc->type = imm_size == 1?LINKER_RELOCATION_TYPE_64_8:
                           imm_size == 4?LINKER_RELOCATION_TYPE_64_32:LINKER_RELOCATION_TYPE_64_32S;
             reloc->offset = buffer_get_position(outbuf);
-            reloc->label = op_imm.label;
+            reloc->label  = op_imm.label;
 
             list_queue_push(relocs, reloc);
         }

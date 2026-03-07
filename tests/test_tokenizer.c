@@ -38,7 +38,7 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     iterator_t* tokenizer = tokenizer_new(buf, delims, wss);
 
-    while(tokenizer->end_of_iterator(tokenizer) != 0) {
+    while(!tokenizer->end_of_iterator(tokenizer)) {
         token_t* token = (token_t*)tokenizer->get_item(tokenizer);
 
         token_print(token);

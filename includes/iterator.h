@@ -25,7 +25,7 @@ typedef struct iterator_t {
     void* metadata; ///< iterable struct's metadata
     int8_t (* destroy)(struct iterator_t* iter); ///< destroys itself
     struct iterator_t* (* next)(struct iterator_t* iter); ///< travels to next item in iterator
-    int8_t (* end_of_iterator)(struct iterator_t* iter); ///< checks iterator ended
+    boolean_t (* end_of_iterator)(struct iterator_t* iter); ///< checks iterator ended
     const void* (* get_item)(struct iterator_t* iter); ///< returns current item data in iterator
     const void* (* delete_item)(struct iterator_t* iter); ///< deletes current item and moves to next
     const void* (* get_extra_data)(struct iterator_t* iter); ///< if underlaying iterable has extra data for current item, returns them

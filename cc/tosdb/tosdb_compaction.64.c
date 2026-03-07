@@ -184,12 +184,12 @@ static boolean_t tosdb_sstable_compact(const tosdb_table_t* tbl, const tosdb_ind
 
     const compression_t* compression = tbl->db->tdb->compression;
 
-    uint64_t idx_loc = 0;
+    uint64_t idx_loc  = 0;
     uint64_t idx_size = 0;
 
     for(uint64_t i = 0; i < item->index_count; i++) {
         if(idx->id == item->indexes[i].index_id) {
-            idx_loc = item->indexes[i].index_location;
+            idx_loc  = item->indexes[i].index_location;
             idx_size = item->indexes[i].index_size;
             break;
         }
@@ -205,7 +205,7 @@ static boolean_t tosdb_sstable_compact(const tosdb_table_t* tbl, const tosdb_ind
 
     tosdb_cache_t* tdb_cache = tbl->db->tdb->cache;
 
-    uint64_t index_data_size = 0;
+    uint64_t index_data_size     = 0;
     uint64_t index_data_location = 0;
 
     tosdb_cached_bloomfilter_t* c_bf = NULL;
@@ -213,18 +213,18 @@ static boolean_t tosdb_sstable_compact(const tosdb_table_t* tbl, const tosdb_ind
     tosdb_cache_key_t cache_key;
     memory_memclean(&cache_key, sizeof(tosdb_cache_key_t));
 
-    cache_key.type = TOSDB_CACHE_ITEM_TYPE_BLOOMFILTER;
+    cache_key.type        = TOSDB_CACHE_ITEM_TYPE_BLOOMFILTER;
     cache_key.database_id = tbl->db->id;
-    cache_key.table_id = tbl->id;
-    cache_key.index_id = idx->id;
-    cache_key.level = item->level;
-    cache_key.sstable_id = item->sstable_id;
+    cache_key.table_id    = tbl->id;
+    cache_key.index_id    = idx->id;
+    cache_key.level       = item->level;
+    cache_key.sstable_id  = item->sstable_id;
 
     if(tdb_cache) {
         c_bf = (tosdb_cached_bloomfilter_t*)tosdb_cache_get(tdb_cache, &cache_key);
     }
     if(c_bf) {
-        index_data_size = c_bf->index_data_size;
+        index_data_size     = c_bf->index_data_size;
         index_data_location = c_bf->index_data_location;
     } else {
         tosdb_block_sstable_index_t* st_idx = (tosdb_block_sstable_index_t*)tosdb_block_read(tbl->db->tdb, idx_loc, idx_size);
@@ -235,18 +235,18 @@ static boolean_t tosdb_sstable_compact(const tosdb_table_t* tbl, const tosdb_ind
             return false;
         }
 
-        index_data_size = st_idx->index_data_size;
+        index_data_size     = st_idx->index_data_size;
         index_data_location = st_idx->index_data_location;
 
         memory_free(st_idx);
     }
 
-    void** st_idx_items = NULL;
-    uint64_t valuelog_location = 0;
-    uint64_t valuelog_size = 0;
-    uint64_t record_count = 0;
-    uint8_t* idx_data = NULL;
-    uint8_t* org_idx_data = NULL;
+    void** st_idx_items          = NULL;
+    uint64_t valuelog_location   = 0;
+    uint64_t valuelog_size       = 0;
+    uint64_t record_count        = 0;
+    uint8_t* idx_data            = NULL;
+    uint8_t* org_idx_data        = NULL;
     boolean_t idx_not_from_cache = false;
 
     tosdb_cached_index_data_t* c_id = NULL;
@@ -270,13 +270,13 @@ static boolean_t tosdb_sstable_compact(const tosdb_table_t* tbl, const tosdb_ind
             return false;
         }
 
-        record_count = c_id->record_count;
+        record_count      = c_id->record_count;
         valuelog_location = c_id->valuelog_location;
-        valuelog_size = c_id->valuelog_size;
+        valuelog_size     = c_id->valuelog_size;
     } else {
         idx_not_from_cache = true;
-        valuelog_location = item->valuelog_location;
-        valuelog_size = item->valuelog_size;
+        valuelog_location  = item->valuelog_location;
+        valuelog_size      = item->valuelog_size;
 
         tosdb_block_sstable_index_data_t* b_sid = (tosdb_block_sstable_index_data_t*)tosdb_block_read(tbl->db->tdb, index_data_location, index_data_size);
 
@@ -289,7 +289,7 @@ static boolean_t tosdb_sstable_compact(const tosdb_table_t* tbl, const tosdb_ind
 
         record_count = b_sid->record_count;
 
-        buffer_t* buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
+        buffer_t* buf_idx_in  = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
         buffer_t* buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
 
         int8_t zc_res = compression->unpack(buf_idx_in, buf_idx_out);
@@ -309,7 +309,7 @@ static boolean_t tosdb_sstable_compact(const tosdb_table_t* tbl, const tosdb_ind
             return false;
         }
 
-        idx_data = buffer_get_all_bytes_and_destroy(buf_idx_out, NULL);
+        idx_data     = buffer_get_all_bytes_and_destroy(buf_idx_out, NULL);
         org_idx_data = idx_data;
 
         uint64_t st_idx_items_len = 0;
@@ -352,9 +352,9 @@ static boolean_t tosdb_sstable_compact(const tosdb_table_t* tbl, const tosdb_ind
 
     }
 
-    buffer_t* buf_vl_out = NULL;
+    buffer_t* buf_vl_out          = NULL;
     tosdb_cached_valuelog_t* c_vl = NULL;
-    boolean_t vl_not_from_cache = false;
+    boolean_t vl_not_from_cache   = false;
 
     cache_key.type = TOSDB_CACHE_ITEM_TYPE_VALUELOG;
 
@@ -468,22 +468,22 @@ static boolean_t tosdb_sstable_compact(const tosdb_table_t* tbl, const tosdb_ind
         tosdb_record_context_t t_ctx;
         memory_memclean(&t_ctx, sizeof(tosdb_record_context_t));
         t_rec.context = &t_ctx;
-        t_ctx.table = (tosdb_table_t*)tbl;
+        t_ctx.table   = (tosdb_table_t*)tbl;
 
         if(idx_type == TOSDB_INDEX_PRIMARY || idx_type == TOSDB_INDEX_UNIQUE) {
             tosdb_memtable_index_item_t* ii = (tosdb_memtable_index_item_t*)st_idx_items[i];
             t_ctx.sstable_id = item->sstable_id;
-            t_ctx.level = item->level;
-            t_ctx.record_id = ii->record_id;
-            t_ctx.offset = ii->offset;
-            t_ctx.length = ii->length;
+            t_ctx.level      = item->level;
+            t_ctx.record_id  = ii->record_id;
+            t_ctx.offset     = ii->offset;
+            t_ctx.length     = ii->length;
         } else if(idx_type == TOSDB_INDEX_SECONDARY) {
             tosdb_memtable_secondary_index_item_t* ii = (tosdb_memtable_secondary_index_item_t*)st_idx_items[i];
             t_ctx.sstable_id = item->sstable_id;
-            t_ctx.level = item->level;
-            t_ctx.record_id = ii->record_id;
-            t_ctx.offset = ii->offset;
-            t_ctx.length = ii->length;
+            t_ctx.level      = item->level;
+            t_ctx.record_id  = ii->record_id;
+            t_ctx.offset     = ii->offset;
+            t_ctx.length     = ii->length;
         }
 
 
@@ -552,7 +552,7 @@ boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t 
 
     boolean_t error = false;
 
-    set_t* keys = set_create(tosdb_record_key_comparator);
+    set_t* keys      = set_create(tosdb_record_key_comparator);
     list_t* old_keys = list_create_list();
 
     if(!tosdb_table_get_keys_internal(tbl, idx->id, keys, old_keys)) {
@@ -571,8 +571,8 @@ boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t 
 
     hashmap_t* level_holes = hashmap_integer(128);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        tosdb_record_t* rec = (tosdb_record_t*)iter->get_item(iter);
+    while(!iter->end_of_iterator(iter)) {
+        tosdb_record_t* rec         = (tosdb_record_t*)iter->get_item(iter);
         tosdb_record_context_t* ctx = rec->context;
 
         hashmap_t* st_holes = (hashmap_t*)hashmap_get(level_holes, (void*)ctx->level);
@@ -599,17 +599,17 @@ boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t 
 
     iter = hashmap_iterator_create(level_holes);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         hashmap_t* st_holes = (hashmap_t*)iter->get_item(iter);
-        uint64_t level = (uint64_t)iter->get_extra_data(iter);
+        uint64_t level      = (uint64_t)iter->get_extra_data(iter);
 
         iterator_t* st_iter = hashmap_iterator_create(st_holes);
 
         uint64_t total_hole_count = 0;
 
-        while(st_iter->end_of_iterator(st_iter) != 0) {
-            list_t* st_holes_list = (list_t*)st_iter->get_item(st_iter);
-            uint64_t st_id = (uint64_t)st_iter->get_extra_data(st_iter);
+        while(!st_iter->end_of_iterator(st_iter)) {
+            list_t* st_holes_list                          = (list_t*)st_iter->get_item(st_iter);
+            uint64_t st_id                                 = (uint64_t)st_iter->get_extra_data(st_iter);
             const tosdb_block_sstable_list_item_t* st_item = tosdb_table_find_sstable_list_item(tbl, level, st_id);
 
             if(!st_item) {

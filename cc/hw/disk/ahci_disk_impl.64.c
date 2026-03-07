@@ -50,9 +50,9 @@ int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     }
 
     uint64_t buffer_len = count * ctx->block_size;
-    uint64_t offset = 0;
-    uint32_t max_len = 65536 * ctx->block_size;
-    future_t* fut = NULL;
+    uint64_t offset     = 0;
+    uint32_t max_len    = 65536 * ctx->block_size;
+    future_t* fut       = NULL;
 
     list_t* futs = list_create_list_with_heap(ctx->sata_disk->heap);
 
@@ -66,13 +66,13 @@ int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
         list_list_insert(futs, fut);
 
 
-        lba += iter_write_size / ctx->block_size;
+        lba    += iter_write_size / ctx->block_size;
         offset += iter_write_size;
     }
 
     iterator_t* iter = list_iterator_create(futs);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         fut = (future_t*)iter->get_item(iter);
 
         future_get_data_and_destroy(fut);
@@ -120,9 +120,9 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     }
 
     uint8_t* read_buf = *data;
-    uint64_t offset = 0;
-    uint32_t max_len = 65536 * ctx->block_size;
-    future_t* fut = NULL;
+    uint64_t offset   = 0;
+    uint32_t max_len  = 65536 * ctx->block_size;
+    future_t* fut     = NULL;
 
     list_t* futs = list_create_list_with_heap(ctx->sata_disk->heap);
 
@@ -149,13 +149,13 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
 
         list_list_insert(futs, fut);
 
-        lba += iter_read_size / ctx->block_size;
+        lba    += iter_read_size / ctx->block_size;
         offset += iter_read_size;
     }
 
     iterator_t* iter = list_iterator_create(futs);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         fut = (future_t*)iter->get_item(iter);
 
         future_get_data_and_destroy(fut);
@@ -210,7 +210,7 @@ disk_t* ahci_disk_impl_open(ahci_sata_disk_t* sata_disk) {
         return NULL;
     }
 
-    ctx->sata_disk = sata_disk;
+    ctx->sata_disk  = sata_disk;
     ctx->block_size = sata_disk->logical_sector_size;
 
     disk_t* d = memory_malloc_ext(sata_disk->heap, sizeof(disk_t), 0);
@@ -221,14 +221,14 @@ disk_t* ahci_disk_impl_open(ahci_sata_disk_t* sata_disk) {
         return NULL;
     }
 
-    d->disk.context = ctx;
-    d->disk.get_heap = ahci_disk_impl_get_heap;
-    d->disk.get_size = ahci_disk_impl_get_size;
+    d->disk.context        = ctx;
+    d->disk.get_heap       = ahci_disk_impl_get_heap;
+    d->disk.get_size       = ahci_disk_impl_get_size;
     d->disk.get_block_size = ahci_disk_impl_get_block_size;
-    d->disk.write = ahci_disk_impl_write;
-    d->disk.read = ahci_disk_impl_read;
-    d->disk.flush = ahci_disk_impl_flush;
-    d->disk.close = ahci_disk_impl_close;
+    d->disk.write          = ahci_disk_impl_write;
+    d->disk.read           = ahci_disk_impl_read;
+    d->disk.flush          = ahci_disk_impl_flush;
+    d->disk.close          = ahci_disk_impl_close;
 
     return d;
 }

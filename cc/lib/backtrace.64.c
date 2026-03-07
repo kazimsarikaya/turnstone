@@ -27,10 +27,10 @@ static int8_t backtrace_symbol_table_compare_function(const void* a, const void*
     linker_global_offset_table_entry_t* entry_b = (linker_global_offset_table_entry_t*)b;
 
     uint64_t entry_a_start = entry_a->entry_value;
-    uint64_t entry_a_end = entry_a->entry_value + entry_a->symbol_size - 1;
+    uint64_t entry_a_end   = entry_a->entry_value + entry_a->symbol_size - 1;
 
     uint64_t entry_b_start = entry_b->entry_value;
-    uint64_t entry_b_end = entry_b->entry_value + entry_b->symbol_size - 1;
+    uint64_t entry_b_end   = entry_b->entry_value + entry_b->symbol_size - 1;
 
     if(entry_a_end < entry_b_start) {
         return -1;
@@ -99,7 +99,7 @@ int8_t backtrace_init(void) {
         return -1;
     }
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const linker_global_offset_table_entry_t* got_entry = iter->get_item(iter);
 
         const char_t* symbol_name = backtrace_get_symbol_name_by_symbol_name_offset(got_entry->symbol_name_offset);
@@ -179,18 +179,18 @@ void backtrace_print(stackframe_t* frame) {
     program_header_t* ph = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
 
     uint64_t stack_start = 0;
-    uint64_t stack_end = 0;
-    uint64_t stack_size = 0;
+    uint64_t stack_end   = 0;
+    uint64_t stack_size  = 0;
 
     if(task) {
         PRINTLOG(KERNEL, LOG_ERROR, "Task Id: %llx", task->task_id);
         stack_start = (uint64_t)task->stack;
-        stack_end = stack_start + task->stack_size;
-        stack_size = task->stack_size;
+        stack_end   = stack_start + task->stack_size;
+        stack_size  = task->stack_size;
     } else {
         stack_start = ph->program_stack_virtual_address;
-        stack_end = stack_start + ph->program_stack_size;
-        stack_size = ph->program_stack_size;
+        stack_end   = stack_start + ph->program_stack_size;
+        stack_size  = ph->program_stack_size;
     }
 
     PRINTLOG(KERNEL, LOG_ERROR, "Stack start: 0x%llx end: 0x%llx size: 0x%llx", stack_start, stack_end, stack_size);

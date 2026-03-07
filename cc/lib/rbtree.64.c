@@ -36,8 +36,8 @@ static rbtree_node_t* rbtree_node_new(memory_heap_t* heap, const void* key, cons
     }
 
     res->color = RBTREE_COLOR_RED;
-    res->key = key;
-    res->data = data;
+    res->key   = key;
+    res->data  = data;
 
     return res;
 }
@@ -88,23 +88,23 @@ static void rbtree_node_move_down(rbtree_node_t* rbn, rbtree_node_t* new_parent)
     }
 
     new_parent->parent = rbn->parent;
-    rbn->parent = new_parent;
+    rbn->parent        = new_parent;
 }
 
 static void rbtree_node_swap_colors(rbtree_node_t* rbn1, rbtree_node_t* rbn2) {
     rbtree_color_t temp;
-    temp = rbn1->color;
+    temp        = rbn1->color;
     rbn1->color = rbn2->color;
     rbn2->color = temp;
 }
 
 static void rbtree_node_swap_values(rbtree_node_t* rbn1, rbtree_node_t* rbn2) {
     const void* temp;
-    temp = rbn1->key;
+    temp      = rbn1->key;
     rbn1->key = rbn2->key;
     rbn2->key = temp;
 
-    temp = rbn1->data;
+    temp       = rbn1->data;
     rbn1->data = rbn2->data;
     rbn2->data = temp;
 }
@@ -188,14 +188,14 @@ static void rbtree_fix_redred(rbtree_t* rbt, rbtree_node_t* rbn) {
             break;
         }
 
-        rbtree_node_t* parent = rbn->parent;
+        rbtree_node_t* parent      = rbn->parent;
         rbtree_node_t* grandparent = parent->parent;
-        rbtree_node_t* uncle = rbtree_node_uncle(rbn);
+        rbtree_node_t* uncle       = rbtree_node_uncle(rbn);
 
         if(parent->color != RBTREE_COLOR_BLACK) {
             if(uncle != NULL && uncle->color == RBTREE_COLOR_RED) {
-                parent->color = RBTREE_COLOR_BLACK;
-                uncle->color = RBTREE_COLOR_BLACK;
+                parent->color      = RBTREE_COLOR_BLACK;
+                uncle->color       = RBTREE_COLOR_BLACK;
                 grandparent->color = RBTREE_COLOR_RED;
 
                 rbn = grandparent;
@@ -239,13 +239,13 @@ static void rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn) {
         }
 
         rbtree_node_t* sibling = rbtree_node_sibling(rbn);
-        rbtree_node_t* parent = rbn->parent;
+        rbtree_node_t* parent  = rbn->parent;
 
         if(!sibling) {
             rbn = parent;
         } else {
             if(sibling->color == RBTREE_COLOR_RED) {
-                parent->color = RBTREE_COLOR_RED;
+                parent->color  = RBTREE_COLOR_RED;
                 sibling->color = RBTREE_COLOR_BLACK;
 
                 if(rbtree_node_is_on_left(sibling)) {
@@ -258,7 +258,7 @@ static void rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn) {
                     if(sibling->left && sibling->left->color == RBTREE_COLOR_RED) {
                         if(rbtree_node_is_on_left(sibling)) {
                             sibling->left->color = sibling->color;
-                            sibling->color = parent->color;
+                            sibling->color       = parent->color;
                             rbtree_right_rotate(rbt, parent);
                         } else {
                             sibling->left->color = parent->color;
@@ -272,7 +272,7 @@ static void rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn) {
                             rbtree_right_rotate(rbt, parent);
                         } else {
                             sibling->right->color = sibling->color;
-                            sibling->color = parent->color;
+                            sibling->color        = parent->color;
                             rbtree_left_rotate(rbt, parent);
                         }
                     }
@@ -300,7 +300,7 @@ static void rbtree_delete_node(rbtree_t* rbt, rbtree_node_t* v) {
     while(true) {
         rbtree_node_t* u = rbtree_node_bst_replace(v);
 
-        boolean_t uvBlack = ((u == NULL || ( u && u->color == RBTREE_COLOR_BLACK)) && (v->color == RBTREE_COLOR_BLACK));
+        boolean_t uvBlack     = ((u == NULL || ( u && u->color == RBTREE_COLOR_BLACK)) && (v->color == RBTREE_COLOR_BLACK));
         rbtree_node_t* parent = v->parent;
 
         if(u == NULL) {
@@ -333,9 +333,9 @@ static void rbtree_delete_node(rbtree_t* rbt, rbtree_node_t* v) {
 
         if(v->left == NULL || v->right == NULL) {
             if (v == rbt->root) {
-                v->key = u->key;
-                v->data = u->data;
-                v->left = NULL;
+                v->key   = u->key;
+                v->data  = u->data;
+                v->left  = NULL;
                 v->right = NULL;
                 memory_free_ext(rbt->heap, u);
             } else {
@@ -443,7 +443,7 @@ static int8_t rbtree_insert(index_t* idx, const void* key, const void* data, voi
             *removed_data = (void*)fn->data;
         }
 
-        fn->key = key;
+        fn->key  = key;
         fn->data = data;
 
         lock_release(rbt->lock);
@@ -608,7 +608,7 @@ static list_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, 
             if(criteria == INDEXER_KEY_COMPARATOR_CRITERIA_EQUALORGREATER) {
                 if(c_res_1 >= 0) {
                     list_stack_push(stack, current);
-                } else  {
+                } else {
                     if(current->right) {
                         current = current->right;
 
@@ -620,7 +620,7 @@ static list_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, 
             if(criteria == INDEXER_KEY_COMPARATOR_CRITERIA_GREATER) {
                 if(c_res_1 > 0) {
                     list_stack_push(stack, current);
-                } else  {
+                } else {
                     if(current->right) {
                         current = current->right;
 
@@ -687,16 +687,16 @@ index_t* rbtree_create_index_with_heap(memory_heap_t* heap, index_key_comparator
     rbt->heap = heap;
     rbt->lock = lock_create_with_heap(heap);
 
-    idx->comparator = comparator;
-    idx->heap = heap;
-    idx->metadata = rbt;
-    idx->size = rbtree_size;
-    idx->insert = rbtree_insert;
-    idx->delete = rbtree_delete;
-    idx->find = rbtree_find;
-    idx->search = rbtree_search;
+    idx->comparator      = comparator;
+    idx->heap            = heap;
+    idx->metadata        = rbt;
+    idx->size            = rbtree_size;
+    idx->insert          = rbtree_insert;
+    idx->delete          = rbtree_delete;
+    idx->find            = rbtree_find;
+    idx->search          = rbtree_search;
     idx->create_iterator = rbtree_create_iterator;
-    idx->contains = rbtree_contains;
+    idx->contains        = rbtree_contains;
 
     return idx;
 }
@@ -766,7 +766,7 @@ typedef struct rbtree_iterator_t {
 
 static int8_t rbtree_iterator_destroy(iterator_t * iterator){
     rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
-    memory_heap_t* heap = iter->heap;
+    memory_heap_t* heap     = iter->heap;
 
     list_destroy(iter->items);
     memory_free_ext(heap, iter);
@@ -775,10 +775,10 @@ static int8_t rbtree_iterator_destroy(iterator_t * iterator){
     return 0;
 }
 
-static int8_t rbtree_iterator_end_of_index(iterator_t * iterator) {
+static boolean_t rbtree_iterator_end_of_index(iterator_t * iterator) {
     rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
 
-    return iter->current_index == iter->size?0:1;
+    return iter->current_index == iter->size;
 }
 
 static iterator_t* rbtree_iterator_next (iterator_t * iterator){
@@ -834,9 +834,9 @@ static iterator_t* rbtree_search(index_t * idx, const void* key1, const void* ke
         return NULL;
     }
 
-    iter->heap = idx->heap;
+    iter->heap  = idx->heap;
     iter->items = rbtree_inorder(idx, key1, key2, criteria);
-    iter->size = list_size(iter->items);
+    iter->size  = list_size(iter->items);
 
     if(!iter->items) {
         memory_free_ext(idx->heap, iter);
@@ -853,13 +853,13 @@ static iterator_t* rbtree_search(index_t * idx, const void* key1, const void* ke
         return NULL;
     }
 
-    iterator->metadata = iter;
-    iterator->destroy = &rbtree_iterator_destroy;
-    iterator->next = &rbtree_iterator_next;
+    iterator->metadata        = iter;
+    iterator->destroy         = &rbtree_iterator_destroy;
+    iterator->next            = &rbtree_iterator_next;
     iterator->end_of_iterator = &rbtree_iterator_end_of_index;
-    iterator->get_item = &rbtree_iterator_get_data;
-    iterator->delete_item = NULL;
-    iterator->get_extra_data = rbtree_iterator_get_key;
+    iterator->get_item        = &rbtree_iterator_get_data;
+    iterator->delete_item     = NULL;
+    iterator->get_extra_data  = rbtree_iterator_get_key;
 
     return iterator;
 }

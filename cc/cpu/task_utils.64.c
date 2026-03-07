@@ -173,7 +173,7 @@ void task_set_custom_has_message_func(task_custom_has_message_func_t func, void*
 void task_print_all(buffer_t* buffer) {
     iterator_t* it = hashmap_iterator_create(task_map);
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         const task_t* task = it->get_item(it);
 
 
@@ -225,7 +225,7 @@ buffer_t* task_build_task_list(void) {
         return NULL;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         const task_t* task = it->get_item(it);
 
 

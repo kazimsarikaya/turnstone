@@ -64,8 +64,8 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
-    cc.index_data_size = 4 << 20;
-    cc.valuelog_size = 16 << 20;
+    cc.index_data_size  = 4 << 20;
+    cc.valuelog_size    = 16 << 20;
 
     if(!tosdb_cache_config_set(tosdb, &cc)) {
         print_error("cannot create tosdb");
@@ -352,8 +352,8 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
-    cc.index_data_size = 4 << 20;
-    cc.valuelog_size = 16 << 20;
+    cc.index_data_size  = 4 << 20;
+    cc.valuelog_size    = 16 << 20;
 
     if(!tosdb_cache_config_set(tosdb, &cc)) {
         print_error("cannot create tosdb");
@@ -676,8 +676,8 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
-    cc.index_data_size = 4 << 20;
-    cc.valuelog_size = 16 << 20;
+    cc.index_data_size  = 4 << 20;
+    cc.valuelog_size    = 16 << 20;
 
     if(!tosdb_cache_config_set(tosdb, &cc)) {
         print_error("cannot create tosdb");
@@ -825,7 +825,7 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    while(tokenizer->end_of_iterator(tokenizer) != 0) {
+    while(!tokenizer->end_of_iterator(tokenizer)) {
         tosdb_record_t* rec = tosdb_table_create_record(table2);
 
         if(!rec) {
@@ -846,7 +846,7 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
         memory_free(token);
 
         tokenizer = tokenizer->next(tokenizer);
-        token = (token_t*)tokenizer->get_item(tokenizer);
+        token     = (token_t*)tokenizer->get_item(tokenizer);
 
         printf("%s ", token->value);
 
@@ -855,7 +855,7 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
         memory_free(token);
 
         tokenizer = tokenizer->next(tokenizer);
-        token = (token_t*)tokenizer->get_item(tokenizer);
+        token     = (token_t*)tokenizer->get_item(tokenizer);
 
         printf("%s ", token->value);
 
@@ -864,7 +864,7 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
         memory_free(token);
 
         tokenizer = tokenizer->next(tokenizer);
-        token = (token_t*)tokenizer->get_item(tokenizer);
+        token     = (token_t*)tokenizer->get_item(tokenizer);
 
         printf("%s\n", token->value);
 
@@ -914,7 +914,7 @@ token_error:
         goto rec_destroy;
     }
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_record_t* res_rec = (tosdb_record_t*)iter->delete_item(iter);
 
         if(!res_rec) {
@@ -1115,8 +1115,8 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
-    cc.index_data_size = 4 << 20;
-    cc.valuelog_size = 16 << 20;
+    cc.index_data_size  = 4 << 20;
+    cc.valuelog_size    = 16 << 20;
 
     if(!tosdb_cache_config_set(tosdb, &cc)) {
         print_error("cannot create tosdb");
@@ -1172,7 +1172,7 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
 
     pass = false;
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_record_t* res_rec = (tosdb_record_t*)iter->delete_item(iter);
 
         if(!res_rec) {

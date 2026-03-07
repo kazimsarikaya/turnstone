@@ -103,7 +103,7 @@ int8_t linker_destroy_context(linker_context_t* ctx) {
         return -1;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
 
         if(!module) {
@@ -1149,7 +1149,7 @@ int8_t linker_calculate_program_size(linker_context_t* ctx) {
         return -1;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
 
         metadata_size += 24; // id, physical_start, virtual_start bytes
@@ -1227,7 +1227,7 @@ int8_t linker_bind_linear_addresses(linker_context_t* ctx) {
         return -1;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
 
         module->physical_start = offset_pyhsical;
@@ -1275,7 +1275,7 @@ int64_t linker_get_section_count_without_relocations(linker_context_t* ctx) {
 
     int64_t count = 0;
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
 
         for(int32_t i = 0; i < LINKER_SECTION_TYPE_RELOCATION_TABLE; i++) {
@@ -1509,7 +1509,7 @@ int8_t linker_link_program(linker_context_t* ctx) {
         return -1;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
 
         if(linker_link_module(ctx, module) < 0) {
@@ -1553,7 +1553,7 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
         return NULL;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
 
         if(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size == 0) {
@@ -1650,7 +1650,7 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
 
     it = list_iterator_create(relocations_list);
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         efi_image_relocation_entry_t* efi_reloc_entry = (efi_image_relocation_entry_t*)it->get_item(it);
 
         PRINTLOG(LINKER, LOG_DEBUG, "relocation entry: page_rva: 0x%x, block_size: 0x%x", efi_reloc_entry->page_rva, efi_reloc_entry->block_size);
@@ -1700,7 +1700,7 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
         return NULL;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
 
         for(uint64_t i = 0; i < LINKER_SECTION_TYPE_RELOCATION_TABLE; i++) {
@@ -1765,7 +1765,7 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
 
     it = list_iterator_create(sections_list);
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         efi_image_section_header_t* efi_reloc_entry = (efi_image_section_header_t*)it->get_item(it);
 
         if(!buffer_append_bytes(sections_buffer, (uint8_t*)efi_reloc_entry, sizeof(efi_image_section_header_t))) {
@@ -2149,7 +2149,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
             return -1;
         }
 
-        while(it->end_of_iterator(it) != 0) {
+        while(!it->end_of_iterator(it)) {
             linker_module_t* module = (linker_module_t*)it->get_item(it);
 
             for(uint64_t i = 0; i < LINKER_SECTION_TYPE_RELOCATION_TABLE; i++) {
@@ -2478,7 +2478,7 @@ buffer_t* linker_build_relocation_table_buffer(linker_context_t* ctx) {
         goto error_destroy_buffer;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
 
 
@@ -2567,7 +2567,7 @@ buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
         goto error_destroy_buffer;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
 
         if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->id, sizeof(uint64_t))) {

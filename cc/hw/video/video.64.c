@@ -65,7 +65,7 @@ int8_t video_display_init(memory_heap_t* heap, list_t* display_controllers) {
         return -1;
     }
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const pci_dev_t* device = iter->get_item(iter);
 
         if(device->pci_header->vendor_id == VIDEO_PCI_DEVICE_VENDOR_VMWARE && device->pci_header->device_id == VIDEO_PCI_DEVICE_ID_VMWARE_SVGA2) {

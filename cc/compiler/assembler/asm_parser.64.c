@@ -138,7 +138,7 @@ boolean_t asm_parser_parse_line(buffer_t* line, list_t* tokens) {
     // directives and instructions can have parameters delimetered by , whitespaces between parameters are ignored
     // label lines can have instructions or directives after them
 
-    boolean_t is_label = false;
+    boolean_t is_label     = false;
     boolean_t is_directive = false;
 
     while(buffer_remaining(line)) {
@@ -172,8 +172,8 @@ boolean_t asm_parser_parse_line(buffer_t* line, list_t* tokens) {
         return false;
     }
 
-    token->token_type = is_label ? ASM_TOKEN_TYPE_LABEL : is_directive ? ASM_TOKEN_TYPE_DIRECTIVE : ASM_TOKEN_TYPE_INSTRUCTION;
-    token->token_value = (char_t*)buffer_get_all_bytes(part, NULL);
+    token->token_type     = is_label ? ASM_TOKEN_TYPE_LABEL : is_directive ? ASM_TOKEN_TYPE_DIRECTIVE : ASM_TOKEN_TYPE_INSTRUCTION;
+    token->token_value    = (char_t*)buffer_get_all_bytes(part, NULL);
     token->directive_type = is_directive ? asm_parser_get_directive_type(token->token_value) : ASM_DIRECTIVE_TYPE_NULL;
 
     list_queue_push(tokens, token);
@@ -208,13 +208,13 @@ boolean_t asm_parser_parse_line(buffer_t* line, list_t* tokens) {
         buffer_reset(part);
 
         boolean_t is_mem_paran = false;
-        boolean_t is_string = false;
-        uint8_t c = NULL;
-        uint8_t c_prev = 0;
+        boolean_t is_string    = false;
+        uint8_t c              = NULL;
+        uint8_t c_prev         = 0;
 
         while(buffer_remaining(line)) {
             c_prev = c;
-            c = buffer_peek_byte(line);
+            c      = buffer_peek_byte(line);
 
             if(c == '(') {
                 is_mem_paran = true;
@@ -242,7 +242,7 @@ boolean_t asm_parser_parse_line(buffer_t* line, list_t* tokens) {
             return false;
         }
 
-        token->token_type = ASM_TOKEN_TYPE_PARAMETER;
+        token->token_type  = ASM_TOKEN_TYPE_PARAMETER;
         token->token_value = (char_t*)buffer_get_all_bytes(part, NULL);
 
         list_queue_push(tokens, token);
@@ -259,7 +259,7 @@ boolean_t asm_parser_parse_line(buffer_t* line, list_t* tokens) {
 void asm_parser_print_tokens(list_t* tokens) {
     iterator_t* it = list_iterator_create(tokens);
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         const asm_token_t* tok = it->get_item(it);
 
         printf("%i %i %s\n", tok->token_type, tok->directive_type, tok->token_value);
@@ -273,7 +273,7 @@ void asm_parser_print_tokens(list_t* tokens) {
 boolean_t asm_parser_destroy_tokens(list_t* tokens) {
     iterator_t* it = list_iterator_create(tokens);
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         const asm_token_t* tok = it->delete_item(it);
 
         memory_free((void*)tok->token_value);

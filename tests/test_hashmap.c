@@ -86,7 +86,7 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     iterator_t* iter = hashmap_iterator_create(hm);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         const char_t* v = iter->get_item(iter);
 
         printf("!!! %s\n", v);

@@ -28,16 +28,11 @@ int8_t                    gpt_del_partition(const disk_t* d, uint8_t partno);
 disk_partition_context_t* gpt_get_partition_context(const disk_t* d, uint8_t partno);
 disk_partition_t*         gpt_get_partition(const disk_t* d, uint8_t partno);
 disk_partition_t*         gpt_get_partition_by_type_data(const disk_t* d, const void* data);
-int8_t                    gpt_part_iter_destroy(iterator_t* iter);
-iterator_t*               gpt_part_iter_next(iterator_t* iter);
-int8_t                    gpt_part_iter_end_of_iterator(iterator_t* iter);
-const void*               gpt_part_iter_get_item(iterator_t* iter);
-const void*               gpt_part_iter_delete_item(iterator_t* iter);
 iterator_t*               gpt_get_partition_contexts(const disk_t* d);
 
 int8_t efi_create_guid(efi_guid_t* guid){
-    guid->time_low = rand();
-    guid->time_mid = rand();
+    guid->time_low          = rand();
+    guid->time_mid          = rand();
     guid->time_high_version = rand();
 
     for(int32_t i = 0; i < 8; i++) {
@@ -80,18 +75,18 @@ int8_t gpt_disk_close(const disk_or_partition_t* d) {
 }
 
 int8_t gpt_write_gpt_metadata(const disk_t* d) {
-    gpt_disk_t* gd = (gpt_disk_t*)d;
+    gpt_disk_t* gd          = (gpt_disk_t*)d;
     disk_or_partition_t* dp = (disk_or_partition_t*)d;
 
     uint64_t block_size = dp->get_block_size(dp);
 
-    uint64_t size = dp->get_size(dp);
-    int64_t gpt_parts_size = sizeof(efi_partition_entry_t) * 128;
-    int64_t max_lba = size / block_size - 1;
+    uint64_t size                  = dp->get_size(dp);
+    int64_t gpt_parts_size         = sizeof(efi_partition_entry_t) * 128;
+    int64_t max_lba                = size / block_size - 1;
     uint64_t gpt_parts_block_count = (gpt_parts_size + block_size - 1)  / block_size;
 
     int32_t pes_crc32 = CRC32_SEED;
-    pes_crc32 = crc32_sum((uint8_t*)gd->partitions, gpt_parts_size, pes_crc32);
+    pes_crc32  = crc32_sum((uint8_t*)gd->partitions, gpt_parts_size, pes_crc32);
     pes_crc32 ^= CRC32_SEED;
 
     efi_partition_table_header_t* gpt = (efi_partition_table_header_t*)gd->gpt_header;
@@ -100,8 +95,8 @@ int8_t gpt_write_gpt_metadata(const disk_t* d) {
 
     gpt->header.crc32 = 0;
     int32_t gpt_crc32 = CRC32_SEED;
-    gpt_crc32 = crc32_sum((uint8_t*)gpt, sizeof(efi_partition_table_header_t), gpt_crc32);
-    gpt_crc32 ^= CRC32_SEED;
+    gpt_crc32         = crc32_sum((uint8_t*)gpt, sizeof(efi_partition_table_header_t), gpt_crc32);
+    gpt_crc32        ^= CRC32_SEED;
     gpt->header.crc32 = gpt_crc32;
 
     dp->write(dp, 1, 1, (uint8_t*)gd->gpt_header);
@@ -110,13 +105,13 @@ int8_t gpt_write_gpt_metadata(const disk_t* d) {
     dp->write(dp, gpt->last_usable_lba + 1, gpt_parts_block_count, (uint8_t*)gd->partitions);
 
     gpt->partition_entry_lba = gpt->last_usable_lba + 1;
-    gpt->my_lba = max_lba;
-    gpt->alternate_lba = 1;
+    gpt->my_lba              = max_lba;
+    gpt->alternate_lba       = 1;
 
     gpt->header.crc32 = 0;
-    gpt_crc32 = CRC32_SEED;
-    gpt_crc32 = crc32_sum((uint8_t*)gpt, sizeof(efi_partition_table_header_t), gpt_crc32);
-    gpt_crc32 ^= CRC32_SEED;
+    gpt_crc32         = CRC32_SEED;
+    gpt_crc32         = crc32_sum((uint8_t*)gpt, sizeof(efi_partition_table_header_t), gpt_crc32);
+    gpt_crc32        ^= CRC32_SEED;
     gpt->header.crc32 = gpt_crc32;
 
     dp->write(dp, max_lba, 1, (uint8_t*)gd->gpt_header);
@@ -129,18 +124,18 @@ int8_t gpt_write_gpt_metadata(const disk_t* d) {
 }
 
 int8_t gpt_check_and_format_if_need(const disk_t* d) {
-    gpt_disk_t* gd = (gpt_disk_t*)d;
+    gpt_disk_t* gd          = (gpt_disk_t*)d;
     disk_or_partition_t* dp = (disk_or_partition_t*)d;
 
     memory_heap_t* heap = dp->get_heap(dp);
 
     uint64_t block_size = dp->get_block_size(dp);
 
-    uint64_t size = dp->get_size((disk_or_partition_t*)d);
+    uint64_t size         = dp->get_size((disk_or_partition_t*)d);
     uint64_t sector_count = size / block_size;
 
-    int64_t gpt_parts_size = sizeof(efi_partition_entry_t) * 128;
-    int64_t max_lba = size / block_size - 1;
+    int64_t gpt_parts_size         = sizeof(efi_partition_entry_t) * 128;
+    int64_t max_lba                = size / block_size - 1;
     uint64_t gpt_parts_block_count = (gpt_parts_size + block_size - 1)  / block_size;
 
     uint8_t* data;
@@ -178,13 +173,13 @@ int8_t gpt_check_and_format_if_need(const disk_t* d) {
         return -1;
     }
 
-    pmbr_part = (efi_pmbr_partition_t*)(data + 0x1be);
-    pmbr_part->first_chs.sector = 2;
-    pmbr_part->part_type = EFI_PMBR_PART_TYPE;
-    pmbr_part->last_chs.head = 0xFF;
-    pmbr_part->last_chs.sector = 0xFF;
+    pmbr_part                    = (efi_pmbr_partition_t*)(data + 0x1be);
+    pmbr_part->first_chs.sector  = 2;
+    pmbr_part->part_type         = EFI_PMBR_PART_TYPE;
+    pmbr_part->last_chs.head     = 0xFF;
+    pmbr_part->last_chs.sector   = 0xFF;
     pmbr_part->last_chs.cylinder = 0xFF;
-    pmbr_part->first_lba = 1;
+    pmbr_part->first_lba         = 1;
 
     if(sector_count > 0xFFFFFFFF) {
         pmbr_part->sector_count = 0xFFFFFFFF;
@@ -204,18 +199,18 @@ int8_t gpt_check_and_format_if_need(const disk_t* d) {
 
     efi_partition_table_header_t* gpt = (efi_partition_table_header_t*)gd->gpt_header;
 
-    gpt->header.signature = EFI_PART_TABLE_HEADER_SIGNATURE;
-    gpt->header.revision = EFI_PART_TABLE_HEADER_REVISION;
+    gpt->header.signature   = EFI_PART_TABLE_HEADER_SIGNATURE;
+    gpt->header.revision    = EFI_PART_TABLE_HEADER_REVISION;
     gpt->header.header_size = sizeof(efi_partition_table_header_t);
 
-    gpt->my_lba = 1;
-    gpt->alternate_lba = max_lba;
+    gpt->my_lba           = 1;
+    gpt->alternate_lba    = max_lba;
     gpt->first_usable_lba = gpt->my_lba + gpt_parts_block_count + 1;
-    gpt->last_usable_lba =  gpt->alternate_lba - gpt_parts_block_count - 1;
+    gpt->last_usable_lba  =  gpt->alternate_lba - gpt_parts_block_count - 1;
     efi_create_guid(&gpt->disk_guid);
-    gpt->partition_entry_lba = 2;
+    gpt->partition_entry_lba   = 2;
     gpt->partition_entry_count = 128;
-    gpt->partition_entry_size = sizeof(efi_partition_entry_t);
+    gpt->partition_entry_size  = sizeof(efi_partition_entry_t);
 
     gpt_write_gpt_metadata(d);
 
@@ -271,13 +266,13 @@ disk_partition_context_t*  gpt_get_partition_context(const disk_t* d, uint8_t pa
     }
 
     res->internal_context = &gd->partitions[partno];
-    res->start_lba = gd->partitions[partno].starting_lba;
-    res->end_lba = gd->partitions[partno].ending_lba;
+    res->start_lba        = gd->partitions[partno].starting_lba;
+    res->end_lba          = gd->partitions[partno].ending_lba;
 
     return res;
 }
 
-int8_t gpt_part_iter_destroy(iterator_t* iter){
+static int8_t gpt_part_iter_destroy(iterator_t* iter){
     if(iter == NULL) {
         return -1;
     }
@@ -296,7 +291,7 @@ int8_t gpt_part_iter_destroy(iterator_t* iter){
     return 0;
 }
 
-iterator_t* gpt_part_iter_next(iterator_t* iter){
+static iterator_t* gpt_part_iter_next(iterator_t* iter){
     if(iter == NULL) {
         return NULL;
     }
@@ -312,25 +307,25 @@ iterator_t* gpt_part_iter_next(iterator_t* iter){
     return iter;
 }
 
-int8_t gpt_part_iter_end_of_iterator(iterator_t* iter){
+static boolean_t gpt_part_iter_end_of_iterator(iterator_t* iter){
     if(iter == NULL) {
-        return 0;
+        return true;
     }
 
     gpt_parts_iter_metadata_t* md = iter->metadata;
 
     if(md == NULL) {
-        return 0;
+        return true;
     }
 
     if(md->current_part_no > md->disk->gpt_header->partition_entry_count) {
-        return 0;
+        return true;
     }
 
-    return -1;
+    return false;
 }
 
-const void* gpt_part_iter_get_item(iterator_t* iter){
+static const void* gpt_part_iter_get_item(iterator_t* iter){
     if(iter == NULL) {
         return NULL;
     }
@@ -344,7 +339,7 @@ const void* gpt_part_iter_get_item(iterator_t* iter){
     return gpt_get_partition_context((disk_t*)md->disk, md->current_part_no);
 }
 
-const void* gpt_part_iter_delete_item(iterator_t* iter){
+static const void* gpt_part_iter_delete_item(iterator_t* iter){
     if(iter == NULL) {
         return NULL;
     }
@@ -382,15 +377,15 @@ iterator_t* gpt_get_partition_contexts(const disk_t* d){
         return NULL;
     }
 
-    md->disk = (gpt_disk_t*)d;
+    md->disk            = (gpt_disk_t*)d;
     md->current_part_no = 0;
 
-    iter->metadata = md;
-    iter->destroy = gpt_part_iter_destroy;
-    iter->next = gpt_part_iter_next;
+    iter->metadata        = md;
+    iter->destroy         = gpt_part_iter_destroy;
+    iter->next            = gpt_part_iter_next;
     iter->end_of_iterator = gpt_part_iter_end_of_iterator;
-    iter->get_item = gpt_part_iter_get_item;
-    iter->delete_item = gpt_part_iter_delete_item;
+    iter->get_item        = gpt_part_iter_get_item;
+    iter->delete_item     = gpt_part_iter_delete_item;
 
     return iter;
 }
@@ -412,15 +407,15 @@ disk_partition_context_t* gpt_create_partition_context(efi_guid_t* type, const c
     efi_create_guid(&ic->unique_partition_guid);
 
     ic->starting_lba = start;
-    ic->ending_lba = end;
+    ic->ending_lba   = end;
 
     char16_t* pname = char_to_wchar(name);
     memory_memcopy(pname, ic->partition_name, strlen(name) * sizeof(char16_t));
     memory_free(pname);
 
     res->internal_context = ic;
-    res->start_lba = ic->starting_lba;
-    res->end_lba = ic->ending_lba;
+    res->start_lba        = ic->starting_lba;
+    res->end_lba          = ic->ending_lba;
 
     return res;
 }
@@ -439,14 +434,14 @@ disk_t* gpt_get_or_create_gpt_disk(disk_t* underlaying_disk){
 
     memory_memcopy(underlaying_disk, gd, sizeof(disk_t));
 
-    gd->underlaying_disk.disk.close = gpt_disk_close;
-    gd->underlaying_disk.add_partition = gpt_add_partition;
-    gd->underlaying_disk.del_partition = gpt_del_partition;
-    gd->underlaying_disk.get_partition_context = gpt_get_partition_context;
-    gd->underlaying_disk.get_partition_contexts = gpt_get_partition_contexts;
-    gd->underlaying_disk.get_partition = gpt_get_partition;
+    gd->underlaying_disk.disk.close                 = gpt_disk_close;
+    gd->underlaying_disk.add_partition              = gpt_add_partition;
+    gd->underlaying_disk.del_partition              = gpt_del_partition;
+    gd->underlaying_disk.get_partition_context      = gpt_get_partition_context;
+    gd->underlaying_disk.get_partition_contexts     = gpt_get_partition_contexts;
+    gd->underlaying_disk.get_partition              = gpt_get_partition;
     gd->underlaying_disk.get_partition_by_type_data = gpt_get_partition_by_type_data;
-    gd->underlaying_disk_pointer = (disk_or_partition_t*)underlaying_disk;
+    gd->underlaying_disk_pointer                    = (disk_or_partition_t*)underlaying_disk;
 
     disk_t* d = (disk_t*)gd;
 
@@ -489,7 +484,7 @@ disk_partition_t* gpt_get_partition(const disk_t* d, uint8_t partno) {
         return NULL;
     }
 
-    dctx->ctx = ctx;
+    dctx->ctx  = ctx;
     dctx->disk = d;
 
     disk_partition_t* res = memory_malloc_ext(heap, sizeof(disk_partition_t), 0);
@@ -501,16 +496,16 @@ disk_partition_t* gpt_get_partition(const disk_t* d, uint8_t partno) {
         return NULL;
     }
 
-    res->partition.context = dctx;
-    res->partition.close = disk_partition_close;
-    res->partition.read = disk_partition_read;
-    res->partition.write = disk_partition_write;
-    res->partition.flush = disk_partition_flush;
-    res->partition.get_heap = disk_partition_get_heap;
-    res->partition.get_size = disk_partition_get_size;
+    res->partition.context        = dctx;
+    res->partition.close          = disk_partition_close;
+    res->partition.read           = disk_partition_read;
+    res->partition.write          = disk_partition_write;
+    res->partition.flush          = disk_partition_flush;
+    res->partition.get_heap       = disk_partition_get_heap;
+    res->partition.get_size       = disk_partition_get_size;
     res->partition.get_block_size = disk_partition_get_block_size;
-    res->get_disk = disk_partition_get_disk;
-    res->get_context = disk_partition_get_context;
+    res->get_disk                 = disk_partition_get_disk;
+    res->get_context              = disk_partition_get_context;
 
     return res;
 }
@@ -532,7 +527,7 @@ disk_partition_t* gpt_get_partition_by_type_data(const disk_t* d, const void* da
     disk_partition_context_t* ctx = NULL;
 
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         disk_partition_context_t* tmp_ctx = (disk_partition_context_t*)it->get_item(it);
 
         efi_partition_entry_t* entry = (efi_partition_entry_t*)tmp_ctx->internal_context;
@@ -564,7 +559,7 @@ disk_partition_t* gpt_get_partition_by_type_data(const disk_t* d, const void* da
         return NULL;
     }
 
-    dctx->ctx = ctx;
+    dctx->ctx  = ctx;
     dctx->disk = d;
 
     disk_partition_t* res = memory_malloc_ext(heap, sizeof(disk_partition_t), 0);
@@ -576,16 +571,16 @@ disk_partition_t* gpt_get_partition_by_type_data(const disk_t* d, const void* da
         return NULL;
     }
 
-    res->partition.context = dctx;
-    res->partition.close = disk_partition_close;
-    res->partition.read = disk_partition_read;
-    res->partition.write = disk_partition_write;
-    res->partition.flush = disk_partition_flush;
-    res->partition.get_heap = disk_partition_get_heap;
-    res->partition.get_size = disk_partition_get_size;
+    res->partition.context        = dctx;
+    res->partition.close          = disk_partition_close;
+    res->partition.read           = disk_partition_read;
+    res->partition.write          = disk_partition_write;
+    res->partition.flush          = disk_partition_flush;
+    res->partition.get_heap       = disk_partition_get_heap;
+    res->partition.get_size       = disk_partition_get_size;
     res->partition.get_block_size = disk_partition_get_block_size;
-    res->get_disk = disk_partition_get_disk;
-    res->get_context = disk_partition_get_context;
+    res->get_disk                 = disk_partition_get_disk;
+    res->get_context              = disk_partition_get_context;
 
     return res;
 }
@@ -643,7 +638,7 @@ uint64_t disk_partition_get_block_size(const disk_or_partition_t* d) {
     }
 
     disk_context_t* dctx = d->context;
-    uint64_t bs = ((disk_or_partition_t*)dctx->disk)->get_block_size((disk_or_partition_t*)dctx->disk);
+    uint64_t bs          = ((disk_or_partition_t*)dctx->disk)->get_block_size((disk_or_partition_t*)dctx->disk);
 
     return bs;
 }

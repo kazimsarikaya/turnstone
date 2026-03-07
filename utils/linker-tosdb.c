@@ -79,7 +79,7 @@ static void linker_print_unresolved_modules(linker_context_t* ctx, set_t* unreso
         return;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         uint64_t module_id = (uint64_t)it->get_item(it);
 
         if(!module_id) {
@@ -148,7 +148,7 @@ int8_t linker_print_context(linker_context_t* ctx) {
         return -1;
     }
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         const linker_module_t* module = it->get_item(it);
 
         printf("module id: 0x%llx physical start: 0x%llx virtual start: 0x%llx\n", module->id, module->physical_start, module->virtual_start);
@@ -169,8 +169,8 @@ int8_t linker_print_context(linker_context_t* ctx) {
 
         printf("\nrelocations:\n");
 
-        uint64_t relocation_size  = buffer_get_length(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data);
-        uint64_t relocation_count = relocation_size / sizeof(linker_relocation_entry_t);
+        uint64_t relocation_size               = buffer_get_length(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data);
+        uint64_t relocation_count              = relocation_size / sizeof(linker_relocation_entry_t);
         linker_relocation_entry_t* relocations = (linker_relocation_entry_t*)buffer_get_view_at_position(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data, 0, relocation_size);
 
         printf("section type relocation type      symbol id         offset         addend\n");
@@ -193,11 +193,11 @@ int8_t linker_print_context(linker_context_t* ctx) {
     uint64_t got_entry_count = hashmap_size(ctx->got_symbol_index_map) + 2;
     printf("GOT table entry count: %llu\n", got_entry_count);
     printf("GOT table:\n\n");
-    uint64_t got_table_size = buffer_get_length(ctx->got_table_buffer);
+    uint64_t got_table_size                       = buffer_get_length(ctx->got_table_buffer);
     linker_global_offset_table_entry_t* got_table = (linker_global_offset_table_entry_t*)buffer_get_view_at_position(ctx->got_table_buffer, 0, got_table_size);
 
     uint64_t unresolved_symbol_count = 0;
-    set_t* unresolved_modules = set_integer();
+    set_t* unresolved_modules        = set_integer();
 
     printf("     module id      symbol id section type    entry value resolved symbol value symbol type symbol scope symbol size\n");
     printf("-------------- -------------- ------------ -------------- -------- ------------ ----------- ------------ -----------\n");
@@ -295,7 +295,7 @@ linkerdb_t* linkerdb_open(const char_t* file) {
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
     cc.index_data_size  = 8 << 20;
-    cc.valuelog_size = 16 << 20;
+    cc.valuelog_size    = 16 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot set cache");
@@ -323,13 +323,13 @@ linkerdb_t* linkerdb_open(const char_t* file) {
         return NULL;
     }
 
-    ldb->backend = bend;
+    ldb->backend        = bend;
     ldb->backend_buffer = buf;
-    ldb->capacity = capacity;
-    ldb->db_file  = fp;
-    ldb->fd = fd;
-    ldb->mmap_res = mmap_res;
-    ldb->tdb = tdb;
+    ldb->capacity       = capacity;
+    ldb->db_file        = fp;
+    ldb->fd             = fd;
+    ldb->mmap_res       = mmap_res;
+    ldb->tdb            = tdb;
 
     return ldb;
 }
@@ -379,15 +379,15 @@ int32_t main(int32_t argc, char_t** argv) {
     argc--;
     argv++;
 
-    char_t* db_file = NULL;
-    char_t* entrypoint_symbol = NULL;
+    char_t* db_file                 = NULL;
+    char_t* entrypoint_symbol       = NULL;
     uint64_t program_start_physical = 0;
     uint64_t program_start_virtual  = 0;
-    boolean_t recursive = false;
-    boolean_t for_efi = false;
-    boolean_t for_vm  = false;
-    boolean_t print_context = false;
-    char_t* output_file = NULL;
+    boolean_t recursive             = false;
+    boolean_t for_efi               = false;
+    boolean_t for_vm                = false;
+    boolean_t print_context         = false;
+    char_t* output_file             = NULL;
 
     while(argc > 0) {
         if(strstarts(*argv, "-") != 0) {
@@ -570,9 +570,9 @@ int32_t main(int32_t argc, char_t** argv) {
         goto exit;
     }
 
-    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
-    tosdb_table_t* tbl_modules  = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
-    tosdb_table_t* tbl_symbols  = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_sections    = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_modules     = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_symbols     = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
     tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 8 << 10, 1 << 20, 8);
 
 
@@ -695,13 +695,13 @@ int32_t main(int32_t argc, char_t** argv) {
         goto exit;
     }
 
-    ctx->entrypoint_symbol_id = sym_id;
+    ctx->entrypoint_symbol_id   = sym_id;
     ctx->program_start_physical = program_start_physical;
     ctx->program_start_virtual  = program_start_virtual;
-    ctx->tdb = ldb->tdb;
-    ctx->modules = hashmap_integer(16);
-    ctx->got_table_buffer = buffer_new();
-    ctx->got_symbol_index_map = hashmap_integer(1024);
+    ctx->tdb                    = ldb->tdb;
+    ctx->modules                = hashmap_integer(16);
+    ctx->got_table_buffer       = buffer_new();
+    ctx->got_symbol_index_map   = hashmap_integer(1024);
 
     linker_global_offset_table_entry_t empty_got_entry = {0};
 

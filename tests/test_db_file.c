@@ -135,8 +135,8 @@ disk_t* disk_file_open(const char_t* file_name, int64_t size) {
         return NULL;
     }
 
-    ctx->fp_disk = fp_disk;
-    ctx->file_size = size;
+    ctx->fp_disk    = fp_disk;
+    ctx->file_size  = size;
     ctx->block_size = 512;
 
     disk_t* d = memory_malloc(sizeof(disk_t));
@@ -148,14 +148,14 @@ disk_t* disk_file_open(const char_t* file_name, int64_t size) {
         return NULL;
     }
 
-    d->disk.context = ctx;
-    d->disk.get_heap = disk_file_get_heap;
-    d->disk.get_size = disk_file_get_disk_size;
+    d->disk.context        = ctx;
+    d->disk.get_heap       = disk_file_get_heap;
+    d->disk.get_size       = disk_file_get_disk_size;
     d->disk.get_block_size = disk_file_get_block_size;
-    d->disk.write = disk_file_write;
-    d->disk.read = disk_file_read;
-    d->disk.close = disk_file_close;
-    d->disk.flush = disk_file_flush;
+    d->disk.write          = disk_file_write;
+    d->disk.read           = disk_file_read;
+    d->disk.close          = disk_file_close;
+    d->disk.flush          = disk_file_flush;
 
     return d;
 }
@@ -215,8 +215,8 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
-    cc.index_data_size = 4 << 20;
-    cc.valuelog_size = 16 << 20;
+    cc.index_data_size  = 4 << 20;
+    cc.valuelog_size    = 16 << 20;
 
     if(!tosdb_cache_config_set(tosdb, &cc)) {
         print_error("cannot create tosdb");
@@ -365,7 +365,7 @@ int32_t main(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    while(tokenizer->end_of_iterator(tokenizer) != 0) {
+    while(!tokenizer->end_of_iterator(tokenizer)) {
         tosdb_record_t* rec = tosdb_table_create_record(table2);
 
         if(!rec) {
@@ -386,7 +386,7 @@ int32_t main(uint32_t argc, char_t** argv) {
         memory_free(token);
 
         tokenizer = tokenizer->next(tokenizer);
-        token = (token_t*)tokenizer->get_item(tokenizer);
+        token     = (token_t*)tokenizer->get_item(tokenizer);
 
         // printf("%s ", token->value);
 
@@ -395,7 +395,7 @@ int32_t main(uint32_t argc, char_t** argv) {
         memory_free(token);
 
         tokenizer = tokenizer->next(tokenizer);
-        token = (token_t*)tokenizer->get_item(tokenizer);
+        token     = (token_t*)tokenizer->get_item(tokenizer);
 
         // printf("%s ", token->value);
 
@@ -404,7 +404,7 @@ int32_t main(uint32_t argc, char_t** argv) {
         memory_free(token);
 
         tokenizer = tokenizer->next(tokenizer);
-        token = (token_t*)tokenizer->get_item(tokenizer);
+        token     = (token_t*)tokenizer->get_item(tokenizer);
 
         // printf("%s\n", token->value);
 
@@ -459,7 +459,7 @@ token_error:
         goto rec_destroy;
        }
 
-       while(iter->end_of_iterator(iter) != 0) {
+       while(!iter->end_of_iterator(iter)) {
         tosdb_record_t* res_rec = (tosdb_record_t*)iter->delete_item(iter);
 
         if(!res_rec) {
@@ -548,7 +548,7 @@ token_error:
 
        iter = set_create_iterator(pks);
 
-       while(iter->end_of_iterator(iter) != 0) {
+       while(!iter->end_of_iterator(iter)) {
         d_rec = (tosdb_record_t*)iter->get_item(iter);
 
         int64_t id = 0;

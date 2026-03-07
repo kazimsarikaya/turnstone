@@ -34,7 +34,7 @@ int8_t usb_init(void) {
 
     iterator_t* it = list_iterator_create(pci_get_context()->usb_controllers);
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         usb_controller_t* usb_controller = memory_malloc(sizeof(usb_controller_t));
 
         if(!usb_controller) {
@@ -44,13 +44,13 @@ int8_t usb_init(void) {
         }
 
 
-        const pci_dev_t* pci_dev = it->get_item(it);
-        pci_common_header_t* pci_header = pci_dev->pci_header;
+        const pci_dev_t* pci_dev          = it->get_item(it);
+        pci_common_header_t* pci_header   = pci_dev->pci_header;
         pci_generic_device_t* pci_gen_dev = (pci_generic_device_t*)pci_header;
 
 
 
-        usb_controller->pci_dev = pci_dev;
+        usb_controller->pci_dev       = pci_dev;
         usb_controller->controller_id = hashmap_size(usb_controllers);
         hashmap_put(usb_controllers, (void*)usb_controller->controller_id, usb_controller);
 
@@ -69,10 +69,10 @@ int8_t usb_init(void) {
         PRINTLOG(USB, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
         frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
-        uint64_t size = pci_get_bar_size(pci_gen_dev, 0);
+        uint64_t size       = pci_get_bar_size(pci_gen_dev, 0);
         PRINTLOG(USB, LOG_TRACE, "bar size 0x%llx", size);
         uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
-        frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+        frame_t bar_req_frm  = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
         uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
 
@@ -147,7 +147,7 @@ int8_t usb_init(void) {
 int8_t usb_reset_all_devices_all_ports(void) {
     iterator_t* it = hashmap_iterator_create(usb_controllers);
 
-    while(it->end_of_iterator(it) != 0) {
+    while(!it->end_of_iterator(it)) {
         usb_controller_t* usb_controller = (usb_controller_t*)it->get_item(it);
 
         if(usb_controller->initialized) {

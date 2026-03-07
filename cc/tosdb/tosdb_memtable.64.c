@@ -178,7 +178,7 @@ tosdb_memtable_t* tosdb_memtable_new_internal(tosdb_table_t * tbl) {
     }
 
     mt->is_dirty = true;
-    mt->values = buffer_new_with_capacity(NULL, tbl->max_valuelog_size);
+    mt->values   = buffer_new_with_capacity(NULL, tbl->max_valuelog_size);
 
     if(!mt->values) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create valuelog for table %s at memory", tbl->name);
@@ -201,7 +201,7 @@ tosdb_memtable_t* tosdb_memtable_new_internal(tosdb_table_t * tbl) {
 
     iterator_t* iter = hashmap_iterator_create(tbl->indexes);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_index_t* index = (tosdb_index_t*)iter->get_item(iter);
 
         tosdb_memtable_index_t* mt_idx = memory_malloc(sizeof(tosdb_memtable_index_t));
@@ -211,7 +211,7 @@ tosdb_memtable_t* tosdb_memtable_new_internal(tosdb_table_t * tbl) {
             break;
         }
 
-        mt_idx->ti = index;
+        mt_idx->ti          = index;
         mt_idx->bloomfilter = bloomfilter_new(tbl->max_record_count, 0.1);
 
         if(!mt_idx->bloomfilter) {
@@ -219,16 +219,16 @@ tosdb_memtable_t* tosdb_memtable_new_internal(tosdb_table_t * tbl) {
             break;
         }
 
-        boolean_t idx_unique = true;
-        index_key_comparator_f cmp = tosdb_memtable_index_comparator;
+        boolean_t idx_unique                    = true;
+        index_key_comparator_f cmp              = tosdb_memtable_index_comparator;
         bplustree_key_destroyer_f key_destroyer = tosdb_memtable_index_key_destroyer;
-        bplustree_key_cloner_f key_cloner = tosdb_memtable_index_key_cloner;
+        bplustree_key_cloner_f key_cloner       = tosdb_memtable_index_key_cloner;
 
         if(index->type == TOSDB_INDEX_SECONDARY) {
-            idx_unique = false;
-            cmp = tosdb_memtable_secondary_index_comparator;
+            idx_unique    = false;
+            cmp           = tosdb_memtable_secondary_index_comparator;
             key_destroyer = tosdb_memtable_secondary_index_key_destroyer;
-            key_cloner = tosdb_memtable_secondary_index_key_cloner;
+            key_cloner    = tosdb_memtable_secondary_index_key_cloner;
         }
 
         mt_idx->index = bplustree_create_index_with_unique(32, cmp, idx_unique);
@@ -265,7 +265,7 @@ tosdb_memtable_t* tosdb_memtable_new_internal(tosdb_table_t * tbl) {
             return NULL;
         }
 
-        while(mt_idx_iter->end_of_iterator(mt_idx_iter) != 0) {
+        while(!mt_idx_iter->end_of_iterator(mt_idx_iter)) {
             tosdb_memtable_index_t* mt_idx = (tosdb_memtable_index_t*)mt_idx_iter->get_item(mt_idx_iter);
 
             bloomfilter_destroy(mt_idx->bloomfilter);
@@ -318,13 +318,13 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
     boolean_t error = false;
 
     mt->tbl = tbl;
-    mt->id = tbl->memtable_next_id;
+    mt->id  = tbl->memtable_next_id;
     tbl->memtable_next_id++;
     tbl->is_dirty = true;
 
     if(tbl->current_memtable) {
-        mt->level = tbl->current_memtable->level; // current memtable level
-        tbl->current_memtable->is_full = true;
+        mt->level                          = tbl->current_memtable->level; // current memtable level
+        tbl->current_memtable->is_full     = true;
         tbl->current_memtable->is_readonly = true;
     } else {
         mt->level = 1;
@@ -380,7 +380,7 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
         return false;
     }
 
-    while(mt_idx_iter->end_of_iterator(mt_idx_iter) != 0) {
+    while(!mt_idx_iter->end_of_iterator(mt_idx_iter)) {
         tosdb_memtable_index_t* mt_idx = (tosdb_memtable_index_t*)mt_idx_iter->get_item(mt_idx_iter);
 
         bloomfilter_destroy(mt_idx->bloomfilter);
@@ -392,7 +392,7 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot create index iterator");
                 error = true;
             } else {
-                while(iter->end_of_iterator(iter) != 0) {
+                while(!iter->end_of_iterator(iter)) {
                     void* item = (void*)iter->get_item(iter);
 
                     memory_free(item);
@@ -430,7 +430,7 @@ boolean_t tosdb_memtable_upsert_internal(tosdb_memtable_t* mt, tosdb_record_t * 
     }
 
     tosdb_record_context_t* r_ctx = record->context;
-    tosdb_table_t* tbl = r_ctx->table;
+    tosdb_table_t* tbl            = r_ctx->table;
 
     if(hashmap_size(tbl->indexes) != hashmap_size(r_ctx->keys)) {
         if(del) {
@@ -510,7 +510,7 @@ boolean_t tosdb_memtable_upsert_internal(tosdb_memtable_t* mt, tosdb_record_t * 
     int64_t pri_uniq_idx_count = 0, pri_uniq_idx_remove_count = 0;
     boolean_t pri_uniq_idx_removed = false;
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_index_t* index = (tosdb_index_t*)iter->get_item(iter);
 
         tosdb_record_key_t* r_key = (tosdb_record_key_t*)hashmap_get(r_ctx->keys, (void*)index->id);
@@ -544,25 +544,25 @@ boolean_t tosdb_memtable_upsert_internal(tosdb_memtable_t* mt, tosdb_record_t * 
             idx_item->is_deleted = del;
             memory_memcopy(r_key->key, idx_item->key, r_key->key_length);
             idx_item->key_length = r_key->key_length;
-            idx_item->key_hash = r_key->key_hash;
-            idx_item->length = length;
-            idx_item->offset = offset;
-            idx_item->level = mt->level;
+            idx_item->key_hash   = r_key->key_hash;
+            idx_item->length     = length;
+            idx_item->offset     = offset;
+            idx_item->level      = mt->level;
             idx_item->sstable_id = mt->id;
-            idx_item->record_id = r_ctx->record_id;
+            idx_item->record_id  = r_ctx->record_id;
 
-            uint8_t* u8_key = r_key->key;
+            uint8_t* u8_key        = r_key->key;
             uint64_t u8_key_length = r_key->key_length;
 
             if(!u8_key_length) {
                 u8_key_length = sizeof(uint64_t);
-                u8_key = (uint8_t*)&r_key->key_hash;
+                u8_key        = (uint8_t*)&r_key->key_hash;
             }
 
             data_t d_key = {0};
-            d_key.type = DATA_TYPE_INT8_ARRAY;
+            d_key.type   = DATA_TYPE_INT8_ARRAY;
             d_key.length = u8_key_length;
-            d_key.value = u8_key;
+            d_key.value  = u8_key;
 
             if(!bloomfilter_add(mt_idx->bloomfilter, &d_key)) {
                 memory_free(idx_item);
@@ -576,7 +576,7 @@ boolean_t tosdb_memtable_upsert_internal(tosdb_memtable_t* mt, tosdb_record_t * 
             mt_idx->index->insert(mt_idx->index, idx_item, idx_item, (void**)&old_item);
 
             if(old_item) {
-                need_rc_inc = false;
+                need_rc_inc          = false;
                 pri_uniq_idx_removed = true;
                 pri_uniq_idx_remove_count++;
 
@@ -593,7 +593,7 @@ boolean_t tosdb_memtable_upsert_internal(tosdb_memtable_t* mt, tosdb_record_t * 
 
         } else {
             const tosdb_record_key_t* pri_r_key = hashmap_get(r_ctx->keys, (void*)tbl->primary_index_id);
-            uint64_t sec_idx_item_len = sizeof(tosdb_memtable_secondary_index_item_t) + r_key->key_length + pri_r_key->key_length;
+            uint64_t sec_idx_item_len           = sizeof(tosdb_memtable_secondary_index_item_t) + r_key->key_length + pri_r_key->key_length;
 
             tosdb_memtable_secondary_index_item_t* sec_idx_item = memory_malloc(sec_idx_item_len);
 
@@ -603,32 +603,32 @@ boolean_t tosdb_memtable_upsert_internal(tosdb_memtable_t* mt, tosdb_record_t * 
                 return false;
             }
 
-            sec_idx_item->secondary_key_hash = r_key->key_hash;
-            sec_idx_item->secondary_key_length = r_key->key_length;
-            sec_idx_item->primary_key_hash = pri_r_key->key_hash;
-            sec_idx_item->primary_key_length = pri_r_key->key_length;
+            sec_idx_item->secondary_key_hash     = r_key->key_hash;
+            sec_idx_item->secondary_key_length   = r_key->key_length;
+            sec_idx_item->primary_key_hash       = pri_r_key->key_hash;
+            sec_idx_item->primary_key_length     = pri_r_key->key_length;
             sec_idx_item->is_primary_key_deleted = del;
-            sec_idx_item->length = length;
-            sec_idx_item->offset = offset;
-            sec_idx_item->level = mt->level;
-            sec_idx_item->sstable_id = mt->id;
-            sec_idx_item->record_id = r_ctx->record_id;
+            sec_idx_item->length                 = length;
+            sec_idx_item->offset                 = offset;
+            sec_idx_item->level                  = mt->level;
+            sec_idx_item->sstable_id             = mt->id;
+            sec_idx_item->record_id              = r_ctx->record_id;
 
             memory_memcopy(r_key->key, sec_idx_item->data, r_key->key_length);
             memory_memcopy(pri_r_key->key, sec_idx_item->data + r_key->key_length, pri_r_key->key_length);
 
-            uint8_t* u8_key = r_key->key;
+            uint8_t* u8_key        = r_key->key;
             uint64_t u8_key_length = r_key->key_length;
 
             if(!u8_key_length) {
                 u8_key_length = sizeof(uint64_t);
-                u8_key = (uint8_t*)&r_key->key_hash;
+                u8_key        = (uint8_t*)&r_key->key_hash;
             }
 
             data_t d_key = {0};
-            d_key.type = DATA_TYPE_INT8_ARRAY;
+            d_key.type   = DATA_TYPE_INT8_ARRAY;
             d_key.length = u8_key_length;
-            d_key.value = u8_key;
+            d_key.value  = u8_key;
 
             if(!bloomfilter_add(mt_idx->bloomfilter, &d_key)) {
                 memory_free(sec_idx_item);
@@ -678,7 +678,7 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
     }
 
     tosdb_record_context_t* r_ctx = record->context;
-    tosdb_table_t* tbl = r_ctx->table;
+    tosdb_table_t* tbl            = r_ctx->table;
 
     if(!tbl || !tbl->is_open) {
         PRINTLOG(TOSDB, LOG_ERROR, "table is null or closed");
@@ -724,7 +724,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     boolean_t error = false;
 
     uint64_t valuelog_unpacked_size = buffer_get_length(mt->values);
-    buffer_t* valuelog_out = buffer_new_with_capacity(NULL, valuelog_unpacked_size);
+    buffer_t* valuelog_out          = buffer_new_with_capacity(NULL, valuelog_unpacked_size);
 
     buffer_seek(mt->values, 0, BUFFER_SEEK_DIRECTION_START);
 
@@ -746,7 +746,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
         return false;
     }
 
-    uint64_t ol = 0;
+    uint64_t ol        = 0;
     uint8_t* b_vl_data = buffer_get_all_bytes_and_destroy(valuelog_out, &ol);
 
     uint64_t b_vl_size = sizeof(tosdb_block_valuelog_t) + ol;
@@ -764,12 +764,12 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
         return false;
     }
 
-    b_vl->header.block_size = b_vl_size;
-    b_vl->header.block_type = TOSDB_BLOCK_TYPE_VALUELOG;
-    b_vl->database_id = mt->tbl->db->id;
-    b_vl->table_id = mt->tbl->id;
-    b_vl->sstable_id = mt->id;
-    b_vl->data_size = ol;
+    b_vl->header.block_size      = b_vl_size;
+    b_vl->header.block_type      = TOSDB_BLOCK_TYPE_VALUELOG;
+    b_vl->database_id            = mt->tbl->db->id;
+    b_vl->table_id               = mt->tbl->id;
+    b_vl->sstable_id             = mt->id;
+    b_vl->data_size              = ol;
     b_vl->valuelog_unpacked_size = valuelog_unpacked_size;
     memory_memcopy(b_vl_data, b_vl->data, ol);
     memory_free(b_vl_data);
@@ -786,7 +786,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
 
     PRINTLOG(TOSDB, LOG_DEBUG, "valuelog for memtable %lli of table %s persisted at 0x%llx(0x%llx)", mt->id, mt->tbl->name, b_vl_loc, b_vl_size);
 
-    uint64_t stli_size = sizeof(tosdb_block_sstable_list_item_t) + sizeof(tosdb_block_sstable_list_item_index_pair_t) * hashmap_size(mt->indexes);
+    uint64_t stli_size                    = sizeof(tosdb_block_sstable_list_item_t) + sizeof(tosdb_block_sstable_list_item_index_pair_t) * hashmap_size(mt->indexes);
     tosdb_block_sstable_list_item_t* stli = memory_malloc(stli_size);
 
     if(!stli) {
@@ -797,12 +797,12 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
 
     PRINTLOG(TOSDB, LOG_TRACE, "sstable list item for memtable %lli of table %s withc record count 0x%llx created", mt->id, mt->tbl->name, mt->record_count);
 
-    stli->record_count = mt->record_count;
-    stli->sstable_id = mt->id;
-    stli->level = mt->level;
+    stli->record_count      = mt->record_count;
+    stli->sstable_id        = mt->id;
+    stli->level             = mt->level;
     stli->valuelog_location = b_vl_loc;
-    stli->valuelog_size = b_vl_size;
-    stli->index_count = hashmap_size(mt->indexes);
+    stli->valuelog_size     = b_vl_size;
+    stli->index_count       = hashmap_size(mt->indexes);
 
     uint64_t idx = 0;
 
@@ -815,7 +815,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
         return false;
     }
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_memtable_index_t* mt_idx = (tosdb_memtable_index_t*)iter->get_item(iter);
 
         error |= !tosdb_memtable_index_persist(mt, stli, idx, mt_idx);
@@ -920,25 +920,25 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
         return false;
     }
 
-    void* first_key = NULL;
+    void* first_key           = NULL;
     uint64_t first_key_length = 0;
-    void* last_key = NULL;
-    uint64_t last_key_length = 0;
+    void* last_key            = NULL;
+    uint64_t last_key_length  = 0;
 
     buffer_t* buf_id_in = buffer_new();
 
     iterator_t* iter = mt_idx->index->create_iterator(mt_idx->index);
 
     if(mt_idx->ti->type != TOSDB_INDEX_SECONDARY) {
-        while(iter->end_of_iterator(iter) != 0) {
+        while(!iter->end_of_iterator(iter)) {
             tosdb_memtable_index_item_t* ii = (tosdb_memtable_index_item_t*) iter->get_item(iter);
 
             if(!first_key) {
-                first_key = ii;
+                first_key        = ii;
                 first_key_length = sizeof(tosdb_memtable_index_item_t) + ii->key_length;
             }
 
-            last_key = ii;
+            last_key        = ii;
             last_key_length = sizeof(tosdb_memtable_index_item_t) + ii->key_length;
 
             buffer_append_bytes(buf_id_in, (uint8_t*)ii, last_key_length);
@@ -946,15 +946,15 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
             iter = iter->next(iter);
         }
     } else {
-        while(iter->end_of_iterator(iter) != 0) {
+        while(!iter->end_of_iterator(iter)) {
             tosdb_memtable_secondary_index_item_t* ii = (tosdb_memtable_secondary_index_item_t*) iter->get_item(iter);
 
             if(!first_key) {
-                first_key = ii;
+                first_key        = ii;
                 first_key_length = sizeof(tosdb_memtable_secondary_index_item_t) + ii->secondary_key_length + ii->primary_key_length;
             }
 
-            last_key = ii;
+            last_key        = ii;
             last_key_length = sizeof(tosdb_memtable_secondary_index_item_t) + ii->secondary_key_length + ii->primary_key_length;
 
             buffer_append_bytes(buf_id_in, (uint8_t*)ii, last_key_length);
@@ -1028,13 +1028,13 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     b_sid->header.block_size = idx_data_block_size;
     b_sid->header.block_type = TOSDB_BLOCK_TYPE_SSTABLE_INDEX_DATA;
 
-    b_sid->database_id = mt->tbl->db->id;
-    b_sid->table_id = mt->tbl->id;
-    b_sid->sstable_id = mt->id;
-    b_sid->index_id = mt_idx->ti->id;
-    b_sid->index_data_size = index_size;
+    b_sid->database_id              = mt->tbl->db->id;
+    b_sid->table_id                 = mt->tbl->id;
+    b_sid->sstable_id               = mt->id;
+    b_sid->index_id                 = mt_idx->ti->id;
+    b_sid->index_data_size          = index_size;
     b_sid->index_data_unpacked_size = index_data_unpacked_size;
-    b_sid->record_count = record_count;
+    b_sid->record_count             = record_count;
 
     memory_memcopy(index_data, b_sid->data, index_size);
     memory_free(index_data);
@@ -1053,7 +1053,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     PRINTLOG(TOSDB, LOG_DEBUG, "data index %lli of memtable %lli of table %s persisted at 0x%llx(0x%llx)", mt_idx->ti->id, mt->id, mt->tbl->name, idx_data_block_loc, idx_data_block_size);
 
     uint64_t minmax_key_size = first_key_length + last_key_length;
-    uint64_t block_size = sizeof(tosdb_block_sstable_index_t) + minmax_key_size + bf_size;
+    uint64_t block_size      = sizeof(tosdb_block_sstable_index_t) + minmax_key_size + bf_size;
 
     if(block_size % TOSDB_PAGE_SIZE) {
         block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
@@ -1071,16 +1071,16 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     b_si->header.block_size = block_size;
     b_si->header.block_type = TOSDB_BLOCK_TYPE_SSTABLE_INDEX;
 
-    b_si->database_id = mt->tbl->db->id;
-    b_si->table_id = mt->tbl->id;
-    b_si->sstable_id = mt->id;
-    b_si->index_id = mt_idx->ti->id;
-    b_si->minmax_key_size = minmax_key_size;
-    b_si->bloomfilter_size = bf_size;
+    b_si->database_id               = mt->tbl->db->id;
+    b_si->table_id                  = mt->tbl->id;
+    b_si->sstable_id                = mt->id;
+    b_si->index_id                  = mt_idx->ti->id;
+    b_si->minmax_key_size           = minmax_key_size;
+    b_si->bloomfilter_size          = bf_size;
     b_si->bloomfilter_unpacked_size = bloomfilter_unpacked_size;
-    b_si->index_data_size = idx_data_block_size;
-    b_si->index_data_location = idx_data_block_loc;
-    b_si->record_count = record_count;
+    b_si->index_data_size           = idx_data_block_size;
+    b_si->index_data_location       = idx_data_block_loc;
+    b_si->record_count              = record_count;
 
     uint8_t* tmp = &b_si->data[0];
 
@@ -1101,9 +1101,9 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
 
     PRINTLOG(TOSDB, LOG_DEBUG, "index %lli of memtable %lli of table %s persisted at 0x%llx(0x%llx)", mt_idx->ti->id, mt->id, mt->tbl->name, block_loc, block_size);
 
-    stli->indexes[idx].index_id = mt_idx->ti->id;
+    stli->indexes[idx].index_id       = mt_idx->ti->id;
     stli->indexes[idx].index_location = block_loc;
-    stli->indexes[idx].index_size = block_size;
+    stli->indexes[idx].index_size     = block_size;
 
     return true;
 }
@@ -1141,7 +1141,7 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
         return false;
     }
 
-    item->key_hash = r_key->key_hash;
+    item->key_hash   = r_key->key_hash;
     item->key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->key, item->key_length);
 
@@ -1153,22 +1153,22 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
         return false;
     }
 
-    boolean_t found = false;
+    boolean_t found                               = false;
     const tosdb_memtable_index_item_t* found_item = NULL;
-    const tosdb_memtable_t* mt = NULL;
+    const tosdb_memtable_t* mt                    = NULL;
 
     iter = list_iterator_create(mts);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         mt = iter->get_item(iter);
 
         const tosdb_memtable_index_t* mt_idx = hashmap_get(mt->indexes, (void*)r_key->index_id);
 
         iterator_t* s_iter = mt_idx->index->search(mt_idx->index, item, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
 
-        if(s_iter->end_of_iterator(s_iter) != 0) {
+        if(!s_iter->end_of_iterator(s_iter)) {
             found_item = s_iter->get_item(s_iter);
-            found = true;
+            found      = true;
             s_iter->destroy(s_iter);
 
             break;
@@ -1212,8 +1212,8 @@ static boolean_t tosdb_memtable_get_from_known_offset(tosdb_record_t* record, co
 
     data_t s_d = {0};
     s_d.length = ctx->length;
-    s_d.type = DATA_TYPE_INT8_ARRAY;
-    s_d.value = f_d;
+    s_d.type   = DATA_TYPE_INT8_ARRAY;
+    s_d.value  = f_d;
 
     data_t* r_d = data_bson_deserialize(&s_d);
 
@@ -1300,11 +1300,11 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
         return false;
     }
 
-    item->key_hash = r_key->key_hash;
+    item->key_hash   = r_key->key_hash;
     item->key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->key, item->key_length);
 
-    boolean_t found = false;
+    boolean_t found                               = false;
     const tosdb_memtable_index_item_t* found_item = NULL;
 
     uint64_t col_id = r_key->column_id;
@@ -1322,9 +1322,9 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
             return false;
         }
 
-        if(s_iter->end_of_iterator(s_iter) != 0) {
+        if(!s_iter->end_of_iterator(s_iter)) {
             found_item = s_iter->get_item(s_iter);
-            found = true;
+            found      = true;
         }
 
         s_iter->destroy(s_iter);
@@ -1339,7 +1339,7 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
         }
         iterator_t* iter = list_iterator_create(mts);
 
-        while(iter->end_of_iterator(iter) != 0) {
+        while(!iter->end_of_iterator(iter)) {
             mt = iter->get_item(iter);
 
             const tosdb_memtable_index_t* mt_idx = hashmap_get(mt->indexes, (void*)r_key->index_id);
@@ -1354,9 +1354,9 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
                 return false;
             }
 
-            if(s_iter->end_of_iterator(s_iter) != 0) {
+            if(!s_iter->end_of_iterator(s_iter)) {
                 found_item = s_iter->get_item(s_iter);
-                found = true;
+                found      = true;
                 s_iter->destroy(s_iter);
 
                 break;
@@ -1382,11 +1382,11 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
 
     if(found_item->is_deleted) {
         ctx->is_deleted = true;
-        ctx->record_id = found_item->record_id;
-        ctx->level = found_item->level;
+        ctx->record_id  = found_item->record_id;
+        ctx->level      = found_item->level;
         ctx->sstable_id = found_item->sstable_id;
-        ctx->offset = -1ULL;
-        ctx->length = 0;
+        ctx->offset     = -1ULL;
+        ctx->length     = 0;
 
         return true;
     }
@@ -1400,8 +1400,8 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
 
     data_t s_d = {0};
     s_d.length = found_item->length;
-    s_d.type = DATA_TYPE_INT8_ARRAY;
-    s_d.value = f_d;
+    s_d.type   = DATA_TYPE_INT8_ARRAY;
+    s_d.value  = f_d;
 
     data_t* r_d = data_bson_deserialize(&s_d);
 
@@ -1413,11 +1413,11 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
         return false;
     }
 
-    ctx->record_id = found_item->record_id;
-    ctx->level = found_item->level;
+    ctx->record_id  = found_item->record_id;
+    ctx->level      = found_item->level;
     ctx->sstable_id = found_item->sstable_id;
-    ctx->offset = found_item->offset;
-    ctx->length = found_item->length;
+    ctx->offset     = found_item->offset;
+    ctx->length     = found_item->length;
 
     data_t* tmp = r_d->value;
 
@@ -1471,7 +1471,7 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
         return false;
     }
 
-    item->secondary_key_hash = r_key->key_hash;
+    item->secondary_key_hash   = r_key->key_hash;
     item->secondary_key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->data, item->secondary_key_length);
 
@@ -1484,18 +1484,18 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
     }
 
     const tosdb_memtable_t* mt = NULL;
-    boolean_t error = false;
+    boolean_t error            = false;
 
     iter = list_iterator_create(mts);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         mt = iter->get_item(iter);
 
         const tosdb_memtable_index_t* mt_idx = hashmap_get(mt->indexes, (void*)r_key->index_id);
 
         iterator_t* s_iter = mt_idx->index->search(mt_idx->index, item, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
 
-        while(s_iter->end_of_iterator(s_iter) != 0) {
+        while(!s_iter->end_of_iterator(s_iter)) {
             const tosdb_memtable_secondary_index_item_t* s_idx_item = s_iter->get_item(s_iter);
 
             uint64_t idx_item_len = sizeof(tosdb_memtable_index_item_t) + s_idx_item->primary_key_length;
@@ -1509,13 +1509,13 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
                 break;
             }
 
-            res->record_id = s_idx_item->record_id;
+            res->record_id  = s_idx_item->record_id;
             res->is_deleted = s_idx_item->is_primary_key_deleted;
-            res->key_hash = s_idx_item->primary_key_hash;
+            res->key_hash   = s_idx_item->primary_key_hash;
             res->key_length = s_idx_item->primary_key_length;
-            res->offset = s_idx_item->offset;
-            res->length = s_idx_item->length;
-            res->level = s_idx_item->level;
+            res->offset     = s_idx_item->offset;
+            res->length     = s_idx_item->length;
+            res->level      = s_idx_item->level;
             res->sstable_id = s_idx_item->sstable_id;
             memory_memcopy(s_idx_item->data + s_idx_item->secondary_key_length, res->key, res->key_length);
 

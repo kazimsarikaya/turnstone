@@ -541,7 +541,7 @@ static boolean_t linkerdb_clear_relocation_references_at_section(linkerdb_t* ldb
             return false;
         }
 
-        while(it->end_of_iterator(it) != 0) {
+        while(!it->end_of_iterator(it)) {
             tosdb_record_t* f_rec = (tosdb_record_t*)it->delete_item(it);
 
             int64_t f_id = 0;
@@ -612,7 +612,7 @@ static boolean_t linkerdb_clear_relocation_references_at_section(linkerdb_t* ldb
             return false;
         }
 
-        while(it->end_of_iterator(it) != 0) {
+        while(!it->end_of_iterator(it)) {
             tosdb_record_t* f_rec = (tosdb_record_t*)it->delete_item(it);
 
             if(f_rec->is_deleted(f_rec)) {
@@ -694,7 +694,7 @@ static boolean_t linkerdb_clear_symbol_references(linkerdb_t* ldb, int64_t secti
             return false;
         }
 
-        while(it->end_of_iterator(it) != 0) {
+        while(!it->end_of_iterator(it)) {
             tosdb_record_t* f_rec = (tosdb_record_t*)it->delete_item(it);
 
             int64_t f_id = 0;
@@ -781,7 +781,7 @@ static boolean_t linkerdb_clear_implementation_references(linkerdb_t* ldb, int64
             return false;
         }
 
-        while(it->end_of_iterator(it) != 0) {
+        while(!it->end_of_iterator(it)) {
             tosdb_record_t* f_rec = (tosdb_record_t*)it->delete_item(it);
 
             int64_t f_sec_id = 0;
@@ -1624,7 +1624,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
     uint64_t dup_count = 0;
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         tosdb_record_t* reloc_rec = (tosdb_record_t*)iter->delete_item(iter);
 
         if(!reloc_rec) {
@@ -1730,7 +1730,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
             iterator_t* iter_dup = list_iterator_create(s_sym_recs);
 
-            while(iter_dup->end_of_iterator(iter_dup) != 0) {
+            while(!iter_dup->end_of_iterator(iter_dup)) {
                 tosdb_record_t* dup_rec = (tosdb_record_t*)iter_dup->get_item(iter_dup);
 
                 int64_t dup_sym_id = 0;
@@ -1841,7 +1841,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
         iter = set_create_iterator(set_nf);
 
-        while(iter->end_of_iterator(iter) != 0) {
+        while(!iter->end_of_iterator(iter)) {
             char_t* sym_name = (char_t*)iter->get_item(iter);
 
             PRINTLOG(LINKER, LOG_WARNING, "cannot find symbol %s", sym_name);
@@ -1861,7 +1861,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
         iter = set_create_iterator(set_dup);
 
-        while(iter->end_of_iterator(iter) != 0) {
+        while(!iter->end_of_iterator(iter)) {
             char_t* sym_name = (char_t*)iter->get_item(iter);
 
             PRINTLOG(LINKER, LOG_WARNING, "duplicated symbol %s", sym_name);

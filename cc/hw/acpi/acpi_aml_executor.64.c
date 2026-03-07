@@ -133,7 +133,7 @@ int8_t acpi_aml_exec_condrefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
         return -1;
     }
 
-    res->type = ACPI_AML_OT_NUMBER;
+    res->type           = ACPI_AML_OT_NUMBER;
     res->number.bytecnt = 1;
 
     if(src == NULL) {
@@ -142,7 +142,7 @@ int8_t acpi_aml_exec_condrefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
         dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 1);
 
         if(acpi_aml_is_null_target(dst) != 0) {
-            dst->type = ACPI_AML_OT_REFOF;
+            dst->type         = ACPI_AML_OT_REFOF;
             dst->refof_target = src;
         }
 
@@ -170,7 +170,7 @@ int8_t acpi_aml_exec_refof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
         return -1;
     }
 
-    refof->type = ACPI_AML_OT_REFOF;
+    refof->type         = ACPI_AML_OT_REFOF;
     refof->refof_target = obj;
 
     opcode->return_obj = refof;
@@ -205,9 +205,9 @@ int8_t acpi_aml_exec_derefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* 
             return -1;
         }
 
-        tmp->type = ACPI_AML_OT_NUMBER;
+        tmp->type           = ACPI_AML_OT_NUMBER;
         tmp->number.bytecnt = 1;
-        tmp->number.value = data;
+        tmp->number.value   = data;
 
         obj = tmp;
 
@@ -235,7 +235,7 @@ int8_t acpi_aml_exec_mth_return(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
     obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0, 0);
 
     mthctx->mthobjs[15] = obj; // acpi_aml_duplicate_object(ctx, obj);
-    opcode->return_obj = obj;
+    opcode->return_obj  = obj;
 
     PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s method return obj type %i", ctx->scope_prefix, obj->type);
 
@@ -249,8 +249,8 @@ int8_t acpi_aml_execute(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* mth, 
         return -1;
     }
 
-    opcode->opcode = ACPI_AML_METHODCALL;
-    opcode->operands[0] = mth;
+    opcode->opcode        = ACPI_AML_METHODCALL;
+    opcode->operands[0]   = mth;
     opcode->operand_count = 1;
 
     va_list args;
@@ -300,42 +300,42 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
         return -1;
     }
 
-    mthctx->mthobjs = mthobjs;
+    mthctx->mthobjs   = mthobjs;
     mthctx->arg_count = opcode->operand_count - 1; // first op is method call object
 
 
-    char_t* old_scope_prefix = ctx->scope_prefix;
-    uint8_t inside_method = ctx->flags.inside_method;
-    uint8_t* old_data = ctx->data;
-    uint64_t old_length = ctx->length;
-    uint64_t old_remaining = ctx->remaining;
+    char_t* old_scope_prefix              = ctx->scope_prefix;
+    uint8_t inside_method                 = ctx->flags.inside_method;
+    uint8_t* old_data                     = ctx->data;
+    uint64_t old_length                   = ctx->length;
+    uint64_t old_remaining                = ctx->remaining;
     acpi_aml_method_context_t* old_mthctx =  ctx->method_context;
-    index_t* old_local_symbols = ctx->local_symbols;
+    index_t* old_local_symbols            = ctx->local_symbols;
 
     acpi_aml_object_t* mth = opcode->operands[0];
 
     PRINTLOG(ACPIAML, LOG_TRACE, "executing method %s argument count %i", mth->name, mthctx->arg_count);
 
-    ctx->scope_prefix = mth->name;
+    ctx->scope_prefix        = mth->name;
     ctx->flags.inside_method = 1;
-    ctx->data = mth->method.termlist;
-    ctx->length = mth->method.termlist_length;
-    ctx->remaining = mth->method.termlist_length;
-    ctx->method_context = mthctx;
-    ctx->local_symbols = bplustree_create_index_with_heap_and_unique(ctx->heap, 20, acpi_aml_object_name_comparator, true);
+    ctx->data                = mth->method.termlist;
+    ctx->length              = mth->method.termlist_length;
+    ctx->remaining           = mth->method.termlist_length;
+    ctx->method_context      = mthctx;
+    ctx->local_symbols       = bplustree_create_index_with_heap_and_unique(ctx->heap, 20, acpi_aml_object_name_comparator, true);
 
     res = acpi_aml_parse_all_items(ctx, NULL, NULL);
 
 
     iterator_t* iter = ctx->local_symbols->create_iterator(ctx->local_symbols);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         acpi_aml_object_t* tmp = (acpi_aml_object_t*)iter->get_item(iter);
 
         if(tmp == mthobjs[15]) {
             tmp = acpi_aml_duplicate_object(ctx, tmp);
             memory_free_ext(ctx->heap, tmp->name);
-            tmp->name = NULL;
+            tmp->name   = NULL;
             mthobjs[15] = tmp;
         }
 
@@ -355,7 +355,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
     if(res == 0 && ctx->flags.fatal == 0 && ctx->flags.method_return == 1) {
         PRINTLOG(ACPIAML, LOG_TRACE, "return obj type %i", mthobjs[15]->type);
         opcode->return_obj = mthobjs[15];
-        res = 0;
+        res                = 0;
 
         if(opcode->return_obj) {
             PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s method execution finished. obj name %s type %i", ctx->scope_prefix, opcode->return_obj->name, opcode->return_obj->type);
@@ -372,14 +372,14 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
     memory_free_ext(ctx->heap, mthobjs);
     memory_free_ext(ctx->heap, mthctx);
 
-    ctx->scope_prefix = old_scope_prefix;
+    ctx->scope_prefix        = old_scope_prefix;
     ctx->flags.inside_method = inside_method;
     ctx->flags.method_return = 0;
-    ctx->data = old_data;
-    ctx->length = old_length;
-    ctx->remaining = old_remaining;
-    ctx->method_context = old_mthctx;
-    ctx->local_symbols = old_local_symbols;
+    ctx->data                = old_data;
+    ctx->length              = old_length;
+    ctx->remaining           = old_remaining;
+    ctx->method_context      = old_mthctx;
+    ctx->local_symbols       = old_local_symbols;
 
     return res;
 }

@@ -36,7 +36,7 @@ int32_t main(void){
     list_insert_at_position(list, &x, 1);
     printf("list size: %lli\n", list_size(list));
     iterator_t* iter = list_iterator_create(list);
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         i = (int*)iter->get_item(iter);
         printf("item: %i\n", *i);
         iter = iter->next(iter);
@@ -61,7 +61,7 @@ int32_t main(void){
     }
     printf("deleted item from pos 1 is: %i\n", *i);
     iter = list_iterator_create(list);
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         i = (int*)iter->get_item(iter);
         printf("item: %i\n", *i);
         iter = iter->next(iter);
@@ -80,7 +80,7 @@ int32_t main(void){
     printf("item inserted: %i\n", z);
     print_success("Populate queue: OK");
     iter = list_iterator_create(queue);
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         i = (int*)iter->get_item(iter);
         printf("item: %i\n", *i);
         iter = iter->next(iter);
@@ -106,7 +106,7 @@ int32_t main(void){
     printf("item inserted: %i\n", z);
     print_success("Populate stack: OK");
     iter = list_iterator_create(stack);
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         i = (int*)iter->get_item(iter);
         printf("item: %i\n", *i);
         iter = iter->next(iter);
@@ -128,7 +128,7 @@ int32_t main(void){
     pos = list_sortedlist_insert(sortedlist, &t);
     printf("%i inserted at %lli\n", t, pos);
     iter = list_iterator_create(sortedlist);
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         i = (int*)iter->get_item(iter);
         printf("item: %i\n", *i);
         iter = iter->next(iter);
@@ -137,7 +137,7 @@ int32_t main(void){
     pos = list_sortedlist_insert(sortedlist, &y);
     printf("%i inserted at %lli\n", y, pos);
     iter = list_iterator_create(sortedlist);
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         i = (int*)iter->get_item(iter);
         printf("item: %i\n", *i);
         iter = iter->next(iter);
@@ -146,7 +146,7 @@ int32_t main(void){
     pos = list_sortedlist_insert(sortedlist, &z);
     printf("%i inserted at %lli\n", z, pos);
     iter = list_iterator_create(sortedlist);
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         i = (int*)iter->get_item(iter);
         printf("item: %i\n", *i);
         iter = iter->next(iter);
@@ -157,7 +157,7 @@ int32_t main(void){
     print_success("Populate sortedlist: OK");
     printf("list size: %lli\n", list_size(sortedlist));
     iter = list_iterator_create(sortedlist);
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         i = (int*)iter->get_item(iter);
         printf("item: %i\n", *i);
         iter = iter->next(iter);
@@ -169,7 +169,7 @@ int32_t main(void){
     printf("%i deleted, deleted value: %i\n", y, *j);
     printf("list size: %lli\n", list_size(sortedlist));
     iter = list_iterator_create(sortedlist);
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         i = (int*)iter->get_item(iter);
         printf("item: %i\n", *i);
         iter = iter->next(iter);
@@ -188,7 +188,7 @@ int32_t main(void){
     list_list_insert(int_list, (void*)-8);
     list_list_insert(int_list, (void*)7);
     iter = list_iterator_create(int_list);
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         int64_t item = (int64_t)iter->get_item(iter);
         printf("item: %lli\n", item);
         iter = iter->next(iter);
@@ -198,7 +198,7 @@ int32_t main(void){
     printf("list duplicate test\n");
     list_t* dup_int_list = list_duplicate_list(int_list);
     iter = list_iterator_create(dup_int_list);
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         int64_t item = (int64_t)iter->get_item(iter);
         printf("item: %lli\n", item);
         iter = iter->next(iter);

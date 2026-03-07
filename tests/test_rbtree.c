@@ -83,7 +83,7 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     iter = idx->search(idx, (void*)90, (void*)150, INDEXER_KEY_COMPARATOR_CRITERIA_BETWEEN);
 
-    while(iter->end_of_iterator(iter) != 0) {
+    while(!iter->end_of_iterator(iter)) {
         int64_t i = (int64_t)iter->get_item(iter);
 
         printf("%lli ", i);
