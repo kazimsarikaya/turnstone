@@ -187,6 +187,8 @@ static int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
 static int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size) {
     frame_allocator_context_t* ctx = (frame_allocator_context_t*)self->context;
 
+    PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "allocating frame by count 0x%llx with type 0x%x", count, fa_type);
+
 
     lock_acquire(ctx->lock);
 
@@ -334,6 +336,8 @@ static int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count
 
         lock_release(ctx->lock);
 
+        PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "frame allocated at 0x%llx with count 0x%llx", new_frm->frame_address, new_frm->frame_count);
+
         return 0;
     } else {
         lock_release(ctx->lock);
@@ -353,6 +357,8 @@ static int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
     if(self == NULL) {
         return -1;
     }
+
+    PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "allocating frame at 0x%llx with count 0x%llx", f->frame_address, f->frame_count);
 
     frame_allocator_context_t* ctx = self->context;
 
@@ -436,13 +442,18 @@ static int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
 
     lock_release(ctx->lock);
 
+    PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "frame allocated at 0x%llx with count 0x%llx", f->frame_address, f->frame_count);
+
     return 0;
 }
 
 static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
     if(self == NULL) {
+        PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "frame allocator is null");
         return -1;
     }
+
+    PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "releasing frame at 0x%llx with count 0x%llx", f->frame_address, f->frame_count);
 
     frame_allocator_context_t* ctx = self->context;
 
@@ -451,17 +462,21 @@ static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
     const frame_t* tmp_frame = ctx->allocated_frames_by_address->find(ctx->allocated_frames_by_address, f);
 
     if(tmp_frame) {
+        PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "frame inside allocated area, releasing. frame address 0x%llx count 0x%llx", tmp_frame->frame_address, tmp_frame->frame_count);
 
         ctx->allocated_frames_by_address->delete(ctx->allocated_frames_by_address, tmp_frame, NULL);
 
         uint64_t rem_frms = tmp_frame->frame_count - f->frame_count;
 
         if(tmp_frame->frame_address < f->frame_address) {
+            PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "there are frames before the frame to release, reinserting to allocateds");
+
             uint64_t prev_frm_count = (f->frame_address - tmp_frame->frame_address) / FRAME_SIZE;
 
             frame_t* prev_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
 
             if(prev_frm == NULL) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
                 lock_release(ctx->lock);
                 return -1;
             }
@@ -476,9 +491,12 @@ static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         }
 
         if(rem_frms) {
+            PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "there are frames after the frame to release, reinserting to allocateds");
+
             frame_t* next_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
 
             if(next_frm == NULL) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
                 lock_release(ctx->lock);
                 return -1;
             }
@@ -493,6 +511,7 @@ static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         frame_t* new_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
 
         if(new_frm == NULL) {
+            PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
             lock_release(ctx->lock);
             return -1;
         }
@@ -518,22 +537,27 @@ static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
 
         lock_release(ctx->lock);
 
+        PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "frame released from allocated area");
+
         return 0;
     }
 
     tmp_frame = ctx->reserved_frames_by_address->find(ctx->reserved_frames_by_address, f);
 
     if(tmp_frame) {
+        PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "frame inside reserved area, releasing. frame address 0x%llx count 0x%llx", tmp_frame->frame_address, tmp_frame->frame_count);
         ctx->reserved_frames_by_address->delete(ctx->reserved_frames_by_address, tmp_frame, NULL);
 
         uint64_t rem_frms = tmp_frame->frame_count - f->frame_count;
 
         if(tmp_frame->frame_address < f->frame_address) {
+            PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "there are frames before the frame to release, reinserting to reserveds");
             uint64_t prev_frm_count = (f->frame_address - tmp_frame->frame_address) / FRAME_SIZE;
 
             frame_t* prev_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
 
             if(prev_frm == NULL) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
                 lock_release(ctx->lock);
                 return -1;
             }
@@ -549,9 +573,11 @@ static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         }
 
         if(rem_frms) {
+            PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "there are frames after the frame to release, reinserting to reserveds");
             frame_t* next_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
 
             if(next_frm == NULL) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
                 lock_release(ctx->lock);
                 return -1;
             }
@@ -567,6 +593,7 @@ static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         frame_t* new_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
 
         if(new_frm == NULL) {
+            PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
             lock_release(ctx->lock);
             return -1;
         }
@@ -589,6 +616,8 @@ static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         list_sortedlist_insert(ctx->free_frames_sorted_by_size, new_frm);
 
         memory_free_ext(ctx->heap, (void*)tmp_frame);
+
+        PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "frame released from reserved area");
     }
 
     lock_release(ctx->lock);
