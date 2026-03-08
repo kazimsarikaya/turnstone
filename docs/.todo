@@ -21,7 +21,7 @@ Turnstone OS:
       ☐ Write networking documentation.
         ☐ Write base network device handling documentation.
         ☐ Write e1000 documentation.
-        ☐ Write virtio-net documentation.
+        ✘ Write virtio-net documentation. @cancelled (2026-03-08 20:22)
       ☐ Write AHCI documentation.
       ☐ Write filesystem documentation.
         ☐ Write fat32 documentation.
@@ -34,7 +34,9 @@ Turnstone OS:
         ✔ Implement trampoline code @done (2023-10-09 03:42)
       ☐ Move kernel threads to the kernel cores
       ☐ Implement user space task scheduling
+        ✔ Switch to user space inside task  @done (2026-03-08 20:16)
       ✔ task sleep @done(2022-12-17 20:01:01)
+      ☐ implement coroutines.
     Disk:
       ✔ Implement NVMe driver @done (2023-10-09 03:44)
       ☐ Implement raid1
@@ -46,19 +48,22 @@ Turnstone OS:
       ☐ Implement compaction.
       ✔ Optimise delete. @done (2023-04-09 23:11)
       ✔ Implement secondary index and search. @done (2024-03-04 20:43)
+      ☐ Implement multiple columns in indexes.
     Network:
+      ✔ Implement UDP @done (2026-03-08 20:21)
       ☐ Implement TCP
         ✔ Parial implementation of TCP @done (2024-03-04 20:43)
         ☐ Full implementation of TCP with congestion control
       ✔ Implement DHCP Client @done(2022-12-13 21:21:25)
       ☐ Implement DNS Client
-      ☐ arp tables
+        ✔ A record implemented @done (2026-03-08 20:13)
+      ✔ arp tables @done (2026-03-08 20:04)
       ☐ routing
-      ✔ @high ipv4 receive packet simple fragmantation reassembly @done(2022-12-18 07:28:16)
-      ☐ @low ipv4 receive packet fragmantation timeout
-      ✔ @low ipv4 send packet fragmantation @done (2024-03-04 20:46)
+      ✘ @high ipv4 receive packet simple fragmantation reassembly @cancelled (2026-03-08 20:17)
+      ✘ @low ipv4 receive packet fragmantation timeout @cancelled (2026-03-08 20:03)
+      ✘ @low ipv4 send packet fragmantation @cancelled (2026-03-08 20:17)
       ✔ @high dhcpv4 client renew and timeout @done(2022-12-17 22:55:57)
-      ☐ @medium each network protocol should be module and have in/out tasks
+      ✘ @medium each network protocol should be module and have in/out tasks @cancelled (2026-03-08 20:03)
     Message Queue:
       ☐  @high Implement mq system
     Compiler:
@@ -73,17 +78,20 @@ Turnstone OS:
     Linker-Loader:
       ☐ Write linker/loader for programs readed from disk
       ☐ Write shared library linker/loader
+        ☐ develop virtual got for modules and handle real got at plt.
     Crypto Libraries:
-      ☐ @high bigint implementation 
+      ✔ @high bigint implementation  @done (2026-03-08 20:19)
         ✔ Partial implementation of bigint @done (2024-03-04 20:43)
       ✔ @high sha384, sha224 @done(2022-12-13 13:47:29)
       ✔ aes encryption with gcm @done (2024-03-04 20:41)
-      ☐ ec implementation
+      ✔ ec implementation @done (2026-03-08 20:18)
       ☐ @low rsa implementation
-      ☐ @low dh implementation
+      ✔ @low dh implementation @done (2026-03-08 20:19)
       ☐ tls implementation especially dtls
+        ✔ tlsv.1.3 implementation  @done (2026-03-08 20:18)
+        ☐ dtls implementation
     Hypervisor:
-      ☐ Implement hypervisor with kvm
+      ☐ Implement hypervisor with vmx/svm
         ✔ Create VM @done (2024-03-04 20:48)
         ✔ Run VM @done (2024-03-04 20:48)
         ✔ Schedule VM as task @done (2024-03-04 20:48)
