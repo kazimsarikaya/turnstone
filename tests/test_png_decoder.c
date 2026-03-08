@@ -46,8 +46,6 @@ static void cleanup_memory(void** memory) {
 int32_t main(uint32_t argc, char_t** argv);
 
 int32_t main(uint32_t argc, char_t** argv) {
-    crc32_init_table();
-
     if(argc != 2) {
         print_error("not enough paramters");
         PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "usage png_decoder <pngfile>");

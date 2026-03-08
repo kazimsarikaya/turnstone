@@ -11,9 +11,10 @@
 MODULE("turnstone.lib");
 
 
-uint32_t crc32_table[256] = {};
+static uint32_t crc32_table[256] = {};
+static uint16_t crc16_table[256] = {};
 
-void crc32_init_table(void) {
+static void crc32_init_table(void) {
     uint8_t index = 0, z;
     do{
         crc32_table[index] = index;
@@ -23,12 +24,40 @@ void crc32_init_table(void) {
     }while(++index);
 }
 
-uint32_t crc32_sum(const void* p, uint32_t bytelength, uint32_t init) {
-    uint8_t* p_u8 = (uint8_t*) p;
-    uint32_t crc = init;
-    while (bytelength-- != 0) {
-        crc = crc32_table[((uint8_t) crc ^ *(p_u8++))] ^ (crc >> 8);
+static void crc16_init_table(void) {
+    uint8_t index = 0, z;
+    do{
+        crc16_table[index] = index;
+        for(z = 8; z; z--) {
+            crc16_table[index] = (crc16_table[index] & 1)?((crc16_table[index] >> 1) ^ 0xA001):(crc16_table[index] >> 1);
+        }
+    }while(++index);
+}
+
+void crc_init(void) {
+    crc32_init_table();
+    crc16_init_table();
+}
+
+uint32_t crc32_sum(const void* data, uint32_t size, uint32_t init) {
+    uint32_t crc   = init;
+    uint8_t* data8 = (uint8_t*)data;
+
+    while (size-- > 0) {
+        crc = (crc >> 8) ^ crc32_table[(crc & 0xFF) ^ *data8++];
     }
+
+    return crc;
+}
+
+uint16_t crc16_sum(const void* data, uint64_t size, uint16_t init) {
+    uint16_t crc         = init;
+    const uint8_t* data8 = (const uint8_t*)data;
+
+    while(size-- > 0) {
+        crc = (crc >> 8) ^ crc16_table[(crc & 0xFF) ^ *data8++];
+    }
+
     return crc;
 }
 
@@ -53,7 +82,7 @@ static inline uint32_t crc32c_u32(uint32_t crc, uint32_t data) {
 }
 
 uint32_t crc32c_sum(const void* data, uint64_t size, uint32_t init) {
-    uint32_t ret = init;
+    uint32_t ret           = init;
     const uint32_t* data32 = (const uint32_t*)data;
 
     while(size >= 4) {

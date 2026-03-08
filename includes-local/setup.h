@@ -21,6 +21,7 @@
 #include <cpu.h>
 #include <strings.h>
 #include <cpu/sync.h>
+#include <crc.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000
@@ -47,10 +48,10 @@ void                              on_sigabrt(int32_t sig);
 boolean_t                         windowmanager_is_initialized(void);
 
 
-FILE* mem_backend = NULL;
-int32_t mem_backend_fd = 0;
-uint64_t mmmap_address = 4ULL << 30;
-uint64_t mmap_size = RAMSIZE;
+FILE* mem_backend                   = NULL;
+int32_t mem_backend_fd              = 0;
+uint64_t mmmap_address              = 4ULL << 30;
+uint64_t mmap_size                  = RAMSIZE;
 boolean_t windowmanager_initialized = false;
 
 buffer_t* default_buffer = NULL;
@@ -186,6 +187,8 @@ void __attribute__((constructor)) start_ram(void) {
     srand(seed);
 
     signal(SIGABRT, on_sigabrt);
+
+    crc_init();
 }
 
 void __attribute__((destructor)) stop_ram(void) {
@@ -220,7 +223,7 @@ struct timespec clock_gettime(int, struct timespec* ts);
 
 void* SYSTEM_INFO;
 void* KERNEL_FRAME_ALLOCATOR = NULL;
-uint64_t __kheap_bottom = 0;
+uint64_t __kheap_bottom      = 0;
 
 #ifdef __cplusplus
 }

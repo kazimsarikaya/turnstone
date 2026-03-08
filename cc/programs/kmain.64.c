@@ -119,7 +119,7 @@ _Thread_local uint64_t test_tls = 0x123456789abcdef0ULL;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t kmain64(size_t entry_point) {
-    crc32_init_table();
+    crc_init();
 
     memory_heap_t* heap = memory_create_heap_hash(0, 0);
 

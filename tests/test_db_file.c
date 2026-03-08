@@ -165,8 +165,6 @@ int32_t main(uint32_t argc, char_t** argv) {
     UNUSED(argc);
     UNUSED(argv);
 
-    crc32_init_table();
-
     const char_t* disk_name = "tmp/tosdb-disk.img";
 
     disk_t* d = disk_file_open(disk_name, 1 << 30);

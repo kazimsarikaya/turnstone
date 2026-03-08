@@ -105,8 +105,8 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
         return NULL;
     }
 
-    ctx->fp_disk = fp_disk;
-    ctx->file_size = size;
+    ctx->fp_disk    = fp_disk;
+    ctx->file_size  = size;
     ctx->block_size = 512;
 
     disk_t* d = memory_malloc(sizeof(disk_t));
@@ -118,13 +118,13 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
         return NULL;
     }
 
-    d->disk.context = ctx;
-    d->disk.get_heap = disk_file_get_heap;
-    d->disk.get_size = disk_file_get_disk_size;
+    d->disk.context        = ctx;
+    d->disk.get_heap       = disk_file_get_heap;
+    d->disk.get_size       = disk_file_get_disk_size;
     d->disk.get_block_size = disk_file_get_block_size;
-    d->disk.write = disk_file_write;
-    d->disk.read = disk_file_read;
-    d->disk.close = disk_file_close;
+    d->disk.write          = disk_file_write;
+    d->disk.read           = disk_file_read;
+    d->disk.close          = disk_file_close;
 
     return d;
 }
@@ -145,10 +145,8 @@ int32_t main(int32_t argc, char** argv) {
     timeparsed(&tp);
     printf("%i %i %i %i %i %i %lli\n", tp.year, tp.month, tp.day, tp.hours, tp.minutes, tp.seconds, timeparsed_to_time(&tp));
 
-    crc32_init_table();
-
-    int item = 1;
-    char_t* disk_name = argv[item++];
+    int item                   = 1;
+    char_t* disk_name          = argv[item++];
     char_t* efi_boot_file_name = argv[item++];
     // char_t* kernel_name = argv[item++];
     char_t* tosdbimg_name = argv[item++];
