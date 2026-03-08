@@ -16,7 +16,7 @@ INCLUDESGENDIR = includes-gen
 LOCALINCLUDESDIR = includes-local
 
 BASEFLAGS += -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) -I$(INCLUDESGENDIR) \
-	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
+	-Werror -Wall -Wextra -ffunction-sections -fdata-sections -fno-common \
 	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
     -Wshadow -Wpointer-arith -Wcast-align \
 	-Wwrite-strings -Wmissing-declarations \
