@@ -20,12 +20,6 @@
 
 MODULE("turnstone.lib.linker");
 
-int8_t    linker_link_module(linker_context_t* ctx, linker_module_t* module);
-int8_t    linker_efi_image_relocation_entry_cmp(const void* a, const void* b);
-int8_t    linker_efi_image_section_header_cmp(const void* a, const void* b);
-buffer_t* linker_build_relocation_table_buffer(linker_context_t* ctx);
-buffer_t* linker_build_metadata_buffer(linker_context_t* ctx);
-
 const char_t*const linker_section_type_names[LINKER_SECTION_TYPE_NR_SECTIONS] = {
     [LINKER_SECTION_TYPE_UNDEF]                         = "undef",
     [LINKER_SECTION_TYPE_TEXT]                          = ".text",
@@ -65,7 +59,7 @@ const char_t*const linker_relocation_type_names[LINKER_RELOCATION_TYPE_NR_TYPES]
     [LINKER_RELOCATION_TYPE_64_GOT64_ABSOLUTE] = "R_X86_64_GOT64_ABS",
 };
 
-int8_t linker_efi_image_relocation_entry_cmp(const void* a, const void* b) {
+static int8_t linker_efi_image_relocation_entry_cmp(const void* a, const void* b) {
     efi_image_relocation_entry_t* entry_a = (efi_image_relocation_entry_t*)a;
     efi_image_relocation_entry_t* entry_b = (efi_image_relocation_entry_t*)b;
 
@@ -78,7 +72,7 @@ int8_t linker_efi_image_relocation_entry_cmp(const void* a, const void* b) {
     return 0;
 }
 
-int8_t linker_efi_image_section_header_cmp(const void* a, const void* b) {
+static int8_t linker_efi_image_section_header_cmp(const void* a, const void* b) {
     efi_image_section_header_t* header_a = (efi_image_section_header_t*)a;
     efi_image_section_header_t* header_b = (efi_image_section_header_t*)b;
 
@@ -284,11 +278,11 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
             got_entry.section_type = section_type;
 
             if(ctx->symbol_table_buffer) {
-                uint64_t symbol_table_index = buffer_get_length(ctx->symbol_table_buffer);
+                uint64_t symbol_name_offset = buffer_get_length(ctx->symbol_table_buffer);
 
                 buffer_append_bytes(ctx->symbol_table_buffer, (uint8_t*)symbol_name, strlen(symbol_name) + 1);
 
-                got_entry.symbol_name_offset = symbol_table_index;
+                got_entry.symbol_name_offset = symbol_name_offset;
             }
 
             got_entry_index = buffer_get_length(ctx->got_table_buffer) / sizeof(linker_global_offset_table_entry_t);
@@ -325,10 +319,10 @@ clean_symbols_iter:
     return -1;
 }
 
-const uint8_t linker_vmx_vm_plt0_entry_data[] = {
+static const uint8_t linker_hypervisor_plt0_entry_data[] = {
     0x50, // push %rax
     0x48, 0xc7, 0xc0, 0x00, 0x10, 0x00, 0x00, // mov $0x1000, %rax
-    0x0f, 0x01, 0xc1, // vmcall intel uses vmcall for vmx
+    0x0f, 0x01, 0x00, // vmcall intel uses vmcall for vmx
     0x48, 0x85, 0xc0, // test %rax,%rax
     0x75, 0x0c, // jne 1c failed
     0x58, // pop %rax
@@ -362,48 +356,13 @@ const uint8_t linker_vmx_vm_plt0_entry_data[] = {
     0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
 };
 
-_Static_assert(sizeof(linker_vmx_vm_plt0_entry_data) == 0x80, "plt0 entry size mismatch");
+#define LINKER_HYPERVISOR_PLT0_VMCALL_VMX_BYTE (0xc1)
+#define LINKER_HYPERVISOR_PLT0_VMCALL_SVM_BYTE (0xd9)
+#define LINKER_HYPERVISOR_PLT0_VMCALL_FIXUP_BYTE_OFFSET (10)
 
-const uint8_t linker_svm_vm_plt0_entry_data[] = {
-    0x50, // push %rax
-    0x48, 0xc7, 0xc0, 0x00, 0x10, 0x00, 0x00, // mov $0x1000, %rax
-    0x0f, 0x01, 0xd9, // vmmcall amd uses vmmcall for svm
-    0x48, 0x85, 0xc0, // test %rax,%rax
-    0x75, 0x0c, // jne 1c failed
-    0x58, // pop %rax
-    0x41, 0x5e, // pop %r14
-    0x4f, 0x8b, 0x1c, 0x3b, // mov (%r11,%r15,1),%r11
-    // 0x41, 0x0f, 0x20, 0xdf, // mov %cr3,%r15
-    // 0x41, 0x0f, 0x22, 0xdf, // mov %r15,%cr3
-    0x41, 0x5f, // pop %r15
-    0x41, 0xff, 0xe3, // jmp *%r11
-    0xfa, // failed: cli
-    0x48, 0x8d, 0x0d, 0x15, 0x00, 0x00, 0x00, // lea 0x15(%rip),%rcx failed_msg_size
-    0x48, 0x8b, 0x09, // mov (%rcx),%rcx
-    0x48, 0x8d, 0x35, 0x13, 0x00, 0x00, 0x00, // lea 0xf(%rip),%rsi  failed_msg
-    0x66, 0xba, 0xf8, 0x03, // mov $0x3f8,%dx
-    0xac, // failed_print: lods %ds:(%rsi),%al
-    0xee, // out %al,(%dx)
-    0xe2, 0xfc, // loop failed_print
-    0xf4, // failed_loop: hlt
-    0xeb, 0xfd, // jmp failed_loop
-    0x23, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // failed_msg_size
-    0x64, 0x79, 0x6e, 0x61, 0x6d, 0x69, 0x63, 0x20, // dynamic
-    0x6c, 0x6f, 0x61, 0x64, 0x65, 0x72, 0x20, // loader
-    0x66, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x2e, 0x20, // failed.
-    0x68, 0x61, 0x6c, 0x74, 0x69, 0x6e, 0x67, 0x2e, 0x2e, 0x2e, 0x0a, 0x00, // halting...
-    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
-    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
-    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
-    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
-    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
-    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
-    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
-};
+_Static_assert(sizeof(linker_hypervisor_plt0_entry_data) == 0x80, "plt0 entry size mismatch");
 
-_Static_assert(sizeof(linker_svm_vm_plt0_entry_data) == 0x80, "plt0 entry size mismatch");
-
-const uint8_t linker_plt_entry_data[] = {
+static const uint8_t linker_plt_entry_data[] = {
     0x41, 0x57, // push %r15
     0x41, 0x56, // push %r14
     0x49, 0xbf, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs $_GLOBAL_OFFSET_TABLE_, %r15
@@ -676,10 +635,13 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
                 }
 
                 if(ctx->for_hypervisor_application) {
+                    buffer_append_bytes(plt_section->section_data, (uint8_t*)linker_hypervisor_plt0_entry_data, sizeof(linker_hypervisor_plt0_entry_data));
+                    uint8_t* raw_bytes = buffer_get_raw_bytes(plt_section->section_data);
+
                     if(cpu_get_type() == CPU_TYPE_INTEL) {
-                        buffer_append_bytes(plt_section->section_data, (uint8_t*)linker_vmx_vm_plt0_entry_data, sizeof(linker_vmx_vm_plt0_entry_data));
+                        raw_bytes[LINKER_HYPERVISOR_PLT0_VMCALL_FIXUP_BYTE_OFFSET] = LINKER_HYPERVISOR_PLT0_VMCALL_VMX_BYTE;
                     } else if(cpu_get_type() == CPU_TYPE_AMD) {
-                        buffer_append_bytes(plt_section->section_data, (uint8_t*)linker_svm_vm_plt0_entry_data, sizeof(linker_svm_vm_plt0_entry_data));
+                        raw_bytes[LINKER_HYPERVISOR_PLT0_VMCALL_FIXUP_BYTE_OFFSET] = LINKER_HYPERVISOR_PLT0_VMCALL_SVM_BYTE;
                     } else {
                         PRINTLOG(LINKER, LOG_ERROR, "unsupported cpu type for hypervisor application");
 
@@ -1152,14 +1114,14 @@ int8_t linker_calculate_program_size(linker_context_t* ctx) {
     while(!it->end_of_iterator(it)) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
 
-        metadata_size += 24; // id, physical_start, virtual_start bytes
+        metadata_size += 32; // id, module_name_offset, physical_start, virtual_start bytes
 
         for(int32_t i = 0; i < LINKER_SECTION_TYPE_RELOCATION_TABLE; i++) {
             if(module->sections[i].size) {
                 metadata_size += 32; // section id, physical_start, virtual_start, size bytes
 
-                if(module->sections[i].size % 0x1000) {
-                    ctx->program_size += module->sections[i].size + (0x1000 - (module->sections[i].size % 0x1000));
+                if(module->sections[i].size % FRAME_SIZE) {
+                    ctx->program_size += module->sections[i].size + (FRAME_SIZE - (module->sections[i].size % FRAME_SIZE));
                 } else {
                     ctx->program_size += module->sections[i].size;
                 }
@@ -1167,7 +1129,8 @@ int8_t linker_calculate_program_size(linker_context_t* ctx) {
         }
 
         if(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size) {
-            relocation_table_size += 16 +  module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size;
+            relocation_table_size += 16; // module id, relocation size
+            relocation_table_size += module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size;
         }
 
         it = it->next(it);
@@ -1175,33 +1138,35 @@ int8_t linker_calculate_program_size(linker_context_t* ctx) {
 
     it->destroy(it);
 
-    if(ctx->program_size % 0x1000) {
-        ctx->program_size += 0x1000 - (ctx->program_size % 0x1000);
+    if(ctx->program_size % FRAME_SIZE) {
+        ctx->program_size += FRAME_SIZE - (ctx->program_size % FRAME_SIZE);
     }
 
     ctx->global_offset_table_size = buffer_get_length(ctx->got_table_buffer);
 
-    if(ctx->global_offset_table_size % 0x1000) {
-        ctx->global_offset_table_size += 0x1000 - (ctx->global_offset_table_size % 0x1000);
+    if(ctx->global_offset_table_size % FRAME_SIZE) {
+        ctx->global_offset_table_size += FRAME_SIZE - (ctx->global_offset_table_size % FRAME_SIZE);
     }
 
+    relocation_table_size     += 16; // empty relocation table header for zero relocation size.
     ctx->relocation_table_size = relocation_table_size;
 
-    if(ctx->relocation_table_size % 0x1000) {
-        ctx->relocation_table_size += 0x1000 - (ctx->relocation_table_size % 0x1000);
+    if(ctx->relocation_table_size % FRAME_SIZE) {
+        ctx->relocation_table_size += FRAME_SIZE - (ctx->relocation_table_size % FRAME_SIZE);
     }
 
+    metadata_size     += 64; // empty module header and one empty section header.
     ctx->metadata_size = metadata_size;
 
-    if(ctx->metadata_size % 0x1000) {
-        ctx->metadata_size += 0x1000 - (ctx->metadata_size % 0x1000);
+    if(ctx->metadata_size % FRAME_SIZE) {
+        ctx->metadata_size += FRAME_SIZE - (ctx->metadata_size % FRAME_SIZE);
     }
 
     if(ctx->symbol_table_buffer) {
         ctx->symbol_table_size = buffer_get_length(ctx->symbol_table_buffer);
 
-        if(ctx->symbol_table_size % 0x1000) {
-            ctx->symbol_table_size += 0x1000 - (ctx->symbol_table_size % 0x1000);
+        if(ctx->symbol_table_size % FRAME_SIZE) {
+            ctx->symbol_table_size += FRAME_SIZE - (ctx->symbol_table_size % FRAME_SIZE);
         }
     }
 
@@ -1241,9 +1206,9 @@ int8_t linker_bind_linear_addresses(linker_context_t* ctx) {
                 offset_pyhsical += module->sections[i].size;
                 offset_virtual  += module->sections[i].size;
 
-                if(offset_pyhsical % 0x1000) {
-                    offset_pyhsical += 0x1000 - (offset_pyhsical % 0x1000);
-                    offset_virtual  += 0x1000 - (offset_virtual % 0x1000);
+                if(offset_pyhsical % FRAME_SIZE) {
+                    offset_pyhsical += FRAME_SIZE - (offset_pyhsical % FRAME_SIZE);
+                    offset_virtual  += FRAME_SIZE - (offset_virtual % FRAME_SIZE);
                 }
             }
         }
@@ -1375,7 +1340,7 @@ boolean_t linker_is_all_symbols_resolved(linker_context_t* ctx) {
     return unresolved_count == 2;
 }
 
-int8_t linker_link_module(linker_context_t* ctx, linker_module_t* module) {
+static int8_t linker_link_module(linker_context_t* ctx, linker_module_t* module) {
     if(!ctx || !module) {
         PRINTLOG(LINKER, LOG_ERROR, "invalid context or module");
 
@@ -1576,8 +1541,8 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
                reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_64) {
 
                 uint64_t reloc_offset = module->sections[reloc_entries[i].section_type].virtual_start + reloc_entries[i].offset;
-                uint64_t er_page      = reloc_offset & ~(0x1000 - 1);
-                uint64_t er_offset    = reloc_offset & (0x1000 - 1);
+                uint64_t er_page      = reloc_offset & ~(FRAME_SIZE - 1);
+                uint64_t er_offset    = reloc_offset & (FRAME_SIZE - 1);
 
                 if(!efi_reloc_entry) {
                     efi_reloc_entry = memory_malloc(sizeof(efi_image_relocation_entry_t) + sizeof(uint16_t) * EFI_IMAGE_MAX_RELOCATION_ENTRIES);
@@ -1718,8 +1683,8 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
 
             uint64_t section_size = module->sections[i].size;
 
-            if(section_size % 0x1000 != 0) {
-                section_size += 0x1000 - (section_size % 0x1000);
+            if(section_size % FRAME_SIZE != 0) {
+                section_size += FRAME_SIZE - (section_size % FRAME_SIZE);
             }
 
             efi_section_header->virtual_size        = section_size;
@@ -1829,8 +1794,8 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
 
     uint64_t padding_after_relocations = 0;
 
-    if(relocation_size % 0x1000 != 0) {
-        padding_after_relocations = 0x1000 - (relocation_size % 0x1000);
+    if(relocation_size % FRAME_SIZE != 0) {
+        padding_after_relocations = FRAME_SIZE - (relocation_size % FRAME_SIZE);
     }
 
     efi_image_section_header_t reloc_section = {
@@ -1869,9 +1834,9 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
     efi_image_optional_header_t efi_image_opt_hdr = {
         .magic                                 = EFI_IMAGE_OPTIONAL_HEADER_MAGIC,
         .address_of_entrypoint                 = ctx->entrypoint_address_virtual,
-        .base_of_code                          = 0x1000,
-        .section_alignment                     = 0x1000,
-        .file_alignment                        = 0x1000,
+        .base_of_code                          = FRAME_SIZE,
+        .section_alignment                     = FRAME_SIZE,
+        .file_alignment                        = FRAME_SIZE,
         .subsystem                             = EFI_IMAGE_SUBSYSTEM_EFI_APPLICATION,
         .number_of_rva_nd_sizes                = 16,
         .base_relocation_table.virtual_address = reloc_section.virtual_address,
@@ -1944,8 +1909,6 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
 
     uint64_t tmp_buf_len = buffer_get_length(program_buffer);
 
-    PRINTLOG(LINKER, LOG_INFO, "program data unaligned start: 0x%llx should start 0x%llx", tmp_buf_len, ctx->program_start_physical);
-
     if(tmp_buf_len > ctx->program_start_physical) {
         PRINTLOG(LINKER, LOG_ERROR, "program header size is too big");
 
@@ -1953,6 +1916,9 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
     }
 
     if(tmp_buf_len < ctx->program_start_physical) {
+        PRINTLOG(LINKER, LOG_DEBUG, "program data unaligned start: 0x%llx should start 0x%llx, adding padding",
+                 tmp_buf_len, ctx->program_start_physical);
+
         uint64_t padding_size = ctx->program_start_physical - tmp_buf_len;
 
         int8_t zero = 0;
@@ -1990,8 +1956,8 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
 
     tmp_buf_len = buffer_get_length(program_buffer);
 
-    if(tmp_buf_len % 0x1000) {
-        uint64_t padding_size = 0x1000 - (tmp_buf_len % 0x1000);
+    if(tmp_buf_len % FRAME_SIZE) {
+        uint64_t padding_size = FRAME_SIZE - (tmp_buf_len % FRAME_SIZE);
 
         int8_t zero = 0;
 
@@ -2030,7 +1996,221 @@ error:
     return NULL;
 }
 
-const uint8_t linker_program_header_trampoline_code[] = {
+static int8_t linker_build_buffer_null_terminator(buffer_t* buffer, uint64_t count) {
+    if(!buffer) {
+        PRINTLOG(LINKER, LOG_ERROR, "invalid buffer");
+
+        return -1;
+    }
+
+    uint64_t null_terminator = 0;
+
+    for(uint64_t i = 0; i < count; i++) {
+        if(!buffer_append_bytes(buffer, (uint8_t*)&null_terminator, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
+
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static buffer_t* linker_build_relocation_table_buffer(linker_context_t* ctx) {
+    if(!ctx) {
+        PRINTLOG(LINKER, LOG_ERROR, "invalid context");
+
+        return NULL;
+    }
+
+    buffer_t* relocation_buffer = buffer_new_with_capacity(NULL, ctx->relocation_table_size);
+
+    if(!relocation_buffer) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create buffer");
+
+        return NULL;
+    }
+
+
+    iterator_t* it = hashmap_iterator_create(ctx->modules);
+
+    if(!it) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator");
+
+        goto error_destroy_buffer;
+    }
+
+    while(!it->end_of_iterator(it)) {
+        linker_module_t* module = (linker_module_t*)it->get_item(it);
+
+
+        if(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size == 0) {
+            it = it->next(it);
+
+            continue;
+        }
+
+        if(!buffer_append_bytes(relocation_buffer, (uint8_t*)&module->id, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append module id to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        if(!buffer_append_bytes(relocation_buffer, (uint8_t*)&module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append relocation table size to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        if(!buffer_append_buffer(relocation_buffer, module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data)) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append relocation table to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        it = it->next(it);
+    }
+
+
+    it->destroy(it);
+
+    // one for module id and one for relocation table size
+    if(linker_build_buffer_null_terminator(relocation_buffer, 2) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
+
+        goto error_destroy_buffer;
+    }
+
+    return relocation_buffer;
+
+error_destroy_buffer:
+    buffer_destroy(relocation_buffer);
+
+    return NULL;
+}
+
+static buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
+    if(!ctx) {
+        PRINTLOG(LINKER, LOG_ERROR, "invalid context");
+
+        return NULL;
+    }
+
+    buffer_t* metadata_buffer = buffer_new_with_capacity(NULL, ctx->metadata_size);
+
+    if(!metadata_buffer) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create buffer");
+
+        return NULL;
+    }
+
+
+    iterator_t* it = hashmap_iterator_create(ctx->modules);
+
+    if(!it) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator");
+
+        goto error_destroy_buffer;
+    }
+
+    while(!it->end_of_iterator(it)) {
+        linker_module_t* module = (linker_module_t*)it->get_item(it);
+
+        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->id, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append module id to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->module_name_offset, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append module size to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->physical_start, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append physical start to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->virtual_start, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append virtual start to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        for(uint64_t i = 0; i < LINKER_SECTION_TYPE_RELOCATION_TABLE; i++) {
+            if(module->sections[i].size == 0) {
+                continue;
+            }
+
+            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&i, sizeof(uint64_t))) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot append section type to buffer");
+                it->destroy(it);
+
+                goto error_destroy_buffer;
+            }
+
+            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->sections[i].physical_start, sizeof(uint64_t))) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot append section physical start to buffer");
+                it->destroy(it);
+
+                goto error_destroy_buffer;
+            }
+
+            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->sections[i].virtual_start, sizeof(uint64_t))) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot append section virtual start to buffer");
+                it->destroy(it);
+
+                goto error_destroy_buffer;
+            }
+
+            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->sections[i].size, sizeof(uint64_t))) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot append section size to buffer");
+                it->destroy(it);
+
+                goto error_destroy_buffer;
+            }
+        }
+
+        if(linker_build_buffer_null_terminator(metadata_buffer, 4) != 0) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+
+        it = it->next(it);
+    }
+
+
+    it->destroy(it);
+
+    if(linker_build_buffer_null_terminator(metadata_buffer, 8) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
+
+        goto error_destroy_buffer;
+    }
+
+    return metadata_buffer;
+
+error_destroy_buffer:
+    buffer_destroy(metadata_buffer);
+
+    return NULL;
+}
+
+
+static const uint8_t linker_program_header_trampoline_code[] = {
     0x48, 0x8b, 0x57, 0x48, // mov 0x48(%rdi),%rdx
     0x48, 0x8b, 0x42, 0x40, // mov 0x40(%rdx),%rax
     0x48, 0x03, 0x42, 0x48, // add 0x48(%rdx),%rax
@@ -2078,14 +2258,14 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
         strcopy(TOS_EXECUTABLE_OR_LIBRARY_MAGIC, (char_t*)program_header->magic);
 
-        program_header->header_physical_address = ctx->program_start_physical - 0x1000;
-        program_header->header_virtual_address  = ctx->program_start_virtual - 0x1000;
-        program_header->program_offset          = 0x1000;
-        program_header->total_size             += 0x1000 + ctx->program_size;
+        program_header->header_physical_address = ctx->program_start_physical - FRAME_SIZE;
+        program_header->header_virtual_address  = ctx->program_start_virtual - FRAME_SIZE;
+        program_header->program_offset          = FRAME_SIZE;
+        program_header->total_size             += FRAME_SIZE + ctx->program_size;
         program_header->program_size            = ctx->program_size;
         program_header->program_entry           = ctx->entrypoint_address_virtual;
 
-        program_target_offset += 0x1000;
+        program_target_offset += FRAME_SIZE;
 
         if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
 #ifndef ___TESTMODE
@@ -2161,8 +2341,11 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
                 uint8_t* section_data = buffer_get_view_at_position(module->sections[i].section_data, 0, section_data_size);
 
-                PRINTLOG(LINKER, LOG_DEBUG, "copying module id 0x%llx section type %lli to 0x%llx with size 0x%llx", module->id, i, module->sections[i].physical_start - ctx->program_start_physical, section_data_size);
-                memory_memcopy(section_data, array + program_target_offset + module->sections[i].physical_start - ctx->program_start_physical, section_data_size);
+                PRINTLOG(LINKER, LOG_DEBUG, "copying module id 0x%llx section type %lli to 0x%llx with size 0x%llx",
+                         module->id, i, module->sections[i].physical_start - ctx->program_start_physical, section_data_size);
+                memory_memcopy(section_data,
+                               array + program_target_offset + module->sections[i].physical_start - ctx->program_start_physical,
+                               section_data_size);
 
 #ifndef ___TESTMODE
                 if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
@@ -2252,7 +2435,8 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                     return -1;
                 }
 
-                PRINTLOG(LINKER, LOG_INFO, "got added to page table at 0x%llx", program_header->got_virtual_address);
+                PRINTLOG(LINKER, LOG_INFO, "got added to page table at 0x%llx with size 0x%llx",
+                         program_header->got_virtual_address, program_header->got_size);
 
             }
 #endif
@@ -2300,7 +2484,8 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                     return -1;
                 }
 
-                PRINTLOG(LINKER, LOG_INFO, "relocation table added to page table at 0x%llx", program_header->relocation_table_virtual_address);
+                PRINTLOG(LINKER, LOG_INFO, "relocation table added to page table at 0x%llx with size 0x%llx",
+                         program_header->relocation_table_virtual_address, program_header->relocation_table_size);
 
             }
 #endif
@@ -2351,7 +2536,8 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                     return -1;
                 }
 
-                PRINTLOG(LINKER, LOG_INFO, "metadata added to page table at 0x%llx", program_header->metadata_virtual_address);
+                PRINTLOG(LINKER, LOG_INFO, "metadata added to page table at 0x%llx with size 0x%llx",
+                         program_header->metadata_virtual_address, program_header->metadata_size);
 
             }
 #endif
@@ -2398,7 +2584,8 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                     return -1;
                 }
 
-                PRINTLOG(LINKER, LOG_INFO, "symbol table added to page table at 0x%llx", program_header->symbol_table_virtual_address);
+                PRINTLOG(LINKER, LOG_INFO, "symbol table added to page table at 0x%llx with size 0x%llx",
+                         program_header->symbol_table_virtual_address, program_header->symbol_table_size);
 
             }
 #endif
@@ -2452,210 +2639,4 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 #endif
 
     return 0;
-}
-
-buffer_t* linker_build_relocation_table_buffer(linker_context_t* ctx) {
-    if(!ctx) {
-        PRINTLOG(LINKER, LOG_ERROR, "invalid context");
-
-        return NULL;
-    }
-
-    buffer_t* relocation_buffer = buffer_new_with_capacity(NULL, ctx->relocation_table_size);
-
-    if(!relocation_buffer) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot create buffer");
-
-        return NULL;
-    }
-
-
-    iterator_t* it = hashmap_iterator_create(ctx->modules);
-
-    if(!it) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator");
-
-        goto error_destroy_buffer;
-    }
-
-    while(!it->end_of_iterator(it)) {
-        linker_module_t* module = (linker_module_t*)it->get_item(it);
-
-
-        if(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size == 0) {
-            it = it->next(it);
-
-            continue;
-        }
-
-        if(!buffer_append_bytes(relocation_buffer, (uint8_t*)&module->id, sizeof(uint64_t))) {
-            PRINTLOG(LINKER, LOG_ERROR, "cannot append module id to buffer");
-            it->destroy(it);
-
-            goto error_destroy_buffer;
-        }
-
-        if(!buffer_append_bytes(relocation_buffer, (uint8_t*)&module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size, sizeof(uint64_t))) {
-            PRINTLOG(LINKER, LOG_ERROR, "cannot append relocation table size to buffer");
-            it->destroy(it);
-
-            goto error_destroy_buffer;
-        }
-
-        if(!buffer_append_buffer(relocation_buffer, module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data)) {
-            PRINTLOG(LINKER, LOG_ERROR, "cannot append relocation table to buffer");
-            it->destroy(it);
-
-            goto error_destroy_buffer;
-        }
-
-        it = it->next(it);
-    }
-
-
-    it->destroy(it);
-
-    return relocation_buffer;
-
-error_destroy_buffer:
-    buffer_destroy(relocation_buffer);
-
-    return NULL;
-}
-
-static int8_t linker_build_metadata_buffer_null_terminator(buffer_t* metadata_buffer, uint64_t count) {
-    if(!metadata_buffer) {
-        PRINTLOG(LINKER, LOG_ERROR, "invalid buffer");
-
-        return -1;
-    }
-
-    uint64_t null_terminator = 0;
-
-    for(uint64_t i = 0; i < count; i++) {
-        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&null_terminator, sizeof(uint64_t))) {
-            PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
-
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
-buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
-    if(!ctx) {
-        PRINTLOG(LINKER, LOG_ERROR, "invalid context");
-
-        return NULL;
-    }
-
-    buffer_t* metadata_buffer = buffer_new_with_capacity(NULL, ctx->metadata_size);
-
-    if(!metadata_buffer) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot create buffer");
-
-        return NULL;
-    }
-
-
-    iterator_t* it = hashmap_iterator_create(ctx->modules);
-
-    if(!it) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator");
-
-        goto error_destroy_buffer;
-    }
-
-    while(!it->end_of_iterator(it)) {
-        linker_module_t* module = (linker_module_t*)it->get_item(it);
-
-        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->id, sizeof(uint64_t))) {
-            PRINTLOG(LINKER, LOG_ERROR, "cannot append module id to buffer");
-            it->destroy(it);
-
-            goto error_destroy_buffer;
-        }
-
-        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->module_name_offset, sizeof(uint64_t))) {
-            PRINTLOG(LINKER, LOG_ERROR, "cannot append module size to buffer");
-            it->destroy(it);
-
-            goto error_destroy_buffer;
-        }
-
-        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->physical_start, sizeof(uint64_t))) {
-            PRINTLOG(LINKER, LOG_ERROR, "cannot append physical start to buffer");
-            it->destroy(it);
-
-            goto error_destroy_buffer;
-        }
-
-        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->virtual_start, sizeof(uint64_t))) {
-            PRINTLOG(LINKER, LOG_ERROR, "cannot append virtual start to buffer");
-            it->destroy(it);
-
-            goto error_destroy_buffer;
-        }
-
-        for(uint64_t i = 0; i < LINKER_SECTION_TYPE_RELOCATION_TABLE; i++) {
-            if(module->sections[i].size == 0) {
-                continue;
-            }
-
-            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&i, sizeof(uint64_t))) {
-                PRINTLOG(LINKER, LOG_ERROR, "cannot append section type to buffer");
-                it->destroy(it);
-
-                goto error_destroy_buffer;
-            }
-
-            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->sections[i].physical_start, sizeof(uint64_t))) {
-                PRINTLOG(LINKER, LOG_ERROR, "cannot append section physical start to buffer");
-                it->destroy(it);
-
-                goto error_destroy_buffer;
-            }
-
-            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->sections[i].virtual_start, sizeof(uint64_t))) {
-                PRINTLOG(LINKER, LOG_ERROR, "cannot append section virtual start to buffer");
-                it->destroy(it);
-
-                goto error_destroy_buffer;
-            }
-
-            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->sections[i].size, sizeof(uint64_t))) {
-                PRINTLOG(LINKER, LOG_ERROR, "cannot append section size to buffer");
-                it->destroy(it);
-
-                goto error_destroy_buffer;
-            }
-        }
-
-        if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 4) != 0) {
-            PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
-            it->destroy(it);
-
-            goto error_destroy_buffer;
-        }
-
-
-        it = it->next(it);
-    }
-
-
-    it->destroy(it);
-
-    if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 8) != 0) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
-
-        goto error_destroy_buffer;
-    }
-
-    return metadata_buffer;
-
-error_destroy_buffer:
-    buffer_destroy(metadata_buffer);
-
-    return NULL;
 }

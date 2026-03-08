@@ -24,7 +24,7 @@ extern "C" {
  * @brief linker section types.
  *
  */
-typedef enum linker_section_type_t {
+typedef enum linker_section_type_t : uint8_t {
     LINKER_SECTION_TYPE_UNDEF, ///< undefined section type
     LINKER_SECTION_TYPE_TEXT, ///< executable (text) section
     LINKER_SECTION_TYPE_DATA, ///< read-write data section
@@ -54,7 +54,7 @@ extern const char_t*const linker_section_type_names[LINKER_SECTION_TYPE_NR_SECTI
  * @enum linker_relocation_type_t
  * @brief relocation stypes
  */
-typedef enum linker_relocation_type_t {
+typedef enum linker_relocation_type_t : uint8_t {
     LINKER_RELOCATION_TYPE_32_16, ///< 32 bit width 16 bit addend section relative relocation
     LINKER_RELOCATION_TYPE_32_32, ///< 32 bit width 32 bit addend section relative relocation
     LINKER_RELOCATION_TYPE_32_PC16, ///< 32 bit width 16 bit addend program counter relative relocation
@@ -80,7 +80,7 @@ typedef enum linker_relocation_type_t {
  * @enum linker_symbol_type_t
  * @brief symbol types
  */
-typedef enum linker_symbol_type_t {
+typedef enum linker_symbol_type_t : uint8_t {
     LINKER_SYMBOL_TYPE_UNDEF, ///< undefined
     LINKER_SYMBOL_TYPE_OBJECT, ///< object
     LINKER_SYMBOL_TYPE_FUNCTION, ///< function
@@ -93,7 +93,7 @@ typedef enum linker_symbol_type_t {
  * @enum linker_symbol_scope_t
  * @brief symbol scope
  */
-typedef enum linker_symbol_scope_t {
+typedef enum linker_symbol_scope_t : uint8_t {
     LINKER_SYMBOL_SCOPE_LOCAL, ///< local
     LINKER_SYMBOL_SCOPE_GLOBAL, ///< global
 } linker_symbol_scope_t; ///< shorthand for enum
@@ -103,30 +103,20 @@ typedef enum linker_symbol_scope_t {
  * @brief relocation information
  */
 typedef struct linker_relocation_entry_t {
-    linker_section_type_t    section_type    : 8; ///< relocation's section type
-    linker_relocation_type_t relocation_type : 8; ///< relocation type
+    linker_section_type_t    section_type; ///< relocation's section type
+    linker_relocation_type_t relocation_type; ///< relocation type
     uint64_t                 symbol_id; ///< symbol id
     uint64_t                 offset; ///< where relocation value will be placed from start of program
     uint64_t                 addend; ///< destination displacement
 }__attribute__((packed)) linker_relocation_entry_t; ///< shorthand for struct
 
-/**
- * @struct linker_section_locations_t
- * @brief section information
- */
-typedef struct linker_section_locations_t {
-    uint64_t section_start; ///< section start for virtual memory
-    uint64_t section_pyhsical_start; ///< section start for physical memory
-    uint64_t section_size; ///< section size
-}__attribute__((packed)) linker_section_locations_t; ///< shorthand for struct
-
 typedef struct linker_global_offset_table_entry_t {
     uint64_t              entry_value; ///< entry value
     boolean_t             resolved; ///< is resolved
     boolean_t             binded; ///< is binded
-    linker_section_type_t section_type : 8; ///< section type
-    linker_symbol_type_t  symbol_type  : 8; ///< symbol type
-    linker_symbol_scope_t symbol_scope : 8; ///< symbol scope
+    linker_section_type_t section_type; ///< section type
+    linker_symbol_type_t  symbol_type; ///< symbol type
+    linker_symbol_scope_t symbol_scope; ///< symbol scope
     uint8_t               padding[3]; ///< align padding
     uint64_t              module_id; ///< module id
     uint64_t              symbol_id; ///< symbol id

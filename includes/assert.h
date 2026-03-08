@@ -19,7 +19,8 @@ extern "C" {
 
 #define assert(expr) ((void)((expr) || (__assert(#expr, __FILE__, __LINE__, __func__), 0)))
 
-_Noreturn void __assert(const char_t * expr, const char_t * file, size_t line, const char_t * func);
+__attribute__((noreturn, target("general-regs-only")))
+void __assert(const char_t * expr, const char_t * file, size_t line, const char_t * func);
 
 #ifdef __cplusplus
 }
