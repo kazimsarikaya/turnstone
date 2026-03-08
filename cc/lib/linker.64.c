@@ -356,6 +356,8 @@ static const uint8_t linker_hypervisor_plt0_entry_data[] = {
     0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
 };
 
+_Static_assert(linker_hypervisor_plt0_entry_data[8] == 0x0f && linker_hypervisor_plt0_entry_data[9] == 0x01 && linker_hypervisor_plt0_entry_data[10] == 0x00, "vmcall instruction bytes mismatch");
+
 #define LINKER_HYPERVISOR_PLT0_VMCALL_VMX_BYTE (0xc1)
 #define LINKER_HYPERVISOR_PLT0_VMCALL_SVM_BYTE (0xd9)
 #define LINKER_HYPERVISOR_PLT0_VMCALL_FIXUP_BYTE_OFFSET (10)
