@@ -11,8 +11,6 @@
 #include <windowmanager/wnd_utils.h>
 #include <windowmanager/wnd_gfx.h>
 #include <windowmanager/wnd_create_destroy.h>
-#include <windowmanager/wnd_greater.h>
-#include <windowmanager/wnd_options.h>
 #include <logging.h>
 #include <memory.h>
 #include <utils.h>
@@ -29,6 +27,7 @@
 #include <graphics/font.h>
 #include <graphics/softgfx.h>
 #include <time.h>
+#include <math_f32.h>
 
 MODULE("turnstone.user.programs.windowmanager");
 
@@ -43,13 +42,13 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
 
     font_get_font_dimension(&font_width, &font_height);
 
-    uint64_t kbd_length = 0;
-    uint32_t kbd_ev_cnt = 0;
+    uint64_t kbd_length   = 0;
+    uint32_t kbd_ev_cnt   = 0;
     uint64_t mouse_length = 0;
     uint32_t mouse_ev_cnt = 0;
 
-    kbd_report_t* kbd_data = (kbd_report_t*)buffer_get_all_bytes_and_reset(kbd_buffer, &kbd_length);
-    mouse_report_t* mouse_data = (mouse_report_t*)buffer_get_all_bytes_and_reset(mouse_buffer, &mouse_length);
+    kbd_report_t* kbd_data     = (kbd_report_t*)(void*)buffer_get_all_bytes_and_reset(kbd_buffer, &kbd_length);
+    mouse_report_t* mouse_data = (mouse_report_t*)(void*)buffer_get_all_bytes_and_reset(mouse_buffer, &mouse_length);
 
     if(kbd_length == 0 && mouse_length == 0) {
         memory_free(kbd_data);
@@ -73,7 +72,7 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
                     event.type = WINDOW_EVENT_TYPE_SCROLL_DOWN;
                 }
 
-                wndmgr->current_window->on_scroll(&event);
+                windowmanager_scroll(wndmgr->current_window, &event);
             }
         }
 
@@ -109,12 +108,12 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
             }
 
             if(kbd_data[i].is_printable) {
-                if(kbd_data[i].key == '\n' && wndmgr->current_window->on_enter) {
+                if(kbd_data[i].key == '\n') {
                     window_event_t event = {0};
-                    event.type = WINDOW_EVENT_TYPE_ENTER;
+                    event.type   = WINDOW_EVENT_TYPE_ENTER;
                     event.window = wndmgr->current_window;
-                    wndmgr->current_window->on_enter(&event);
-                } else if(kbd_data[i].key == '\t'){
+                    windowmanager_enter(wndmgr->current_window, &event);
+                } else if(kbd_data[i].key == '\t') {
                     boolean_t is_reverse = false;
 
                     if(kbd_data[i].state.is_shift_pressed) {
@@ -150,32 +149,24 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
                     wndmgr_text_cursor_move_relative(1, 0);
                 } else if(kbd_data[i].key == KBD_SCANCODE_F5) {
                     window_event_t event = {0};
-                    event.type = WINDOW_EVENT_TYPE_SCROLL_LEFT;
+                    event.type   = WINDOW_EVENT_TYPE_SCROLL_LEFT;
                     event.window = wndmgr->current_window;
-                    if(wndmgr->current_window->on_scroll) {
-                        wndmgr->current_window->on_scroll(&event);
-                    }
+                    windowmanager_scroll(wndmgr->current_window, &event);
                 } else if(kbd_data[i].key == KBD_SCANCODE_F6 || kbd_data[i].key == KBD_SCANCODE_PAGEUP) {
                     window_event_t event = {0};
-                    event.type = WINDOW_EVENT_TYPE_SCROLL_UP;
+                    event.type   = WINDOW_EVENT_TYPE_SCROLL_UP;
                     event.window = wndmgr->current_window;
-                    if(wndmgr->current_window->on_scroll) {
-                        wndmgr->current_window->on_scroll(&event);
-                    }
+                    windowmanager_scroll(wndmgr->current_window, &event);
                 } else if(kbd_data[i].key == KBD_SCANCODE_F7 || kbd_data[i].key == KBD_SCANCODE_PAGEDOWN) {
                     window_event_t event = {0};
-                    event.type = WINDOW_EVENT_TYPE_SCROLL_DOWN;
+                    event.type   = WINDOW_EVENT_TYPE_SCROLL_DOWN;
                     event.window = wndmgr->current_window;
-                    if(wndmgr->current_window->on_scroll) {
-                        wndmgr->current_window->on_scroll(&event);
-                    }
+                    windowmanager_scroll(wndmgr->current_window, &event);
                 } else if(kbd_data[i].key == KBD_SCANCODE_F8) {
                     window_event_t event = {0};
-                    event.type = WINDOW_EVENT_TYPE_SCROLL_RIGHT;
+                    event.type   = WINDOW_EVENT_TYPE_SCROLL_RIGHT;
                     event.window = wndmgr->current_window;
-                    if(wndmgr->current_window->on_scroll) {
-                        wndmgr->current_window->on_scroll(&event);
-                    }
+                    windowmanager_scroll(wndmgr->current_window, &event);
                 } else if(kbd_data[i].key == KBD_SCANCODE_PRINTSCREEN) {
                     // clipboard_send_text("hello world from turnstone os!");
                 }
@@ -190,7 +181,7 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
 
     window_t* edit_area = NULL;
 
-    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &edit_area)) {
+    if(strlen(data) && windowmanager_find_window_by_text_cursor(wndmgr->current_window, &edit_area)) {
         if(edit_area != NULL) {
             windowmanager_set_window_text(edit_area, data);
         }
@@ -202,13 +193,13 @@ static int8_t windowmanager_main(void) {
     task_set_interruptible();
 
     boolean_t test_trigangle = false;
-    boolean_t print_fps = false;
+    boolean_t print_fps      = false;
 
     if(!test_trigangle) {
         task_set_interrupt_receive_workaround(1000 / 5);
     }
 
-    kbd_buffer = buffer_new_with_capacity(NULL, 4100);
+    kbd_buffer   = buffer_new_with_capacity(NULL, 4100);
     mouse_buffer = buffer_new_with_capacity(NULL, 4096);
 
     windowmanager_t* wndmgr = windowmanager_get_instance();
@@ -230,19 +221,26 @@ static int8_t windowmanager_main(void) {
 
     wndmgr->current_window = windowmanager_create_greater_window();
 
+    if(wndmgr->current_window == NULL) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create main window");
+        return -1;
+    }
+
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Window Manager initialized, waiting events");
+
     windowmanager_set_initialized(true);
-
-    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Window Manager initialized, waiting events\n");
-
-    float32_t angle = 0.0f;
-
-    uint64_t start_time = 0;
-    uint64_t end_time = 0;
-    uint64_t clear_start = 0;
-    uint64_t clear_end = 0;
 
     sgfx_clear(gfx_ctx, 0.0f, 0.0f, 0.0f, 1.0f);
     sgfx_swap_buffers(gfx_ctx);
+
+    float32_t angle = 0.0f;
+
+    uint64_t start_time  = 0;
+    uint64_t end_time    = 0;
+    uint64_t clear_start = 0;
+    uint64_t clear_end   = 0;
+    uint64_t swap_start  = 0;
+    uint64_t swap_end    = 0;
 
     while(windowmanager_is_initialized()) {
         start_time = time_us(NULL);
@@ -277,23 +275,16 @@ static int8_t windowmanager_main(void) {
             sgfx_vertex3_f32(gfx_ctx, 0.5f, -0.5f, 0.0f);
             sgfx_end(gfx_ctx);
         } else {
-            sgfx_matrix_mode(gfx_ctx, SGFX_PROJECTION);
-            sgfx_load_identity(gfx_ctx);
-            sgfx_ortho_f32(gfx_ctx,
-                           0.0f, (float32_t)wndmgr->screen_width,
-                           (float32_t)wndmgr->screen_height, 0.0f,
-                           -1.0f, 1.0f);
-
-            sgfx_matrix_mode(gfx_ctx, SGFX_MODELVIEW);
-            sgfx_load_identity(gfx_ctx);
-
             windowmanager_draw_window(wndmgr, wndmgr->current_window);
+            if(print_fps) {
+                video_text_print("--------------------------------\n");
+            }
         }
 
         // Swap buffers (copies diff to framebuffer)
-        uint64_t swap_start = time_us(NULL);
+        swap_start = time_us(NULL);
         sgfx_swap_buffers(gfx_ctx);
-        uint64_t swap_end = time_us(NULL);
+        swap_end = time_us(NULL);
 
         end_time = time_us(NULL);
 

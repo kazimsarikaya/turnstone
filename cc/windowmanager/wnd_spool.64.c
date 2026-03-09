@@ -7,11 +7,8 @@
  */
 
 #include <windowmanager.h>
-#include <windowmanager/wnd_spool_browser.h>
 #include <windowmanager/wnd_create_destroy.h>
 #include <windowmanager/wnd_utils.h>
-#include <windowmanager/wnd_options.h>
-#include <windowmanager/wnd_editor.h>
 #include <strings.h>
 #include <spool.h>
 #include <argumentparser.h>
@@ -86,7 +83,7 @@ typedef struct sposl_item_window_extra_data {
     const buffer_t* buffer;
 } spool_item_window_extra_data_t;
 
-static int8_t wndmgr_spool_item_on_redraw(const window_event_t* event) {
+static int8_t wndmgr_spool_item_on_predraw(const window_event_t* event) {
     if(!event) {
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Window event is NULL");
         return -1;
@@ -119,62 +116,27 @@ static int8_t wndmgr_spool_item_on_redraw(const window_event_t* event) {
 
 static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spool_item){
     windowmanager_t* wndmgr = windowmanager_get_instance();
-    window_t* window = windowmanager_create_top_window();
 
-    if(window == NULL) {
+    char_t* title_str = strprintf("tOS Spool Item %s Details", spool_get_name(spool_item));
+
+    window_top_window_t top_window = windowmanager_create_top_window(title_str, true);
+
+    memory_free(title_str);
+
+    if(!top_window.main_window || !top_window.inside_window) {
         return -1;
     }
+
+    window_t* window = top_window.inside_window;
 
     uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
     uint32_t screen_width = wndmgr->screen_width;
 
-    char_t* title_str = strprintf("tOS Spool Item %s Details", spool_get_name(spool_item));
-
-    rect_t rect = windowmanager_calc_text_rect(title_str, screen_width);
-    rect.x = (screen_width - rect.width) / 2;
-    rect.y = font_height;
-
-
-    window_t* title_window = windowmanager_create_window(window,
-                                                         title_str,
-                                                         rect,
-                                                         (color_t){.color = 0x00000000},
-                                                         (color_t){.color = 0xFF2288FF});
-
-    if(title_window == NULL) {
-        windowmanager_destroy_window(window);
-        return -1;
-    }
-
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
-                                                                 WINDOWMANAGER_COMMAND_TEXT,
-                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
-                                                                 "option",
-                                                                 NULL);
-
-    if(!option_input_row) {
-        windowmanager_destroy_window(window);
-        return -1;
-    }
-
-    window_t* wnd_header = windowmanager_create_window(window,
-                                                       NULL,
-                                                       (rect_t){0,
-                                                                option_input_row->rect.y + option_input_row->rect.height + font_height,
-                                                                screen_width,
-                                                                font_height},
-                                                       (color_t){.color = 0x00000000},
-                                                       (color_t){.color = 0xFFee9900});
-
-    if(!wnd_header) {
-        windowmanager_destroy_window(window);
-        return -1;
-    }
 
     char_t* header_text = strprintf("%- 5s% 12s% 15s",
                                     "Cmd", "Buffer Id", "Buffer Size");
 
-    window_t* wnd_header_text = windowmanager_create_window(wnd_header,
+    window_t* wnd_header_text = windowmanager_create_window(window,
                                                             header_text,
                                                             (rect_t){font_width, 0, screen_width - font_width, font_height},
                                                             (color_t){.color = 0x00000000},
@@ -182,14 +144,14 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
 
     if(!wnd_header_text) {
-        windowmanager_destroy_window(window);
+        windowmanager_destroy_window(top_window.main_window);
         return -1;
     }
 
     size_t buf_cnt = spool_get_buffer_count(spool_item);
 
     int32_t left = font_width + 5 * font_width;
-    int32_t top = wnd_header->rect.y + wnd_header->rect.height;
+    int32_t top  = wnd_header_text->rect.y + wnd_header_text->rect.height;
 
     for(size_t i = 0; i < buf_cnt; i++) {
         const buffer_t* buffer = spool_get_buffer(spool_item, i);
@@ -201,14 +163,14 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
                                                                 (color_t){.color = 0xFFF00000});
 
         if(!wnd_spool_input) {
-            windowmanager_destroy_window(window);
+            windowmanager_destroy_window(top_window.main_window);
             return -1;
         }
 
-        wnd_spool_input->is_writable = true;
+        wnd_spool_input->is_writable  = true;
         wnd_spool_input->input_length = 1;
-        wnd_spool_input->input_id = "buffer";
-        wnd_spool_input->extra_data = (void*)buffer;
+        wnd_spool_input->input_id     = "buffer";
+        wnd_spool_input->extra_data   = (void*)buffer;
 
         char_t* spool_text = strprintf("% 12i% 15lli",
                                        i,
@@ -221,22 +183,22 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
                                                           (color_t){.color = 0xFF00FF00});
 
         if(!wnd_spool) {
-            windowmanager_destroy_window(window);
+            windowmanager_destroy_window(top_window.main_window);
             return -1;
         }
 
         spool_item_window_extra_data_t* sied = memory_malloc(sizeof(spool_item_window_extra_data_t));
 
         if(!sied) {
-            windowmanager_destroy_window(window);
+            windowmanager_destroy_window(top_window.main_window);
             return -1;
         }
 
         sied->buffer_id = i;
-        sied->buffer = buffer;
+        sied->buffer    = buffer;
 
-        wnd_spool->on_redraw = wndmgr_spool_item_on_redraw;
-        wnd_spool->extra_data = (void*)sied;
+        wnd_spool->on_predraw              = wndmgr_spool_item_on_predraw;
+        wnd_spool->extra_data              = (void*)sied;
         wnd_spool->extra_data_is_allocated = true;
 
         top += font_height;
@@ -244,7 +206,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
     window->on_enter = wndmgr_spool_item_on_enter;
 
-    windowmanager_insert_and_set_current_window(window);
+    windowmanager_insert_and_set_current_window(top_window.main_window);
 
     return 0;
 }
@@ -310,7 +272,7 @@ static int8_t wndmgr_spool_browser_on_enter(const window_event_t* event) {
     return 0;
 }
 
-static int8_t wndmgr_spool_browser_wnd_spool_on_redraw(const window_event_t* event) {
+static int8_t wndmgr_spool_browser_wnd_spool_on_predraw(const window_event_t* event) {
     if(!event) {
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Window event is NULL");
         return -1;
@@ -345,62 +307,22 @@ static int8_t wndmgr_spool_browser_wnd_spool_on_redraw(const window_event_t* eve
 int8_t windowmanager_create_and_show_spool_browser_window(void) {
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    window_t* window = windowmanager_create_top_window();
+    window_top_window_t top_window = windowmanager_create_top_window("tOS Spool Browser", true);
 
-    if(window == NULL) {
+    if(!top_window.main_window || !top_window.inside_window) {
         return -1;
     }
 
     uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
     uint32_t screen_width = wndmgr->screen_width;
 
-    char_t* title_str = strdup("tOS Spool Browser");
 
-    rect_t rect = windowmanager_calc_text_rect(title_str, screen_width);
-    rect.x = (screen_width - rect.width) / 2;
-    rect.y = font_height;
-
-
-    window_t* title_window = windowmanager_create_window(window,
-                                                         title_str,
-                                                         rect,
-                                                         (color_t){.color = 0x00000000},
-                                                         (color_t){.color = 0xFF2288FF});
-
-    if(title_window == NULL) {
-        windowmanager_destroy_window(window);
-        return -1;
-    }
-
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
-                                                                 WINDOWMANAGER_COMMAND_TEXT,
-                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
-                                                                 "option",
-                                                                 NULL);
-
-    if(!option_input_row) {
-        windowmanager_destroy_window(window);
-        return -1;
-    }
-
-    window_t* wnd_header = windowmanager_create_window(window,
-                                                       NULL,
-                                                       (rect_t){0,
-                                                                option_input_row->rect.y + option_input_row->rect.height + font_height,
-                                                                screen_width,
-                                                                font_height},
-                                                       (color_t){.color = 0x00000000},
-                                                       (color_t){.color = 0xFFee9900});
-
-    if(!wnd_header) {
-        windowmanager_destroy_window(window);
-        return -1;
-    }
+    window_t* window = top_window.inside_window;
 
     char_t* header_text = strprintf("%- 5s%- 60s% 15s% 20s",
                                     "Cmd", "Name", "Buffer Count", "Total Buffer Size");
 
-    window_t* wnd_header_text = windowmanager_create_window(wnd_header,
+    window_t* wnd_header_text = windowmanager_create_window(window,
                                                             header_text,
                                                             (rect_t){font_width, 0, screen_width - font_width, font_height},
                                                             (color_t){.color = 0x00000000},
@@ -408,12 +330,12 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
 
     if(!wnd_header_text) {
-        windowmanager_destroy_window(window);
+        windowmanager_destroy_window(top_window.main_window);;
         return -1;
     }
 
     int32_t left = font_width + 5 * font_width;
-    int32_t top = wnd_header->rect.y + wnd_header->rect.height;
+    int32_t top  = wnd_header_text->rect.y + wnd_header_text->rect.height;
 
     list_t* spool_list = spool_get_all();
 
@@ -427,14 +349,14 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
                                                                 (color_t){.color = 0xFFF00000});
 
         if(!wnd_spool_input) {
-            windowmanager_destroy_window(window);
+            windowmanager_destroy_window(top_window.main_window);
             return -1;
         }
 
-        wnd_spool_input->is_writable = true;
+        wnd_spool_input->is_writable  = true;
         wnd_spool_input->input_length = 1;
-        wnd_spool_input->input_id = "spool";
-        wnd_spool_input->extra_data = (void*)spool;
+        wnd_spool_input->input_id     = "spool";
+        wnd_spool_input->extra_data   = (void*)spool;
 
         char_t* spool_text = strprintf("%- 60s% 15lli% 20lli",
                                        spool_get_name(spool),
@@ -448,11 +370,11 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
                                                           (color_t){.color = 0xFF00FF00});
 
         if(!wnd_spool) {
-            windowmanager_destroy_window(window);
+            windowmanager_destroy_window(top_window.main_window);
             return -1;
         }
 
-        wnd_spool->on_redraw = wndmgr_spool_browser_wnd_spool_on_redraw;
+        wnd_spool->on_predraw = wndmgr_spool_browser_wnd_spool_on_predraw;
         wnd_spool->extra_data = (void*)spool;
 
         top += font_height;
@@ -460,7 +382,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
     window->on_enter = wndmgr_spool_browser_on_enter;
 
-    windowmanager_insert_and_set_current_window(window);
+    windowmanager_insert_and_set_current_window(top_window.main_window);
 
     return 0;
 }

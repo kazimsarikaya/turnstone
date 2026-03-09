@@ -8,8 +8,6 @@
 
 #include <windowmanager/wnd_types.h>
 #include <windowmanager/wnd_create_destroy.h>
-#include <windowmanager/wnd_task_manager.h>
-#include <windowmanager/wnd_options.h>
 #include <windowmanager/wnd_utils.h>
 #include <strings.h>
 #include <cpu/task.h>
@@ -22,7 +20,7 @@ MODULE("turnstone.windowmanager");
 void video_text_print(const char_t* str);
 
 
-static int8_t wnd_task_list_on_redraw(const window_event_t* event) {
+static int8_t wnd_task_list_on_predraw(const window_event_t* event) {
     UNUSED(event);
 
     windowmanager_t* wndmgr = windowmanager_get_instance();
@@ -45,7 +43,7 @@ static int8_t wnd_task_list_on_redraw(const window_event_t* event) {
 
     uint64_t buf_len = 0;
 
-    task_list_item_t* task_list_items = (task_list_item_t*)buffer_get_all_bytes_and_destroy(task_list, &buf_len);
+    task_list_item_t* task_list_items = (task_list_item_t*)(void*)buffer_get_all_bytes_and_destroy(task_list, &buf_len);
 
     if(!task_list_items) {
         return -1;
@@ -109,60 +107,31 @@ static int8_t wnd_task_list_on_scroll(const window_event_t* event) {
 
 
 int8_t windowmanager_create_and_show_task_vm_list_window(void) {
-    window_t* window = windowmanager_create_top_window();
+    window_top_window_t top_window = windowmanager_create_top_window("Task List", true);
 
-    if(window == NULL) {
+    if(!top_window.main_window || !top_window.inside_window) {
         return -1;
     }
 
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
     uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
-    uint32_t screen_width = wndmgr->screen_width;
+    uint32_t screen_width  = wndmgr->screen_width;
     uint32_t screen_height = wndmgr->screen_height;
 
-    char_t* title_str = strdup("Task List");
-
-    rect_t rect = windowmanager_calc_text_rect(title_str, screen_width);
-    rect.x = (window->rect.width - rect.width) / 2;
-    rect.y = font_height;
-
-
-    window_t* title_window = windowmanager_create_window(window,
-                                                         title_str,
-                                                         rect,
-                                                         (color_t){.color = 0x00000000},
-                                                         (color_t){.color = 0xFF2288FF});
-
-    if(title_window == NULL) {
-        windowmanager_destroy_window(window);
-        return -1;
-    }
-
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
-                                                                 WINDOWMANAGER_COMMAND_TEXT,
-                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
-                                                                 "option",
-                                                                 NULL);
-
-    if(!option_input_row) {
-        windowmanager_destroy_window(window);
-        return NULL;
-    }
-
-    int64_t option_input_row_bottom = option_input_row->rect.y + option_input_row->rect.height;
+    window_t* window = top_window.inside_window;
 
     window_t* wnd_header = windowmanager_create_window(window,
                                                        NULL,
                                                        (rect_t){0,
-                                                                option_input_row_bottom + font_height,
+                                                                0,
                                                                 screen_width,
                                                                 font_height},
                                                        (color_t){.color = 0x00000000},
                                                        (color_t){.color = 0xFFee9900});
 
     if(!wnd_header) {
-        windowmanager_destroy_window(window);
+        windowmanager_destroy_window(top_window.main_window);
         return -1;
     }
 
@@ -178,18 +147,14 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
 
 
     if(!wnd_header_text) {
-        windowmanager_destroy_window(window);
+        windowmanager_destroy_window(top_window.main_window);
         return -1;
     }
 
-    int64_t wnd_header_bottom = wnd_header->rect.y + wnd_header->rect.height;
-
-    int64_t wnd_task_list_area_top = wnd_header_bottom;
-
     rect_t wnd_task_list_area_rect = {0,
-                                      wnd_task_list_area_top,
+                                      font_height,
                                       screen_width,
-                                      screen_height - wnd_task_list_area_top - font_height};
+                                      screen_height - wnd_header_text->rect.y - font_height - font_height};
 
     window_t* wnd_task_list_area = windowmanager_create_window(window,
                                                                NULL,
@@ -198,19 +163,19 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
                                                                (color_t){.color = 0xFFee9900});
 
     if(!wnd_task_list_area) {
-        windowmanager_destroy_window(window);
+        windowmanager_destroy_window(top_window.main_window);
         return -1;
     }
 
     wnd_task_list_area->is_always_redrawn = true;
 
-    wnd_task_list_area->extra_data = (void*)wnd_task_list_area;
+    wnd_task_list_area->extra_data              = (void*)wnd_task_list_area;
     wnd_task_list_area->extra_data_is_allocated = false;
 
-    wnd_task_list_area->on_redraw = wnd_task_list_on_redraw;
-    wnd_task_list_area->on_scroll = wnd_task_list_on_scroll;
+    wnd_task_list_area->on_predraw = wnd_task_list_on_predraw;
+    wnd_task_list_area->on_scroll  = wnd_task_list_on_scroll;
 
-    windowmanager_insert_and_set_current_window(window);
+    windowmanager_insert_and_set_current_window(top_window.main_window);
 
     return 0;
 }
@@ -234,7 +199,7 @@ static int8_t wndmgr_create_vm_on_enter(const window_event_t* event) {
     }
 
     char_t* entry_point = NULL;
-    uint64_t heap_size = 0;
+    uint64_t heap_size  = 0;
     uint64_t stack_size = 0;
 
     for(uint64_t i = 0; i < list_size(inputs); i++) {
@@ -295,73 +260,33 @@ static int8_t wndmgr_create_vm_on_enter(const window_event_t* event) {
 }
 
 int8_t windowmanager_create_and_show_task_vm_create_window(void) {
-    window_t* window = windowmanager_create_top_window();
+    window_top_window_t top_window = windowmanager_create_top_window("Create Task or VM", true);
 
-    if(window == NULL) {
+    if(!top_window.main_window || !top_window.inside_window) {
         return -1;
     }
+
 
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
 
     uint32_t font_height = wndmgr->font_height;
-    uint32_t screen_width = wndmgr->screen_width, screen_height = wndmgr->screen_height;
 
-    char_t* title_str = strdup("Create Task or VM");
+    window_t* window = top_window.inside_window;
 
-    rect_t rect = windowmanager_calc_text_rect(title_str, screen_width);
-    rect.x = (window->rect.width - rect.width) / 2;
-    rect.y = font_height;
-
-
-    window_t* title_window = windowmanager_create_window(window,
-                                                         title_str,
-                                                         rect,
-                                                         (color_t){.color = 0x00000000},
-                                                         (color_t){.color = 0xFF2288FF});
-
-    if(title_window == NULL) {
-        windowmanager_destroy_window(window);
-        return -1;
-    }
-
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
-                                                                 WINDOWMANAGER_COMMAND_TEXT,
-                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
-                                                                 "option",
-                                                                 NULL);
-
-    if(!option_input_row) {
-        windowmanager_destroy_window(window);
-        return NULL;
-    }
-
-    window_t* wnd_vm_create_area = windowmanager_create_window(window,
-                                                               NULL,
-                                                               (rect_t){0,
-                                                                        option_input_row->rect.y + option_input_row->rect.height + font_height,
-                                                                        screen_width,
-                                                                        screen_height - option_input_row->rect.y - option_input_row->rect.height - font_height},
-                                                               (color_t){.color = 0x00000000},
-                                                               (color_t){.color = 0xFFee9900});
-
-    if(!wnd_vm_create_area) {
-        windowmanager_destroy_window(window);
-        return -1;
-    }
 
     rect_t wnd_entry_point_rect = {
-        .x = 0,
-        .y = 0,
-        .width = wnd_vm_create_area->rect.width,
+        .x      = 0,
+        .y      = 0,
+        .width  = window->rect.width,
         .height = font_height,
     };
 
-    window_t* wnd_entry_point = windowmanager_add_option_window(wnd_vm_create_area, wnd_entry_point_rect,
-                                                                "Entry Point",
-                                                                WINDOWMANAGER_COMMAND_INPUT_TEXT,
-                                                                "entry_point",
-                                                                "Entry Point function name of VM");
+    window_t* wnd_entry_point = windowmanager_command_input_window(window, wnd_entry_point_rect,
+                                                                   "Entry Point",
+                                                                   WINDOWMANAGER_COMMAND_INPUT_TEXT,
+                                                                   "entry_point",
+                                                                   "Entry Point function name of VM");
 
     if(!wnd_entry_point) {
         windowmanager_destroy_window(window);
@@ -369,45 +294,45 @@ int8_t windowmanager_create_and_show_task_vm_create_window(void) {
     }
 
     rect_t wnd_heap_size_rect = {
-        .x = 0,
-        .y = font_height,
-        .width = wnd_vm_create_area->rect.width,
+        .x      = 0,
+        .y      = font_height,
+        .width  = window->rect.width,
         .height = font_height,
     };
 
-    window_t* wnd_heap_size = windowmanager_add_option_window(wnd_vm_create_area, wnd_heap_size_rect,
-                                                              "Heap Size",
-                                                              "0x0000000001000000", // 16MiB
-                                                              "heap_size",
-                                                              "Heap size of VM");
+    window_t* wnd_heap_size = windowmanager_command_input_window(window, wnd_heap_size_rect,
+                                                                 "Heap Size",
+                                                                 "0x0000000001000000", // 16MiB
+                                                                 "heap_size",
+                                                                 "Heap size of VM");
 
     if(!wnd_heap_size) {
-        windowmanager_destroy_window(window);
+        windowmanager_destroy_window(top_window.main_window);
         return -1;
     }
 
     rect_t wnd_stack_size_rect = {
-        .x = 0,
-        .y =  2 * font_height,
-        .width = wnd_vm_create_area->rect.width,
+        .x      = 0,
+        .y      =  2 * font_height,
+        .width  = window->rect.width,
         .height = font_height,
     };
 
-    window_t* wnd_stack_size = windowmanager_add_option_window(wnd_vm_create_area, wnd_stack_size_rect,
-                                                               "Stack Size",
-                                                               "0x0000000000200000", // 2MiB
-                                                               "stack_size",
-                                                               "Stack size of VM");
+    window_t* wnd_stack_size = windowmanager_command_input_window(window, wnd_stack_size_rect,
+                                                                  "Stack Size",
+                                                                  "0x0000000000200000", // 2MiB
+                                                                  "stack_size",
+                                                                  "Stack size of VM");
 
     if(!wnd_stack_size) {
-        windowmanager_destroy_window(window);
+        windowmanager_destroy_window(top_window.main_window);
         return -1;
     }
 
-    window->on_enter = wndmgr_create_vm_on_enter;
+    top_window.inside_window->on_enter = wndmgr_create_vm_on_enter;
 
 
-    windowmanager_insert_and_set_current_window(window);
+    windowmanager_insert_and_set_current_window(top_window.main_window);
 
     return 0;
 }

@@ -7,11 +7,8 @@
  */
 
 #include <windowmanager.h>
-#include <windowmanager/wnd_options.h>
 #include <windowmanager/wnd_create_destroy.h>
 #include <windowmanager/wnd_utils.h>
-#include <windowmanager/wnd_spool_browser.h>
-#include <windowmanager/wnd_task_manager.h>
 #include <windowmanager/wnd_misc.h>
 #include <strings.h>
 #include <argumentparser.h>
@@ -56,11 +53,11 @@ typedef enum wnd_task_vm_manager_list_item_type_t {
 
 const wnd_options_list_item_t wnd_task_manager_item_list[WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_END] = {
     [WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_LIST] =    {
-        .text = "Task and VM List",
+        .text   = "Task and VM List",
         .action = windowmanager_create_and_show_task_vm_list_window,
     },
     [WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_CREATE] =    {
-        .text = "Create Task and VM",
+        .text   = "Create Task and VM",
         .action = windowmanager_create_and_show_task_vm_create_window,
     },
 };
@@ -77,41 +74,41 @@ typedef enum wnd_primary_options_list_item_type_t {
 
 const wnd_options_list_item_t wnd_primary_options_item_list[WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_END] = {
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_SPOOL_BROWSER] =    {
-        .text = "Spool Browser",
+        .text   = "Spool Browser",
         .action = windowmanager_create_and_show_spool_browser_window,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_VM_MANAGER] =    {
-        .text = "Task and Virtual Machine Manager",
+        .text                = "Task and Virtual Machine Manager",
         .next_options_window = WND_OPTIONS_TASK_VM_MANAGER,
-        .action = NULL,
+        .action              = NULL,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_NETWORK_MANAGER] =    {
-        .text = "Network Manager",
+        .text   = "Network Manager",
         .action = NULL,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TURNSTONE_DATABASE_MANAGER] =    {
-        .text = "Turnstone Database Manager",
+        .text   = "Turnstone Database Manager",
         .action = NULL,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_REBOOT] =    {
-        .text = "Reboot",
+        .text   = "Reboot",
         .action = wndmgr_reboot,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_POWER_OFF] =    {
-        .text = "Power Off",
+        .text   = "Power Off",
         .action = wndmgr_power_off,
     },
 };
 
 const wnd_options_list_t wnd_options_list[WND_OPTIONS_END] = {
     [WND_OPTIONS_PRIMARY] =    {
-        .title = "tOS Primary Options Menu",
-        .items = wnd_primary_options_item_list,
+        .title       = "tOS Primary Options Menu",
+        .items       = wnd_primary_options_item_list,
         .items_count = WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_END,
     },
     [WND_OPTIONS_TASK_VM_MANAGER] =    {
-        .title = "tOS Task and Virtual Machine Manager",
-        .items = wnd_task_manager_item_list,
+        .title       = "tOS Task and Virtual Machine Manager",
+        .items       = wnd_task_manager_item_list,
         .items_count = WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_END,
     },
 };
@@ -126,89 +123,6 @@ window_t* windowmanager_create_primary_options_window(void) {
     return pri_opt_wnd;
 }
 
-window_t* windowmanager_add_option_window(window_t* parent, rect_t pos,
-                                          const char_t* label_text,
-                                          const char_t* input_text,
-                                          const char_t* input_text_id,
-                                          const char_t* tooltip_text) {
-
-    windowmanager_t* wndmgr = windowmanager_get_instance();
-    uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
-    uint32_t screen_width = wndmgr->screen_width;
-
-
-    window_t* option_input_row = windowmanager_create_window(parent,
-                                                             NULL,
-                                                             (rect_t){font_width,
-                                                                      pos.y + pos.height + 2 * font_height,
-                                                                      screen_width - font_width,
-                                                                      font_height},
-                                                             (color_t){.color = 0x00000000},
-                                                             (color_t){.color = 0xFF00FF00});
-
-    if(option_input_row == NULL) {
-        return NULL;
-    }
-
-    char_t* input_label_text = strprintf("%s ==> ", label_text);
-
-    rect_t rect = windowmanager_calc_text_rect(input_label_text, screen_width);
-
-    window_t* option_input_label = windowmanager_create_window(option_input_row,
-                                                               input_label_text,
-                                                               rect,
-                                                               (color_t){.color = 0x00000000},
-                                                               (color_t){.color = 0xFF00FF00});
-
-    if(option_input_label == NULL) {
-        windowmanager_destroy_window(option_input_row);
-        return NULL;
-    }
-
-    char_t* wnd_input_text = strdup(input_text);
-
-    rect = windowmanager_calc_text_rect(input_text, screen_width);
-
-    rect.x = option_input_label->rect.width + 2 * font_width;
-
-    window_t* option_input_text = windowmanager_create_window(option_input_row,
-                                                              wnd_input_text,
-                                                              rect,
-                                                              (color_t){.color = 0x00000000},
-                                                              (color_t){.color = 0xFFFF0000});
-
-    if(option_input_text == NULL) {
-        return NULL;
-    }
-
-    option_input_text->is_writable = true;
-    option_input_text->input_length = strlen(input_text);
-    option_input_text->input_id = input_text_id;
-
-    if(tooltip_text == NULL) {
-        return option_input_row;
-    }
-
-    rect = windowmanager_calc_text_rect(tooltip_text, screen_width);
-
-    rect.x = option_input_text->rect.x + option_input_text->rect.width  + 2 * font_width;
-
-    char_t* tooltip_text_str = strndup(tooltip_text, rect.width);
-
-    window_t* option_input_tooltip = windowmanager_create_window(option_input_row,
-                                                                 tooltip_text_str,
-                                                                 rect,
-                                                                 (color_t){.color = 0x00000000},
-                                                                 (color_t){.color = 0xFF00FF00});
-
-    if(option_input_tooltip == NULL) {
-        windowmanager_destroy_window(option_input_row);
-        return NULL;
-    }
-
-    return option_input_row;
-}
-
 static int8_t wndmgr_options_on_enter(const window_event_t* event) {
     if(event == NULL) {
         return -1;
@@ -220,7 +134,9 @@ static int8_t wndmgr_options_on_enter(const window_event_t* event) {
         return -1;
     }
 
-    list_t* inputs = windowmanager_get_input_values(window);
+    windowmanager_t* wndmgr = windowmanager_get_instance();
+
+    list_t* inputs = windowmanager_get_input_values(wndmgr->current_window);
 
     if(!list_size(inputs)) {
         list_destroy(inputs);
@@ -325,59 +241,18 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
 
     const wnd_options_list_t* options_list = &wnd_options_list[option_window_type];
 
-    window_t* window = windowmanager_create_top_window();
+    window_top_window_t top_window = windowmanager_create_top_window(options_list->title, true);
 
-    if(window == NULL) {
+    if(!top_window.main_window || !top_window.inside_window) {
         return NULL;
     }
 
-    uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
+    uint32_t font_width   = wndmgr->font_width;
     uint32_t screen_width = wndmgr->screen_width;
 
-    char_t* title_str = strdup(options_list->title);
-
-    rect_t rect = windowmanager_calc_text_rect(options_list->title, screen_width);
-    rect.x = (screen_width - rect.width) / 2;
-    rect.y = font_height;
-
-
-    window_t* title_window = windowmanager_create_window(window,
-                                                         title_str,
-                                                         rect,
-                                                         (color_t){.color = 0x00000000},
-                                                         (color_t){.color = 0xFF2288FF});
-
-    if(title_window == NULL) {
-        windowmanager_destroy_window(window);
-        return NULL;
-    }
-
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
-                                                                 WINDOWMANAGER_COMMAND_TEXT,
-                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
-                                                                 "option",
-                                                                 NULL);
-
-    if(!option_input_row) {
-        windowmanager_destroy_window(window);
-        return NULL;
-    }
-
-    window_t* wnd_option_list = windowmanager_create_window(window,
-                                                            NULL,
-                                                            (rect_t){font_width,
-                                                                     option_input_row->rect.y + option_input_row->rect.height + 2 * font_height,
-                                                                     screen_width - font_width,
-                                                                     0},
-                                                            (color_t){.color = 0x00000000},
-                                                            (color_t){.color = 0xFF00FF00});
-
-    if(wnd_option_list == NULL) {
-        windowmanager_destroy_window(window);
-        return NULL;
-    }
 
     int32_t option_list_height = 0;
+    rect_t rect;
 
     for(int64_t i = 0; i < options_list->items_count; i++) {
 
@@ -387,14 +262,14 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
 
         rect.y = option_list_height;
 
-        window_t* option_number_area = windowmanager_create_window(wnd_option_list,
+        window_t* option_number_area = windowmanager_create_window(top_window.inside_window,
                                                                    option_number,
                                                                    rect,
                                                                    (color_t){.color = 0x00000000},
                                                                    (color_t){.color = 0xFF2288FF});
 
         if(option_number_area == NULL) {
-            windowmanager_destroy_window(window);
+            windowmanager_destroy_window(top_window.main_window);
             return NULL;
         }
 
@@ -404,27 +279,26 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
 
         rect.x = option_number_area->rect.width +  font_width;
 
-        rect.y = option_list_height;
+        rect.y              = option_list_height;
         option_list_height += rect.height;
 
-        window_t* option_text_area = windowmanager_create_window(wnd_option_list,
+        window_t* option_text_area = windowmanager_create_window(top_window.inside_window,
                                                                  option_text,
                                                                  rect,
                                                                  (color_t){.color = 0x00000000},
                                                                  (color_t){.color = 0xFF00FF00});
 
         if(option_text_area == NULL) {
-            windowmanager_destroy_window(window);
+            windowmanager_destroy_window(top_window.main_window);
             return NULL;
         }
     }
 
-    wnd_option_list->rect.height = option_list_height;
+    top_window.inside_window->rect.height = option_list_height;
 
-    window->extra_data = (void*)(uint64_t)option_window_type;
-    window->extra_data_is_allocated = false;
+    top_window.inside_window->extra_data              = (void*)(uint64_t)option_window_type;
+    top_window.inside_window->extra_data_is_allocated = false;
+    top_window.inside_window->on_enter                = wndmgr_options_on_enter;
 
-    window->on_enter = wndmgr_options_on_enter;
-
-    return window;
+    return top_window.main_window;
 }

@@ -26,7 +26,8 @@ typedef struct window_input_value_t window_input_value_t;
 
 typedef enum window_event_type_t {
     WINDOW_EVENT_TYPE_ENTER,
-    WINDOW_EVENT_TYPE_REDRAW,
+    WINDOW_EVENT_TYPE_PREDRAW,
+    WINDOW_EVENT_TYPE_DRAW,
     WINDOW_EVENT_TYPE_SCROLL_UP,
     WINDOW_EVENT_TYPE_SCROLL_DOWN,
     WINDOW_EVENT_TYPE_SCROLL_LEFT,
@@ -60,6 +61,16 @@ struct windowmanager_t {
     window_t*         current_window;
     uint64_t          next_window_id;
     uint64_t          previous_render_time;
+    float32_t         scale_x;
+    float32_t         scale_y;
+    float32_t         scale_z;
+    float32_t         rotate_angle;
+    float32_t         rotate_x;
+    float32_t         rotate_y;
+    float32_t         rotate_z;
+    float32_t         translate_x;
+    float32_t         translate_y;
+    float32_t         translate_z;
 };
 
 struct rect_t {
@@ -77,33 +88,40 @@ typedef struct window_event_t {
 typedef int8_t (*window_event_f)(const window_event_t* event);
 
 struct window_t {
-    uint64_t       id;
-    char_t*        text;
-    boolean_t      is_text_readonly;
-    boolean_t      is_dirty;
-    boolean_t      is_always_redrawn;
-    boolean_t      is_drawing_occured;
-    boolean_t      is_visible;
-    boolean_t      is_writable;
-    boolean_t      has_alert;
-    int32_t        input_length;
-    const char_t*  input_id;
-    void*          extra_data;
-    boolean_t      extra_data_is_allocated;
-    int32_t        tab_index;
-    rect_t         rect;
-    rect_t         absolute_rect;
-    color_t*       buffer;
-    color_t        background_color;
-    color_t        foreground_color;
-    window_t*      parent;
-    window_t*      next;
-    window_t*      prev;
-    list_t*        children;
-    window_event_f on_enter;
-    window_event_f on_redraw;
-    window_event_f on_scroll;
+    windowmanager_t* wndmgr;
+    uint64_t         id;
+    char_t*          text;
+    boolean_t        is_text_readonly;
+    boolean_t        is_dirty;
+    boolean_t        is_always_redrawn;
+    boolean_t        is_drawing_occured;
+    boolean_t        is_visible;
+    boolean_t        is_writable;
+    boolean_t        has_alert;
+    int32_t          input_length;
+    const char_t*    input_id;
+    void*            extra_data;
+    boolean_t        extra_data_is_allocated;
+    int32_t          tab_index;
+    rect_t           rect;
+    rect_t           absolute_rect;
+    color_t*         buffer;
+    color_t          background_color;
+    color_t          foreground_color;
+    window_t*        parent;
+    window_t*        next;
+    window_t*        prev;
+    list_t*          children;
+    window_event_f   on_enter;
+    window_event_f   on_scroll;
+    window_event_f   on_predraw;
+    window_event_f   on_draw;
 };
+
+typedef struct window_top_window_t {
+    window_t* main_window;
+    window_t* inside_window;
+} window_top_window_t;
 
 typedef struct window_input_value_t {
     const char_t* id;

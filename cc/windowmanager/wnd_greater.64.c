@@ -6,7 +6,6 @@
  * Please read and understand latest version of Licence.
  */
 
-#include <windowmanager/wnd_greater.h>
 #include <windowmanager/wnd_create_destroy.h>
 #include <windowmanager/wnd_utils.h>
 #include <strings.h>
@@ -17,17 +16,17 @@ MODULE("turnstone.windowmanager");
 
 extern char_t tos_logo_data_start;
 
-static int8_t wndmgr_rainbow_on_redraw(const window_event_t* event) {
+static int8_t wndmgr_rainbow_on_draw(const window_event_t* event) {
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
     window_t* window = event->window;
 
-    if(window == NULL) {
+    if(!window) {
         return -1;
     }
 
     uintptr_t angle_data_raw = (uintptr_t)window->extra_data;
-    float32_t angle = (float32_t)angle_data_raw / 2;
+    float32_t angle          = (float32_t)angle_data_raw / 2;
 
     sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
 
@@ -77,37 +76,40 @@ static int8_t wndmgr_rainbow_on_redraw(const window_event_t* event) {
 window_t* windowmanager_create_greater_window(void) {
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    uint32_t font_width = wndmgr->font_width;
+    uint32_t font_width  = wndmgr->font_width;
     uint32_t font_height = wndmgr->font_height;
-    uint32_t screen_width = wndmgr->screen_width;
-    uint32_t screen_height = wndmgr->screen_height;
 
-    window_t* window = windowmanager_create_top_window();
+    window_top_window_t top_window = windowmanager_create_top_window(NULL, false);
 
-    if(window == NULL) {
-        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create greater window\n");
+    if(!top_window.main_window || !top_window.inside_window) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create greater window top window\n");
         return NULL;
     }
 
+    window_t* window = top_window.inside_window;
+
+    uint32_t window_width  = window->rect.width;
+    uint32_t window_height = window->rect.height;
+
     char_t* windowmanager_turnstone_ascii_art = strdup((char_t*)&tos_logo_data_start);
 
-    rect_t rect = windowmanager_calc_text_rect(windowmanager_turnstone_ascii_art, screen_width);
+    rect_t rect = windowmanager_calc_text_rect(windowmanager_turnstone_ascii_art, window_width);
 
     if(rect.width == 0 || rect.height == 0) {
-        memory_free(window);
+        windowmanager_destroy_window(top_window.main_window);
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to calculate text rect for greater window\n");
         return NULL;
     }
 
-    if(rect.width > screen_width - 2 * font_width ||
-       rect.height > screen_height - 2 * font_height) {
-        memory_free(window);
+    if(rect.width > window_width - 2 * font_width ||
+       rect.height > window_height - 2 * font_height) {
+        windowmanager_destroy_window(top_window.main_window);
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Greater window text too large for screen\n");
         return NULL;
     }
 
-    rect.x = (screen_width - rect.width) / 2;
-    rect.y = (screen_height - rect.height) / 2;
+    rect.x = (window_width - rect.width) / 2;
+    rect.y = (window_height - rect.height) / 2;
     // align x to font width, y to font height
     rect.x = (rect.x / font_width) * font_width;
     rect.y = (rect.y / font_height) * font_height;
@@ -119,19 +121,19 @@ window_t* windowmanager_create_greater_window(void) {
                                                   (color_t){.color = 0xFF2288FF});
 
     if(child == NULL) {
-        memory_free(window);
+        windowmanager_destroy_window(top_window.main_window);
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create greater window child\n");
         return NULL;
     }
 
-    int32_t old_x = rect.x;
-    int32_t old_y = rect.y;
+    int32_t old_x      = rect.x;
+    int32_t old_y      = rect.y;
     int32_t old_height = rect.height;
-    int32_t old_width = rect.width;
+    int32_t old_width  = rect.width;
 
     char_t* text = strdup("Press F2 to open panel");
 
-    rect = windowmanager_calc_text_rect(text, screen_width);
+    rect   = windowmanager_calc_text_rect(text, window_width);
     rect.x = old_x;
     rect.y = old_y + old_height + 4 * font_height;
 
@@ -142,16 +144,16 @@ window_t* windowmanager_create_greater_window(void) {
                                         (color_t){.color = 0xFF00FF00});
 
     if(child == NULL) {
-        windowmanager_destroy_window(window);
+        windowmanager_destroy_window(top_window.main_window);
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create greater window instruction child\n");
         return NULL;
     }
 
 
     rect_t rainbow_rect = {
-        .x = old_x + old_width + font_width,
-        .y = font_height,
-        .width = screen_width - (old_x + old_width) - 3 * font_width,
+        .x      = old_x + old_width + font_width,
+        .y      = font_height,
+        .width  = window_width - (old_x + old_width) - 3 * font_width,
         .height = old_y - 2 * font_height
     };
 
@@ -164,21 +166,21 @@ window_t* windowmanager_create_greater_window(void) {
                                                            (color_t){.color = 0xFFFFFFFF});
 
     if(rainbow_window == NULL) {
-        windowmanager_destroy_window(window);
+        windowmanager_destroy_window(top_window.main_window);
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create greater window rainbow child\n");
         return NULL;
     }
 
     rainbow_window->extra_data = (void*)(uintptr_t)0;
 
-    rainbow_window->on_redraw = wndmgr_rainbow_on_redraw;
+    rainbow_window->on_draw           = wndmgr_rainbow_on_draw;
     rainbow_window->is_always_redrawn = true;
 
 
     rainbow_rect = (rect_t){
-        .x = screen_width - 300 - font_width,
-        .y = screen_height - 300 - font_height,
-        .width = 300,
+        .x      = window_width - 300 - font_width,
+        .y      = window_height - 300 - font_height,
+        .width  = 300,
         .height = 300
     };
 
@@ -191,15 +193,15 @@ window_t* windowmanager_create_greater_window(void) {
                                                  (color_t){.color = 0xFFFFFFFF});
 
     if(rainbow_window == NULL) {
-        windowmanager_destroy_window(window);
+        windowmanager_destroy_window(top_window.main_window);
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create greater window rainbow child\n");
         return NULL;
     }
 
     rainbow_window->extra_data = (void*)(uintptr_t)0;
 
-    rainbow_window->on_redraw = wndmgr_rainbow_on_redraw;
+    rainbow_window->on_draw           = wndmgr_rainbow_on_draw;
     rainbow_window->is_always_redrawn = true;
 
-    return window;
+    return top_window.main_window;
 }

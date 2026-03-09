@@ -48,8 +48,8 @@ windowmanager_t* windowmanager_get_instance(void) {
 
         sgfx_enable(gfx_ctx, SGFX_CAP_BLEND);
 
-        wndmgr_instance->gfx_ctx = gfx_ctx;
-        wndmgr_instance->screen_width = screen_info.width;
+        wndmgr_instance->gfx_ctx       = gfx_ctx;
+        wndmgr_instance->screen_width  = screen_info.width;
         wndmgr_instance->screen_height = screen_info.height;
 
         wndmgr_instance->padding = 2;
@@ -63,30 +63,30 @@ rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
         return (rect_t){0};
     }
 
-    uint32_t font_width = 0, font_height = 0;
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
 
     rect_t rect = {0};
 
-    rect.x = 0;
-    rect.y = 0;
-    rect.width = 0;
+    rect.x      = 0;
+    rect.y      = 0;
+    rect.width  = 0;
     rect.height = 0;
 
     uint32_t max_calc_width = 0;
-    size_t len = strlen(text);
+    size_t len              = strlen(text);
 
     while(*text) {
         if(*text == '\n') {
-            rect.height += font_height;
+            rect.height   += font_height;
             max_calc_width = MAX(max_calc_width, rect.width);
-            rect.width = 0;
+            rect.width     = 0;
         } else {
             if(rect.width + font_width > max_width) {
-                rect.height += font_height;
+                rect.height   += font_height;
                 max_calc_width = MAX(max_calc_width, rect.width);
-                rect.width = 0;
+                rect.width     = 0;
             } else {
                 rect.width += font_width;
             }
@@ -160,7 +160,7 @@ boolean_t windowmanager_is_rects_intersect(const rect_t* r1, const rect_t* r2) {
 rect_t windowmanager_get_window_absolute_rect(const window_t* window) {
     rect_t rect = {0};
 
-    if(window == NULL) {
+    if(!window) {
         return rect;
     }
 
@@ -168,10 +168,10 @@ rect_t windowmanager_get_window_absolute_rect(const window_t* window) {
 
     window_t* p = window->parent;
 
-    while(p != NULL) {
+    while(p) {
         rect.x += p->rect.x;
         rect.y += p->rect.y;
-        p = p->parent;
+        p       = p->parent;
     }
 
     return rect;
@@ -229,11 +229,7 @@ void windowmanager_mark_window_dirty_by_rect(window_t* window, const rect_t* rec
 }
 
 boolean_t windowmanager_find_window_by_text_cursor(window_t* window, window_t** result) {
-    if(window == NULL) {
-        return false;
-    }
-
-    if(result == NULL) {
+    if(!window || !result) {
         return false;
     }
 
@@ -241,12 +237,8 @@ boolean_t windowmanager_find_window_by_text_cursor(window_t* window, window_t** 
 
     text_cursor_get(&x, &y);
 
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
-
-    x *= font_width;
-    y *= font_height;
+    x *= window->wndmgr->font_width;
+    y *= window->wndmgr->font_height;
 
     return windowmanager_find_window_by_point(window, x, y, result);
 }
@@ -268,9 +260,7 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
 
     text_cursor_get(&x, &y);
 
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_width = window->wndmgr->font_width, font_height = window->wndmgr->font_height;
 
     int32_t win_x = window->absolute_rect.x / font_width;
     int32_t win_y = window->absolute_rect.y / font_height;
@@ -370,10 +360,10 @@ list_t* windowmanager_get_input_values(const window_t* window) {
                 return NULL;
             }
 
-            value->id = w->input_id;
-            value->value = strdup(w->text);
+            value->id         = w->input_id;
+            value->value      = strdup(w->text);
             value->extra_data = w->extra_data;
-            value->rect = w->absolute_rect;
+            value->rect       = w->absolute_rect;
 
             for(size_t i = 0; i < strlen(value->value); i++) { // TODO: find best way for this
                 if(value->value[i] == '_') {
@@ -430,26 +420,24 @@ void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reve
 
     text_cursor_get(&cursor_x, &cursor_y);
 
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_width = window->wndmgr->font_width, font_height = window->wndmgr->font_height;
 
     cursor_x *= font_width;
     cursor_y *= font_height;
 
-    boolean_t input_found = false;
+    boolean_t input_found             = false;
     const window_input_value_t* first = list_get_data_at_position(inputs, 0);
-    const window_input_value_t* last = list_get_data_at_position(inputs, list_size(inputs) - 1);
-    const window_input_value_t* next = NULL;
+    const window_input_value_t* last  = list_get_data_at_position(inputs, list_size(inputs) - 1);
+    const window_input_value_t* next  = NULL;
 
-    int64_t end = list_size(inputs) - 1;
+    int64_t end   = list_size(inputs) - 1;
     int64_t start = 0;
-    int32_t inc = 1;
+    int32_t inc   = 1;
 
     if(is_reverse) {
         start = end;
-        end = 0;
-        inc = -1;
+        end   = 0;
+        inc   = -1;
     }
 
     for(int64_t i = start;
@@ -494,15 +482,19 @@ void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reve
 void wndmgr_text_cursor_move(int32_t x, int32_t y) {
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    if(wndmgr == NULL) {
+    if(!wndmgr) {
         return;
     }
 
     window_t* wnd = NULL;
     if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
-        if(wnd != NULL) {
+        if(wnd) {
             wnd->is_dirty = true;
+        } else {
+            video_text_print("No window found for text cursor\n");
         }
+    } else {
+        video_text_print("Failed to find window for text cursor\n");
     }
 
     text_cursor_move(x, y);
@@ -510,24 +502,32 @@ void wndmgr_text_cursor_move(int32_t x, int32_t y) {
     wnd = NULL;
 
     if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
-        if(wnd != NULL) {
+        if(wnd) {
             wnd->is_dirty = true;
+        } else {
+            video_text_print("No window found for text cursor after move\n");
         }
+    } else {
+        video_text_print("Failed to find window for text cursor after move\n");
     }
 }
 
 void wndmgr_text_cursor_move_relative(int32_t dx, int32_t dy) {
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    if(wndmgr == NULL) {
+    if(!wndmgr) {
         return;
     }
 
     window_t* wnd = NULL;
     if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
-        if(wnd != NULL) {
+        if(wnd) {
             wnd->is_dirty = true;
+        } else {
+            video_text_print("No window found for text cursor\n");
         }
+    } else {
+        video_text_print("Failed to find window for text cursor\n");
     }
 
     text_cursor_move_relative(dx, dy);
@@ -535,8 +535,45 @@ void wndmgr_text_cursor_move_relative(int32_t dx, int32_t dy) {
     wnd = NULL;
 
     if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
-        if(wnd != NULL) {
+        if(wnd) {
             wnd->is_dirty = true;
+        } else {
+            video_text_print("No window found for text cursor after move\n");
         }
+    } else {
+        video_text_print("Failed to find window for text cursor after move\n");
+    }
+}
+
+void windowmanager_scroll(window_t* window, window_event_t* event) {
+    if(!window || !event) {
+        return;
+    }
+
+    if(window->on_scroll) {
+        window->on_scroll(event);
+    }
+
+    for(size_t i = 0; i < list_size(window->children); i++) {
+        window_t* child = (window_t*)list_get_data_at_position(window->children, i);
+        event->window = child;
+        windowmanager_scroll(child, event);
+    }
+}
+
+void windowmanager_enter(window_t* window, window_event_t* event) {
+    if(!window || !event) {
+        return;
+    }
+
+    if(window->on_enter) {
+        video_text_print("enter handler found\n");
+        window->on_enter(event);
+    }
+
+    for(size_t i = 0; i < list_size(window->children); i++) {
+        window_t* child = (window_t*)list_get_data_at_position(window->children, i);
+        event->window = child;
+        windowmanager_enter(child, event);
     }
 }

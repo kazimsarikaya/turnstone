@@ -31,6 +31,9 @@ void      wndmgr_text_cursor_move(int32_t x, int32_t y);
 void      wndmgr_text_cursor_move_relative(int32_t dx, int32_t dy);
 void      windowmanager_mark_window_dirty_by_rect(window_t* window, const rect_t* rect);
 
+void windowmanager_scroll(window_t* window, window_event_t* event);
+void windowmanager_enter(window_t* window, window_event_t* event);
+
 #ifdef __cplusplus
 }
 #endif

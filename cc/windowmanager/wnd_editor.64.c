@@ -7,11 +7,9 @@
  */
 
 #include <windowmanager.h>
-#include <windowmanager/wnd_editor.h>
 #include <windowmanager/wnd_types.h>
 #include <windowmanager/wnd_utils.h>
 #include <windowmanager/wnd_create_destroy.h>
-#include <windowmanager/wnd_options.h>
 #include <strings.h>
 #include <spool.h>
 #include <argumentparser.h>
@@ -46,7 +44,7 @@ static window_t* wnd_create_textbox(char_t* text, window_t* parent, int64_t x_of
 static window_t* wnd_create_editor_ruler(windowmanager_t* wndmgr, window_t* parent, int64_t start, int64_t top, color_t bg_color, color_t fg_color) {
     uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
 
-    int64_t max_ruler = (parent->rect.width / font_width) - 9;
+    int64_t max_ruler       = (parent->rect.width / font_width) - 9;
     int64_t ruler_col_count = max_ruler;
     max_ruler += start;
 
@@ -87,10 +85,10 @@ static window_t* wnd_create_editor_ruler(windowmanager_t* wndmgr, window_t* pare
 
             if(show_upper) {
                 ruler_lines[j][i] = '0' + ruler_digit;
-                show_upper = ruler_digit == 0;
+                show_upper        = ruler_digit == 0;
             } else {
                 ruler_lines[j][i] = ' ';
-                show_upper = false;
+                show_upper        = false;
             }
 
             ruler_value /= 10;
@@ -180,15 +178,11 @@ static window_t* wnd_create_numbered_line(windowmanager_t* wndmgr, int64_t line_
         return NULL;
     }
 
-    window->rect.height = font_height;
-    window->rect.width = line_window->rect.width + line_number_window->rect.width;
-
     return window;
 }
 
 typedef struct wnd_editor_extra_data_t {
     window_t*     ruler_window;
-    int64_t       rect_ruler_top;
     window_t*     editor_window;
     const char_t* text;
     boolean_t     is_text_readonly;
@@ -196,18 +190,21 @@ typedef struct wnd_editor_extra_data_t {
     int64_t       col_start;
 } wnd_editor_extra_data_t;
 
-static int8_t wnd_editor_on_redraw(const window_event_t* event) {
+static int8_t wnd_editor_on_predraw(const window_event_t* event) {
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
     uint32_t font_height = wndmgr->font_height;
 
     window_t* window = event->window;
 
+    if(!window->is_dirty) {
+        return 0;
+    }
+
     wnd_editor_extra_data_t* extra_data = window->extra_data;
 
     const char_t* text = extra_data->text;
 
-    int64_t rect_ruler_top = extra_data->rect_ruler_top;
 
     int64_t col_start = extra_data->col_start;
 
@@ -215,7 +212,7 @@ static int8_t wnd_editor_on_redraw(const window_event_t* event) {
         windowmanager_destroy_child_window(window, extra_data->ruler_window);
     }
 
-    window_t* ruler_window = wnd_create_editor_ruler(wndmgr, window, col_start + 1, rect_ruler_top, (color_t){.color = 0x00000000}, (color_t){.color = 0xFFF00000});
+    window_t* ruler_window = wnd_create_editor_ruler(wndmgr, window, col_start + 1, 0, (color_t){.color = 0x00000000}, (color_t){.color = 0xFFF00000});
 
     if(ruler_window == NULL) {
         return -1;
@@ -223,7 +220,7 @@ static int8_t wnd_editor_on_redraw(const window_event_t* event) {
 
     extra_data->ruler_window = ruler_window;
 
-    int64_t top = ruler_window->rect.y + ruler_window->rect.height;
+    int64_t top        = ruler_window->rect.y + ruler_window->rect.height;
     int64_t max_height = window->rect.height - font_height; // remove footer line
 
     rect_t rect_editor = {0, top, window->rect.width, max_height - top};
@@ -245,7 +242,7 @@ static int8_t wnd_editor_on_redraw(const window_event_t* event) {
     extra_data->editor_window = editor_window;
 
     int64_t* line_lengths = NULL;
-    int64_t line_count = 0;
+    int64_t line_count    = 0;
 
     char_t** lines = strsplit(text, '\n', &line_lengths, &line_count);
 
@@ -268,10 +265,10 @@ static int8_t wnd_editor_on_redraw(const window_event_t* event) {
     }
 
     for(int64_t i = 0; i < print_line_count; i++) {
-        char_t* line = NULL;
+        char_t* line        = NULL;
         int64_t line_length = 0;
 
-        line = lines[row_start + i];
+        line        = lines[row_start + i];
         line_length = line_lengths[row_start + i];
 
         if(col_start > line_length) {
@@ -280,7 +277,7 @@ static int8_t wnd_editor_on_redraw(const window_event_t* event) {
             col_start = 0;
         }
 
-        line += col_start;
+        line        += col_start;
         line_length -= col_start;
 
         window_t* line_window = wnd_create_numbered_line(wndmgr, row_start + i + 1, line, line_length, top, editor_window);
@@ -302,7 +299,17 @@ static int8_t wnd_editor_on_redraw(const window_event_t* event) {
 static int8_t wnd_editor_on_scroll(const window_event_t* event) {
     window_t* window = event->window;
 
+    if(!window) {
+        video_text_print("No window in scroll event\n");
+        return -1;
+    }
+
     wnd_editor_extra_data_t* extra_data = window->extra_data;
+
+    if(!extra_data) {
+        video_text_print("No extra data in scroll event\n");
+        return -1;
+    }
 
     int64_t row_start = extra_data->row_start;
     int64_t col_start = extra_data->col_start;
@@ -310,95 +317,63 @@ static int8_t wnd_editor_on_scroll(const window_event_t* event) {
     if(event->type == WINDOW_EVENT_TYPE_SCROLL_UP) {
         if(row_start > 0) {
             row_start--;
+            window->is_dirty = true;
         }
     } else if(event->type == WINDOW_EVENT_TYPE_SCROLL_DOWN) {
         row_start++;
+        window->is_dirty = true;
     } else if(event->type == WINDOW_EVENT_TYPE_SCROLL_LEFT) {
         if(col_start > 0) {
             col_start--;
+            window->is_dirty = true;
         }
     } else if(event->type == WINDOW_EVENT_TYPE_SCROLL_RIGHT) {
         col_start++;
+        window->is_dirty = true;
     }
 
     extra_data->row_start = row_start;
     extra_data->col_start = col_start;
 
-    // window->on_redraw(event);
-    window->is_dirty = true;
-
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t windowmanager_create_and_show_editor_window(const char_t* title, const char_t* text, boolean_t is_text_readonly) {
-    window_t* window = windowmanager_create_top_window();
+    window_top_window_t top_window = windowmanager_create_top_window(title, true);
 
-    if(window == NULL) {
+    if(!top_window.main_window || !top_window.inside_window) {
         return -1;
     }
 
-    windowmanager_t* wndmgr = windowmanager_get_instance();
-
-    uint32_t font_height = wndmgr->font_height;
+    window_t* window = top_window.inside_window;
 
     window->is_writable = !is_text_readonly;
-
-    char_t* title_str = strdup(title);
-
-    rect_t rect = windowmanager_calc_text_rect(title_str, wndmgr->screen_width);
-    rect.x = (window->rect.width - rect.width) / 2;
-    rect.y = font_height;
-
-
-    window_t* title_window = windowmanager_create_window(window,
-                                                         title_str,
-                                                         rect,
-                                                         (color_t){.color = 0x00000000},
-                                                         (color_t){.color = 0xFF2288FF});
-
-    if(title_window == NULL) {
-        windowmanager_destroy_window(window);
-        return -1;
-    }
-
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
-                                                                 WINDOWMANAGER_COMMAND_TEXT,
-                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
-                                                                 "option",
-                                                                 NULL);
-
-    if(!option_input_row) {
-        windowmanager_destroy_window(window);
-        return NULL;
-    }
-
-    rect_t option_input_row_rect = option_input_row->absolute_rect;
-
-    int64_t rect_ruler_top = option_input_row_rect.y + option_input_row->rect.height + font_height;
 
 
     wnd_editor_extra_data_t* extra_data = memory_malloc(sizeof(wnd_editor_extra_data_t));
 
-    if(extra_data == NULL) {
-        windowmanager_destroy_window(window);
+    if(!extra_data) {
+        windowmanager_destroy_window(top_window.main_window);
         return -1;
     }
 
-    extra_data->ruler_window = NULL;
-    extra_data->rect_ruler_top = rect_ruler_top;
-    extra_data->editor_window = NULL;
-    extra_data->text = text;
+    extra_data->ruler_window     = NULL;
+    extra_data->editor_window    = NULL;
+    extra_data->text             = text;
     extra_data->is_text_readonly = is_text_readonly;
-    extra_data->row_start = 0;
-    extra_data->col_start = 0;
+    extra_data->row_start        = 0;
+    extra_data->col_start        = 0;
 
-    window->extra_data = extra_data;
+    window->extra_data              = extra_data;
     window->extra_data_is_allocated = true;
-    window->on_redraw = wnd_editor_on_redraw;
-    window->on_scroll = wnd_editor_on_scroll;
+    window->on_predraw              = wnd_editor_on_predraw;
+    window->on_scroll               = wnd_editor_on_scroll;
 
-    windowmanager_insert_and_set_current_window(window);
+    windowmanager_insert_and_set_current_window(top_window.main_window);
 
 
     return 0;
 }
+#pragma GCC diagnostic pop

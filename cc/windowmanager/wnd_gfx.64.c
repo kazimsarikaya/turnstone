@@ -43,7 +43,7 @@ int8_t wndmgr_mouse_init(windowmanager_t* wndmgr) {
     sgfx_tex_image2d(gfx_ctx, wndmgr_mouse_image->width, wndmgr_mouse_image->height, wndmgr_mouse_image->data);
     sgfx_bind_texture(gfx_ctx, 0);
 
-    wndmgr->mouse_image_width = wndmgr_mouse_image->width;
+    wndmgr->mouse_image_width  = wndmgr_mouse_image->width;
     wndmgr->mouse_image_height = wndmgr_mouse_image->height;
 
     wndmgr->mouse_x = (wndmgr->screen_width - wndmgr->mouse_image_width) / 2;
@@ -105,12 +105,14 @@ int8_t wndmgr_font_init(windowmanager_t* wndmgr) {
     wndmgr->font_is_sdf = !use_old_font;
 
     wndmgr->font_column_count = font->column_count;
-    wndmgr->font_row_count = font->row_count;
-    wndmgr->font_real_width = font->font_width;
-    wndmgr->font_real_height = font->font_height;
+    wndmgr->font_row_count    = font->row_count;
+    wndmgr->font_real_width   = font->font_width;
+    wndmgr->font_real_height  = font->font_height;
 
-    wndmgr->font_width = old_font->font_width;
+    wndmgr->font_width  = old_font->font_width;
     wndmgr->font_height = old_font->font_height;
+
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Font width and height set to %dx%d", wndmgr->font_width, wndmgr->font_height);
 
     wndmgr->font_uv_table = memory_malloc(sizeof(wndmgr_font_uv_t) * font->glyph_count);
 
@@ -155,9 +157,9 @@ void wndmgr_mouse_move_cursor(windowmanager_t* wndmgr, uint32_t x, uint32_t y) {
     }
 
     rect_t mouse_rect = {
-        .x = wndmgr->mouse_x,
-        .y = wndmgr->mouse_y,
-        .width = wndmgr->mouse_image_width,
+        .x      = wndmgr->mouse_x,
+        .y      = wndmgr->mouse_y,
+        .width  = wndmgr->mouse_image_width,
         .height = wndmgr->mouse_image_height
     };
 
@@ -362,29 +364,34 @@ static void windowmanager_draw_window_internal(windowmanager_t* wndmgr, window_t
 
     sgfx_create_sub_context(gfx_ctx, rect.x, rect.y, rect.width, rect.height);
 
-    if(window->is_dirty || window->is_always_redrawn) {
-        if(0 && parent && parent->background_color.color == window->background_color.color) {
-            // No need to redraw if background color is same as parent
-        } else {
-            color_t bg = window->background_color;
+    if(window->on_predraw) {
+        window_event_t event = {.type = WINDOW_EVENT_TYPE_PREDRAW, .window = window};
+        window->on_predraw(&event);
+    }
 
-            while(bg.color == 0x00000000 && parent != NULL) {
-                bg = parent->background_color;
-                parent = parent->parent;
+    if(window->is_dirty || window->is_always_redrawn) {
+        if(window->on_draw) {
+            window_event_t event = {.type = WINDOW_EVENT_TYPE_DRAW, .window = window};
+            window->on_draw(&event);
+        } else {
+            if(0 && parent && parent->background_color.color == window->background_color.color) {
+                // No need to redraw if background color is same as parent
+            } else {
+                color_t bg = window->background_color;
+
+                while(bg.color == 0x00000000 && parent != NULL) {
+                    bg     = parent->background_color;
+                    parent = parent->parent;
+                }
+
+                sgfx_clear_color(gfx_ctx, bg);
             }
 
-            sgfx_clear_color(gfx_ctx, bg);
+            windowmanager_print_text(wndmgr, window, 0, 0, window->text);
         }
 
-        if(window->on_redraw) {
-            window_event_t event = {.type = WINDOW_EVENT_TYPE_REDRAW, .window = window};
-            window->on_redraw(&event);
-        }
-
-        windowmanager_print_text(wndmgr, window, 0, 0, window->text);
-
-        parent_is_dirty = true;
-        window->is_dirty = false;
+        parent_is_dirty            = true;
+        window->is_dirty           = false;
         window->is_drawing_occured = true;
     } else {
         window->is_drawing_occured = false;
