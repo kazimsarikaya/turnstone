@@ -907,7 +907,7 @@ static int8_t task_create_idle_task(void) {
     new_task->stack_size  = stack_size;
     new_task->stack       = (void*)stack_va;
 
-    char_t* tmp_task_name = strprintf("%s-%d", "idle", new_task->task_id);
+    char_t* tmp_task_name = strprintf("%s-%d", "idle", apic_get_local_apic_id());
 
     new_task->task_name = strdup_at_heap(heap, tmp_task_name);
 
@@ -998,7 +998,7 @@ static int8_t task_create_cleaner_task(void) {
 
         cpu_hlt();
     }
-    new_task->task_id = apic_get_local_apic_id() + 1;
+    new_task->task_id = apic_get_local_apic_id() + 1 + apic_get_ap_count() + 1;
     new_task->cpu_id  = apic_get_local_apic_id();
 
     new_task->state       = TASK_STATE_CREATED;
@@ -1008,7 +1008,7 @@ static int8_t task_create_cleaner_task(void) {
     new_task->stack_size  = stack_size;
     new_task->stack       = (void*)stack_va;
 
-    char_t* tmp_task_name = strprintf("%s-%d", "task-cleaner", new_task->task_id);
+    char_t* tmp_task_name = strprintf("%s-%d", "task-cleaner", apic_get_local_apic_id());
 
     new_task->task_name = strdup_at_heap(heap, tmp_task_name);
 
@@ -1362,7 +1362,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     kernel_task->creator_heap = task_map_heap;
     kernel_task->heap         = heap;
     kernel_task->heap_size    = kernel->program_heap_size;
-    kernel_task->task_id      = cpu_count + 1;
+    kernel_task->task_id      = cpu_count * 2 + 1; // 1 for idle task and 1 for cleaner task for each cpu
     kernel_task->state        = TASK_STATE_RUNNING;
     kernel_task->entry_point  = kmain64;
     kernel_task->page_table   = memory_paging_get_table();
