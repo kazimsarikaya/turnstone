@@ -26,6 +26,8 @@
 
 typedef uint32_t sgfx_texture_t;
 
+#define SGFX_INVALID_TEXTURE ((sgfx_texture_t)0)
+
 // Vector and matrix types
 typedef struct sgfx_vec4_i32_t {
     int32_t x, y, z, w;
@@ -52,15 +54,15 @@ typedef union sgfx_mat4_f32_t {
 typedef struct sgfx_context_t sgfx_context_t;
 
 typedef enum sgfx_cap_t {
-    SGFX_CAP_TEXTURE_2D = BIT(0),
-    SGFX_CAP_BLEND      = BIT(1),
-    SGFX_CAP_DEPTH_TEST = BIT(2),
+    SGFX_CAP_TEXTURE_2D   = BIT(0),
+    SGFX_CAP_BLEND        = BIT(1),
+    SGFX_CAP_DEPTH_TEST   = BIT(2),
     SGFX_CAP_SCISSOR_TEST = BIT(3),
 } sgfx_cap_t;
 
 typedef enum {
     SGFX_TEXTURE_COLOR, // color_t (uint32_t BGRA)
-    SGFX_TEXTURE_SDF // float32_t SDF atlas
+    SGFX_TEXTURE_SDF, // float32_t SDF atlas
 } sgfx_texture_format_t;
 
 // API
