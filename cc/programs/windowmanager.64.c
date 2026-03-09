@@ -62,7 +62,7 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
 
         for(uint32_t i = 0; i < mouse_ev_cnt; i++) {
 
-            if(mouse_data[i].wheel != 0 && wndmgr->current_window->on_scroll) {
+            if(mouse_data[i].wheel != 0) {
                 window_event_t event = {0};
                 event.window = wndmgr->current_window;
 

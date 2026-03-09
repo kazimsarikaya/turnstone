@@ -294,8 +294,6 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
         }
     }
 
-    top_window.inside_window->rect.height = option_list_height;
-
     top_window.inside_window->extra_data              = (void*)(uint64_t)option_window_type;
     top_window.inside_window->extra_data_is_allocated = false;
     top_window.inside_window->on_enter                = wndmgr_options_on_enter;
