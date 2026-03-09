@@ -151,6 +151,16 @@ unumber_t atou_base(const char_t * source, number_t base);
 #define atoh(number) atou_base(number, 16)
 
 /**
+ * @brief converts string into float number
+ * @param[in]  source string represents number in base
+ * @param[in]  base   base of number inside string
+ * @return number
+ */
+float64_t atof_base(const char_t * source, number_t base);
+
+#define atof(number) atof_base(number, 10)
+
+/**
  * @brief convers number to its string representation
  * @param[in]  number number to be converted string
  * @param[in]  base   base value of conversion

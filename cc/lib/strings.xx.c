@@ -78,7 +78,7 @@ char_t* strrev(const char_t* source) {
 
 number_t ato_base(const char_t* source, number_t base) {
     number_t ret = 0;
-    number_t p = 0;
+    number_t p   = 0;
 
     if(source == NULL) {
         return 0;
@@ -111,7 +111,7 @@ number_t ato_base(const char_t* source, number_t base) {
 
 unumber_t atou_base(const char_t* source, number_t base) {
     number_t ret = 0;
-    number_t p = 0;
+    number_t p   = 0;
 
     if(source == NULL) {
         return 0;
@@ -131,6 +131,39 @@ unumber_t atou_base(const char_t* source, number_t base) {
     return ret;
 }
 
+float64_t atof_base(const char_t * source, number_t base) {
+    float64_t ret = 0;
+    float64_t p   = 0;
+
+    if(source == NULL) {
+        return 0;
+    }
+
+    float64_t sign = 1;
+
+    if(source[0] == '+') {
+        source++;
+    }
+
+    if(source[0] == '-') {
+        sign = -1;
+        source++;
+    }
+
+    size_t l = strlen(source);
+    for(size_t i = 1; i <= l; i++) {
+        if(source[l - i] <= '9') {
+            ret += ((float64_t)(source[l - i] - '0')) * power(base, p);
+        } else if(source[l - i] <= 'Z') {
+            ret += ((float64_t)(source[l - i] - 'A') + 10) * power(base, p);
+        } else {
+            ret += ((float64_t)(source[l - i] - 'a') + 10) * power(base, p);
+        }
+        p++;
+    }
+    return sign * ret;
+}
+
 char_t* ito_base(number_t number, number_t base){
     char_t buf[64];
 
@@ -140,7 +173,7 @@ char_t* ito_base(number_t number, number_t base){
         return NULL;
     }
 
-    size_t len = strlen(buf);
+    size_t len  = strlen(buf);
     char_t* ret = memory_malloc(sizeof(char_t) * len + 1);
 
     if (ret == NULL) {
@@ -161,7 +194,7 @@ char_t* uto_base(unumber_t number, number_t base){
         return NULL;
     }
 
-    size_t len = strlen(buf);
+    size_t len  = strlen(buf);
     char_t* ret = memory_malloc(sizeof(char_t) * len + 1);
 
     if (ret == NULL) {
@@ -333,7 +366,7 @@ char_t** strsplit(const char_t* str, const char_t token, int64_t** lengths, int6
     tmp = (char_t*)str;
 
     int64_t* tmp_lengths = *lengths;
-    int64_t len = 0;
+    int64_t len          = 0;
 
     *result = tmp;
 
@@ -349,7 +382,7 @@ char_t** strsplit(const char_t* str, const char_t token, int64_t** lengths, int6
             *result = tmp;
 
             *tmp_lengths = len;
-            len = 0;
+            len          = 0;
             tmp_lengths++;
 
         } else {
@@ -419,7 +452,7 @@ int64_t wchar_size(const char16_t* str){
     }
 
     int64_t res = 0;
-    int64_t i = 0;
+    int64_t i   = 0;
 
     while(str[i++] != 0) {
         res++;
@@ -468,7 +501,7 @@ char16_t* char_to_wchar(const char_t* str){
         return NULL;
     }
 
-    int64_t len = strlen(str);
+    int64_t len   = strlen(str);
     char16_t* res = memory_malloc(sizeof(char16_t) * len + 1);
 
     if(res == NULL) {
@@ -507,7 +540,7 @@ char16_t* char_to_wchar(const char_t* str){
 
 int64_t lchar_size(const char32_t* str){
     int64_t res = 0;
-    int64_t i = 0;
+    int64_t i   = 0;
 
     while(str[i++] != 0) {
         res++;
@@ -561,7 +594,7 @@ char32_t* char_to_lchar(char_t* str){
         return NULL;
     }
 
-    int64_t len = strlen(str);
+    int64_t len   = strlen(str);
     char32_t* res = memory_malloc(sizeof(char16_t) * len + 1);
 
     if(res == NULL) {
