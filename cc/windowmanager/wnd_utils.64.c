@@ -567,7 +567,6 @@ void windowmanager_enter(window_t* window, window_event_t* event) {
     }
 
     if(window->on_enter) {
-        video_text_print("enter handler found\n");
         window->on_enter(event);
     }
 
