@@ -213,6 +213,10 @@ char_t* strndup_at_heap(memory_heap_t* heap, const char_t* src, size_t l){
 
     l = MIN(l, strlen(src));
 
+    if(l == 0) {
+        return NULL;
+    }
+
     char_t* res = memory_malloc_ext(heap, sizeof(char_t) * l + 1, 0x0);
 
     if(res == NULL) {
