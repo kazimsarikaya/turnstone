@@ -30,7 +30,7 @@ static int8_t wndmgr_spool_item_on_enter(const window_event_t* event) {
         return -1;
     }
 
-    list_t* inputs = windowmanager_get_input_values(window);
+    list_t* inputs = wndmgr_get_input_values(window);
 
     if(!inputs) {
         return -1;
@@ -73,7 +73,7 @@ static int8_t wndmgr_spool_item_on_enter(const window_event_t* event) {
         }
     }
 
-    windowmanager_destroy_inputs(inputs);
+    wndmgr_destroy_inputs(inputs);
 
     return 0;
 }
@@ -96,6 +96,20 @@ static int8_t wndmgr_spool_item_on_predraw(const window_event_t* event) {
         return -1;
     }
 
+    if(!window->sheets) {
+        return -1;
+    }
+
+    if(list_size(window->sheets) != 1) {
+        return -1;
+    }
+
+    window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, 0);
+
+    if(!sheet) {
+        return -1;
+    }
+
     const spool_item_window_extra_data_t* sied = (const spool_item_window_extra_data_t*)window->extra_data;
 
     if(!sied) {
@@ -107,9 +121,9 @@ static int8_t wndmgr_spool_item_on_predraw(const window_event_t* event) {
                                    sied->buffer_id,
                                    buffer_get_length(sied->buffer));
 
-    memory_free(window->text);
+    memory_free(sheet->text);
 
-    ((window_t*)window)->text = spool_text;
+    sheet->text = spool_text;
 
     return 0;
 }
@@ -137,10 +151,9 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
                                     "Cmd", "Buffer Id", "Buffer Size");
 
     window_t* wnd_header_text = windowmanager_create_window(window,
-                                                            header_text,
                                                             (rect_t){font_width, 0, screen_width - font_width, font_height},
-                                                            (color_t){.color = 0x00000000},
-                                                            (color_t){.color = 0xFFee9900});
+                                                            (color_t){.color = 0xFFee9900},
+                                                            .text = header_text);
 
 
     if(!wnd_header_text) {
@@ -151,36 +164,36 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
     size_t buf_cnt = spool_get_buffer_count(spool_item);
 
     int32_t left = font_width + 5 * font_width;
-    int32_t top  = wnd_header_text->rect.y + wnd_header_text->rect.height;
+    int32_t top  = wnd_header_text->owner_rect.y + wnd_header_text->owner_rect.height;
 
     for(size_t i = 0; i < buf_cnt; i++) {
         const buffer_t* buffer = spool_get_buffer(spool_item, i);
 
         window_t* wnd_spool_input = windowmanager_create_window(window,
-                                                                strdup("_"),
                                                                 (rect_t){font_width*2, top, font_width, font_height},
-                                                                (color_t){.color = 0x00000000},
-                                                                (color_t){.color = 0xFFF00000});
+                                                                (color_t){.color = 0xFFF00000},
+                                                                .text = "_");
 
         if(!wnd_spool_input) {
             windowmanager_destroy_window(top_window.main_window);
             return -1;
         }
 
-        wnd_spool_input->is_writable  = true;
         wnd_spool_input->input_length = 1;
         wnd_spool_input->input_id     = "buffer";
         wnd_spool_input->extra_data   = (void*)buffer;
+        wndmgr_set_window_writable(wnd_spool_input, true);
 
         char_t* spool_text = strprintf("% 12i% 15lli",
                                        i,
                                        buffer_get_length(buffer));
 
         window_t* wnd_spool = windowmanager_create_window(window,
-                                                          spool_text,
                                                           (rect_t){left, top, screen_width - left, font_height},
-                                                          (color_t){.color = 0x00000000},
-                                                          (color_t){.color = 0xFF00FF00});
+                                                          (color_t){.color = 0xFF00FF00},
+                                                          .text = spool_text);
+
+        memory_free(spool_text);
 
         if(!wnd_spool) {
             windowmanager_destroy_window(top_window.main_window);
@@ -222,7 +235,7 @@ static int8_t wndmgr_spool_browser_on_enter(const window_event_t* event) {
         return -1;
     }
 
-    list_t* inputs = windowmanager_get_input_values(window);
+    list_t* inputs = wndmgr_get_input_values(window);
 
     if(!inputs) {
         return -1;
@@ -267,7 +280,7 @@ static int8_t wndmgr_spool_browser_on_enter(const window_event_t* event) {
         }
     }
 
-    windowmanager_destroy_inputs(inputs);
+    wndmgr_destroy_inputs(inputs);
 
     return 0;
 }
@@ -285,6 +298,20 @@ static int8_t wndmgr_spool_browser_wnd_spool_on_predraw(const window_event_t* ev
         return -1;
     }
 
+    if(!window->sheets) {
+        return -1;
+    }
+
+    if(list_size(window->sheets) != 1) {
+        return -1;
+    }
+
+    window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, 0);
+
+    if(!sheet) {
+        return -1;
+    }
+
     const spool_item_t* spool = (const spool_item_t*)window->extra_data;
 
     if(!spool) {
@@ -297,9 +324,9 @@ static int8_t wndmgr_spool_browser_wnd_spool_on_predraw(const window_event_t* ev
                                    spool_get_buffer_count(spool),
                                    spool_get_total_buffer_size(spool));
 
-    memory_free(window->text);
+    memory_free(sheet->text);
 
-    ((window_t*)window)->text = spool_text;
+    sheet->text = spool_text;
 
     return 0;
 }
@@ -323,11 +350,11 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
                                     "Cmd", "Name", "Buffer Count", "Total Buffer Size");
 
     window_t* wnd_header_text = windowmanager_create_window(window,
-                                                            header_text,
                                                             (rect_t){font_width, 0, screen_width - font_width, font_height},
-                                                            (color_t){.color = 0x00000000},
-                                                            (color_t){.color = 0xFFee9900});
+                                                            (color_t){.color = 0xFFee9900},
+                                                            .text = header_text);
 
+    memory_free(header_text);
 
     if(!wnd_header_text) {
         windowmanager_destroy_window(top_window.main_window);;
@@ -335,7 +362,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
     }
 
     int32_t left = font_width + 5 * font_width;
-    int32_t top  = wnd_header_text->rect.y + wnd_header_text->rect.height;
+    int32_t top  = wnd_header_text->owner_rect.y + wnd_header_text->owner_rect.height;
 
     list_t* spool_list = spool_get_all();
 
@@ -343,20 +370,19 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
         const spool_item_t* spool = list_get_data_at_position(spool_list, i);
 
         window_t* wnd_spool_input = windowmanager_create_window(window,
-                                                                strdup("_"),
                                                                 (rect_t){font_width*2, top, font_width, font_height},
-                                                                (color_t){.color = 0x00000000},
-                                                                (color_t){.color = 0xFFF00000});
+                                                                (color_t){.color = 0xFFF00000},
+                                                                .text = "_");
 
         if(!wnd_spool_input) {
             windowmanager_destroy_window(top_window.main_window);
             return -1;
         }
 
-        wnd_spool_input->is_writable  = true;
         wnd_spool_input->input_length = 1;
         wnd_spool_input->input_id     = "spool";
         wnd_spool_input->extra_data   = (void*)spool;
+        wndmgr_set_window_writable(wnd_spool_input, true);
 
         char_t* spool_text = strprintf("%- 60s% 15lli% 20lli",
                                        spool_get_name(spool),
@@ -364,10 +390,11 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
                                        spool_get_total_buffer_size(spool));
 
         window_t* wnd_spool = windowmanager_create_window(window,
-                                                          spool_text,
                                                           (rect_t){left, top, screen_width - left, font_height},
-                                                          (color_t){.color = 0x00000000},
-                                                          (color_t){.color = 0xFF00FF00});
+                                                          (color_t){.color = 0xFF00FF00},
+                                                          .text = spool_text);
+
+        memory_free(spool_text);
 
         if(!wnd_spool) {
             windowmanager_destroy_window(top_window.main_window);

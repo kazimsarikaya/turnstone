@@ -78,7 +78,7 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
 
         mouse_report_t* last = &mouse_data[mouse_ev_cnt - 1];
 
-        if((last->buttons & MOUSE_BUTTON_LEFT) && !wndmgr->current_window->has_alert) {
+        if((last->buttons & MOUSE_BUTTON_LEFT) && !wndmgr->has_alert) {
             wndmgr_text_cursor_move(last->x / font_width, last->y / font_height);
         }
 
@@ -103,7 +103,7 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
     for(uint32_t i = 0; i < kbd_ev_cnt; i++) {
         if(kbd_data[i].is_pressed) {
 
-            if(wndmgr->current_window->has_alert && kbd_data[i].key != '\n') {
+            if(wndmgr->has_alert && kbd_data[i].key != '\n') {
                 continue;
             }
 
@@ -120,9 +120,9 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
                         is_reverse = true;
                     }
 
-                    windowmanager_move_cursor_to_next_input(wndmgr->current_window, is_reverse);
+                    wndmgr_move_cursor_to_next_input(wndmgr->current_window, is_reverse);
                 }else {
-                    data_idx = windowmanager_append_char16_to_buffer(kbd_data[i].key, data, data_idx);
+                    data_idx = wndmgr_append_char16_to_buffer(kbd_data[i].key, data, data_idx);
                 }
             } else {
                 if(kbd_data[i].key == KBD_SCANCODE_BACKSPACE) {
@@ -138,7 +138,7 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
                 } else if(kbd_data[i].key == KBD_SCANCODE_F3) {
                     windowmanager_remove_and_set_current_window(wndmgr->current_window);
                 } else if(kbd_data[i].key == KBD_SCANCODE_F4) {
-                    wndmgr->current_window->is_dirty = true;
+                    wndmgr_mark_all_windows_dirty(wndmgr->current_window);
                 } else if(kbd_data[i].key == KBD_SCANCODE_UP) {
                     wndmgr_text_cursor_move_relative(0, -1);
                 } else if(kbd_data[i].key == KBD_SCANCODE_DOWN) {
@@ -179,11 +179,11 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
 
     memory_free(kbd_data);
 
-    window_t* edit_area = NULL;
+    const window_t* edit_area = NULL;
 
-    if(strlen(data) && windowmanager_find_window_by_text_cursor(wndmgr->current_window, &edit_area)) {
+    if(strlen(data) && wndmgr_find_window_by_text_cursor(wndmgr->current_window, &edit_area)) {
         if(edit_area != NULL) {
-            windowmanager_set_window_text(edit_area, data);
+            wndmgr_set_window_text(edit_area, data);
         }
     }
 }

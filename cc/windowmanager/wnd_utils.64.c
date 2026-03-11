@@ -25,11 +25,11 @@ extern color_t* VIDEO_BASE_ADDRESS;
 static windowmanager_t* wndmgr_instance = NULL;
 
 windowmanager_t* windowmanager_get_instance(void) {
-    if(wndmgr_instance == NULL) {
+    if(!wndmgr_instance) {
         wndmgr_instance = memory_malloc(sizeof(windowmanager_t));
 
-        if(wndmgr_instance == NULL) {
-            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to allocate memory for windowmanager instance\n");
+        if(!wndmgr_instance) {
+            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to allocate memory for windowmanager instance");
             return NULL;
         }
 
@@ -40,7 +40,7 @@ windowmanager_t* windowmanager_get_instance(void) {
         sgfx_context_t* gfx_ctx = sgfx_create_context(screen_info.width, screen_info.height, VIDEO_BASE_ADDRESS);
 
         if(gfx_ctx == NULL) {
-            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create graphics context\n");
+            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create graphics context");
             memory_free(wndmgr_instance);
             wndmgr_instance = NULL;
             return NULL;
@@ -58,8 +58,8 @@ windowmanager_t* windowmanager_get_instance(void) {
     return wndmgr_instance;
 }
 
-rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
-    if(text == NULL) {
+rect_t wndmgr_calc_text_rect(const char_t* text, uint32_t max_width) {
+    if(!text) {
         return (rect_t){0};
     }
 
@@ -104,7 +104,7 @@ rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
     return rect;
 }
 
-uint32_t windowmanager_append_char16_to_buffer(char16_t src, char_t* dst, uint32_t dst_idx) {
+uint32_t wndmgr_append_char16_to_buffer(char16_t src, char_t* dst, uint32_t dst_idx) {
     if(dst == NULL) {
         return NULL;
     }
@@ -125,18 +125,16 @@ uint32_t windowmanager_append_char16_to_buffer(char16_t src, char_t* dst, uint32
     return j;
 }
 
-boolean_t windowmanager_is_point_in_rect(const rect_t* rect, uint32_t x, uint32_t y) {
-    if (!rect) {
-        return false;
-    }
-
-    return (x >= rect->x) &
+static boolean_t wndmgr_is_point_in_rect(const rect_t* rect, uint32_t x, uint32_t y) {
+    return (rect != NULL) &
+           (x >= rect->x) &
            (x <  rect->x + rect->width) &
            (y >= rect->y) &
            (y <  rect->y + rect->height);
 }
 
-boolean_t windowmanager_is_rect_in_rect(const rect_t* r1, const rect_t* r2) {
+#if 0
+static boolean_t wndmgr_is_rect_in_rect(const rect_t* r1, const rect_t* r2) {
     boolean_t valid = (r1 != NULL) & (r2 != NULL);
     return valid & (
         (r2->x >= r1->x) &
@@ -145,8 +143,9 @@ boolean_t windowmanager_is_rect_in_rect(const rect_t* r1, const rect_t* r2) {
         (r2->y + r2->height <= r1->y + r1->height)
         );
 }
+#endif
 
-boolean_t windowmanager_is_rects_intersect(const rect_t* r1, const rect_t* r2) {
+static boolean_t wndmgr_is_rects_intersect(const rect_t* r1, const rect_t* r2) {
     boolean_t valid = (r1 != NULL) & (r2 != NULL);
     return valid & (
         valid &
@@ -157,78 +156,103 @@ boolean_t windowmanager_is_rects_intersect(const rect_t* r1, const rect_t* r2) {
         );
 }
 
-rect_t windowmanager_get_window_absolute_rect(const window_t* window) {
-    rect_t rect = {0};
-
-    if(!window) {
-        return rect;
-    }
-
-    rect = window->rect;
-
-    window_t* p = window->parent;
-
-    while(p) {
-        rect.x += p->rect.x;
-        rect.y += p->rect.y;
-        p       = p->parent;
-    }
-
-    return rect;
-}
-
-boolean_t windowmanager_find_window_by_point(window_t* window, uint32_t x, uint32_t y, window_t** result) {
-    if(window == NULL) {
+static boolean_t wndmgr_find_window_by_point(const window_t* window, uint32_t x, uint32_t y, const window_t** result) {
+    if(!window || !result) {
         return false;
     }
 
-    if(result == NULL) {
-        return false;
-    }
-
-    if(!windowmanager_is_point_in_rect(&window->absolute_rect, x, y)) {
+    // if point not in owner rect of this window, return false
+    if(!wndmgr_is_point_in_rect(&window->owner_absolute_rect, x, y)) {
         return false;
     }
 
     for(size_t i = 0; i < list_size(window->children); i++) {
-        window_t* child = (window_t*)list_get_data_at_position(window->children, i);
+        const window_t* child = list_get_data_at_position(window->children, i);
 
-        if(windowmanager_find_window_by_point(child, x, y, result)) {
+        if(!wndmgr_is_point_in_rect(&child->owner_absolute_rect, x, y)) {
+            continue;
+        }
+
+        if(wndmgr_find_window_by_point(child, x, y, result)) {
+            return true;
+        }
+    }
+
+    for(size_t i = 0; i < list_size(window->sheets); i++) {
+        const window_sheet_t* sheet = list_get_data_at_position(window->sheets, i);
+
+        if(wndmgr_is_point_in_rect(&sheet->absolute_rect, x, y)) {
+            *result = window;
             return true;
         }
     }
 
     *result = window;
 
-    return true;
+    return false;
 }
 
-void windowmanager_mark_window_dirty_by_rect(window_t* window, const rect_t* rect) {
-    if (window == NULL || rect == NULL) {
+static boolean_t wndmgr_find_window_sheet_by_point(const window_t* window, uint32_t x, uint32_t y, const window_sheet_t** result) {
+    if(!window || !result) {
+        return false;
+    }
+
+    // if point not in owner rect of this window, return false
+    if(!wndmgr_is_point_in_rect(&window->owner_absolute_rect, x, y)) {
+        return false;
+    }
+
+    for(size_t i = 0; i < list_size(window->children); i++) {
+        const window_t* child = list_get_data_at_position(window->children, i);
+
+        if(!wndmgr_is_point_in_rect(&child->owner_absolute_rect, x, y)) {
+            continue;
+        }
+
+        if(wndmgr_find_window_sheet_by_point(child, x, y, result)) {
+            return true;
+        }
+    }
+
+    for(size_t i = 0; i < list_size(window->sheets); i++) {
+        const window_sheet_t* sheet = list_get_data_at_position(window->sheets, i);
+
+        if(wndmgr_is_point_in_rect(&sheet->absolute_rect, x, y)) {
+            *result = sheet;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void wndmgr_mark_window_sheet_dirty_by_rect(const window_t* window, const rect_t* rect) {
+    if (!window || !rect) {
+        return;
+    }
+
+    // if rect not intersect with owner rect of this window, return
+    if (!wndmgr_is_rects_intersect(&window->owner_absolute_rect, rect)) {
         return;
     }
 
     // First check children
-    boolean_t fully_contained = false;
     for (size_t i = 0; i < list_size(window->children); i++) {
-        window_t* child = (window_t*)list_get_data_at_position(window->children, i);
-        if (windowmanager_is_rects_intersect(&child->absolute_rect, rect)) {
-            windowmanager_mark_window_dirty_by_rect(child, rect);
+        const window_t* child = list_get_data_at_position(window->children, i);
 
-            if (windowmanager_is_rect_in_rect(&child->absolute_rect, rect)) {
-                fully_contained = true;
-            }
-
-        }
+        wndmgr_mark_window_sheet_dirty_by_rect(child, rect);
     }
 
-    // Only mark this window if no child contains/intersects the rect
-    if (!fully_contained && windowmanager_is_rects_intersect(&window->absolute_rect, rect)) {
-        window->is_dirty = true;
+    for(size_t i = 0; i < list_size(window->sheets); i++) {
+        window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, i);
+
+        if (wndmgr_is_rects_intersect(&sheet->absolute_rect, rect)) {
+            sheet->is_dirty = true;
+        }
     }
 }
 
-boolean_t windowmanager_find_window_by_text_cursor(window_t* window, window_t** result) {
+boolean_t wndmgr_find_window_by_text_cursor(window_t* window, const window_t** result) {
     if(!window || !result) {
         return false;
     }
@@ -240,11 +264,34 @@ boolean_t windowmanager_find_window_by_text_cursor(window_t* window, window_t** 
     x *= window->wndmgr->font_width;
     y *= window->wndmgr->font_height;
 
-    return windowmanager_find_window_by_point(window, x, y, result);
+    return wndmgr_find_window_by_point(window, x, y, result);
 }
 
-int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
+boolean_t wndmgr_find_window_sheet_by_text_cursor(window_t* window, const window_sheet_t** result) {
+    if(!window || !result) {
+        return false;
+    }
+
+    int32_t x, y;
+
+    text_cursor_get(&x, &y);
+
+    x *= window->wndmgr->font_width;
+    y *= window->wndmgr->font_height;
+
+    return wndmgr_find_window_sheet_by_point(window, x, y, result);
+}
+
+int8_t wndmgr_set_window_text(const window_t* window, const char_t* text) {
     if(window == NULL) {
+        return -1;
+    }
+
+    if(!window->sheets) {
+        return -1;
+    }
+
+    if(list_size(window->sheets) != 1) {
         return -1;
     }
 
@@ -262,9 +309,11 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
 
     uint32_t font_width = window->wndmgr->font_width, font_height = window->wndmgr->font_height;
 
-    int32_t win_x = window->absolute_rect.x / font_width;
-    int32_t win_y = window->absolute_rect.y / font_height;
-    int32_t win_w = window->absolute_rect.width / font_width;
+    window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, 0);
+
+    int32_t win_x = sheet->absolute_rect.x / font_width;
+    int32_t win_y = sheet->absolute_rect.y / font_height;
+    int32_t win_w = sheet->absolute_rect.width / font_width;
 
     int32_t start_idx = (y - win_y) * win_w + (x - win_x);
 
@@ -285,7 +334,7 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
                 x--;
             }
         } else {
-            window->text[start_idx] = text[text_idx];
+            sheet->text[start_idx] = text[text_idx];
             start_idx++;
             x++;
         }
@@ -300,9 +349,83 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
 
     text_cursor_move(x, y);
 
-    window->is_dirty = true;
+    sheet->is_dirty = true;
 
     return 0;
+}
+
+static void wndmgr_mark_window_sheet_dirty_by_text_cursor(const window_t* window) {
+    if(window == NULL) {
+        return;
+    }
+
+    int32_t x, y;
+
+    text_cursor_get(&x, &y);
+
+    x *= window->wndmgr->font_width;
+    y *= window->wndmgr->font_height;
+
+    rect_t cursor_rect = {x, y, window->wndmgr->font_width, window->wndmgr->font_height};
+
+    wndmgr_mark_window_sheet_dirty_by_rect(window, &cursor_rect);
+}
+
+void wndmgr_text_cursor_move(int32_t x, int32_t y) {
+    windowmanager_t* wndmgr = windowmanager_get_instance();
+
+    if(!wndmgr) {
+        return;
+    }
+
+    wndmgr_mark_window_sheet_dirty_by_text_cursor(wndmgr->current_window);
+
+    text_cursor_move(x, y);
+
+    wndmgr_mark_window_sheet_dirty_by_text_cursor(wndmgr->current_window);
+}
+
+void wndmgr_text_cursor_move_relative(int32_t dx, int32_t dy) {
+    windowmanager_t* wndmgr = windowmanager_get_instance();
+
+    if(!wndmgr) {
+        return;
+    }
+
+    wndmgr_mark_window_sheet_dirty_by_text_cursor(wndmgr->current_window);
+
+    text_cursor_move_relative(dx, dy);
+
+    wndmgr_mark_window_sheet_dirty_by_text_cursor(wndmgr->current_window);
+}
+
+void wndmgr_mouse_move_cursor(windowmanager_t* wndmgr, uint32_t x, uint32_t y) {
+    if (!wndmgr->mouse_initialized) {
+        return;
+    }
+
+    if (x >= wndmgr->screen_width || y >= wndmgr->screen_height) {
+        video_text_print("Mouse cursor position out of bounds\n");
+        return;
+    }
+
+    rect_t mouse_rect = {
+        .x      = wndmgr->mouse_x,
+        .y      = wndmgr->mouse_y,
+        .width  = wndmgr->mouse_image_width,
+        .height = wndmgr->mouse_image_height
+    };
+
+    wndmgr_mark_window_sheet_dirty_by_rect(wndmgr->current_window, &mouse_rect);
+
+
+    wndmgr->mouse_x = x;
+    wndmgr->mouse_y = y;
+
+    mouse_rect.x = wndmgr->mouse_x;
+    mouse_rect.y = wndmgr->mouse_y;
+
+    wndmgr_mark_window_sheet_dirty_by_rect(wndmgr->current_window, &mouse_rect);
 }
 
 static int8_t wndmgr_iv_list_destroyer(memory_heap_t* heap, void* item){
@@ -318,7 +441,7 @@ static int8_t wndmgr_iv_list_destroyer(memory_heap_t* heap, void* item){
     return 0;
 }
 
-int8_t windowmanager_destroy_inputs(list_t* inputs) {
+int8_t wndmgr_destroy_inputs(list_t* inputs) {
     if(inputs == NULL) {
         return -1;
     }
@@ -328,20 +451,20 @@ int8_t windowmanager_destroy_inputs(list_t* inputs) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-list_t* windowmanager_get_input_values(const window_t* window) {
-    if(window == NULL) {
+list_t* wndmgr_get_input_values(const window_t* window) {
+    if(!window) {
         return NULL;
     }
 
     list_t* values = list_create_stack();
 
-    if(values == NULL) {
+    if(!values) {
         return NULL;
     }
 
     list_t* ws = list_create_stack();
 
-    if(ws == NULL) {
+    if(!ws) {
         list_destroy(values);
         return NULL;
     }
@@ -351,7 +474,27 @@ list_t* windowmanager_get_input_values(const window_t* window) {
     while(list_size(ws)) {
         window_t* w = (window_t*)list_stack_pop(ws);
 
-        if(w->is_writable) {
+        if(w->children) {
+            for(size_t i = 0; i < list_size(w->children); i++) {
+                list_stack_push(ws, list_get_data_at_position(w->children, i));
+            }
+        }
+
+        if(!w->sheets) {
+            continue;
+        }
+
+        if(list_size(w->sheets) != 1) {
+            continue;
+        }
+
+        window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(w->sheets, 0);
+
+        if(!sheet) {
+            continue;
+        }
+
+        if(sheet->is_writable) {
             window_input_value_t* value = memory_malloc(sizeof(window_input_value_t));
 
             if(value == NULL) {
@@ -361,9 +504,9 @@ list_t* windowmanager_get_input_values(const window_t* window) {
             }
 
             value->id         = w->input_id;
-            value->value      = strdup(w->text);
+            value->value      = strdup(sheet->text);
             value->extra_data = w->extra_data;
-            value->rect       = w->absolute_rect;
+            value->rect       = sheet->absolute_rect;
 
             for(size_t i = 0; i < strlen(value->value); i++) { // TODO: find best way for this
                 if(value->value[i] == '_') {
@@ -379,7 +522,7 @@ list_t* windowmanager_get_input_values(const window_t* window) {
                 }
             }
 
-            if(value->value == NULL) {
+            if(!value->value) {
                 memory_free(value);
                 list_destroy_with_type(values, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);
                 list_destroy(ws);
@@ -388,24 +531,18 @@ list_t* windowmanager_get_input_values(const window_t* window) {
 
             list_stack_push(values, value);
         }
-
-        if(w->children != NULL) {
-            for(size_t i = 0; i < list_size(w->children); i++) {
-                list_stack_push(ws, list_get_data_at_position(w->children, i));
-            }
-        }
     }
 
     return values;
 }
 #pragma GCC diagnostic pop
 
-void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reverse) {
+void wndmgr_move_cursor_to_next_input(window_t* window, boolean_t is_reverse) {
     if(!window) {
         return;
     }
 
-    list_t* inputs = windowmanager_get_input_values(window);
+    list_t* inputs = wndmgr_get_input_values(window);
 
     if(!inputs) {
         return;
@@ -413,6 +550,7 @@ void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reve
 
     if(list_size(inputs) == 0) {
         list_destroy(inputs);
+        video_text_print("No input values found\n");
         return;
     }
 
@@ -450,7 +588,7 @@ void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reve
             break;
         }
 
-        if(!input_found && windowmanager_is_point_in_rect(&value->rect, cursor_x, cursor_y)) {
+        if(!input_found && wndmgr_is_point_in_rect(&value->rect, cursor_x, cursor_y)) {
             input_found = true;
             continue;
         }
@@ -479,69 +617,246 @@ void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reve
     list_destroy_with_type(inputs, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);
 }
 
-void wndmgr_text_cursor_move(int32_t x, int32_t y) {
-    windowmanager_t* wndmgr = windowmanager_get_instance();
+boolean_t wndmgr_is_drawing_occured(const window_t* window) {
+    if(window == NULL) {
+        return false;
+    }
 
-    if(!wndmgr) {
+    if(!window->sheets) {
+        return false;
+    }
+
+    for(size_t i = 0; i < list_size(window->sheets); i++) {
+        const window_sheet_t* sheet = list_get_data_at_position(window->sheets, i);
+
+        if(sheet->is_drawing_occured) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void wndmgr_mark_all_windows_dirty(window_t* window) {
+    if(window == NULL) {
         return;
     }
 
-    window_t* wnd = NULL;
-    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
-        if(wnd) {
-            wnd->is_dirty = true;
-        } else {
-            video_text_print("No window found for text cursor\n");
+    if(window->sheets) {
+        for(size_t i = 0; i < list_size(window->sheets); i++) {
+            window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, i);
+            sheet->is_dirty = true;
         }
-    } else {
-        video_text_print("Failed to find window for text cursor\n");
     }
 
-    text_cursor_move(x, y);
-
-    wnd = NULL;
-
-    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
-        if(wnd) {
-            wnd->is_dirty = true;
-        } else {
-            video_text_print("No window found for text cursor after move\n");
+    if(window->children) {
+        for(size_t i = 0; i < list_size(window->children); i++) {
+            window_t* child = (window_t*)list_get_data_at_position(window->children, i);
+            wndmgr_mark_all_windows_dirty(child);
         }
-    } else {
-        video_text_print("Failed to find window for text cursor after move\n");
     }
 }
 
-void wndmgr_text_cursor_move_relative(int32_t dx, int32_t dy) {
-    windowmanager_t* wndmgr = windowmanager_get_instance();
+boolean_t wndmgr_is_window_dirty(const window_t* window) {
+    if(window == NULL) {
+        return false;
+    }
 
-    if(!wndmgr) {
+    if(!window->sheets) {
+        return false;
+    }
+
+    for(size_t i = 0; i < list_size(window->sheets); i++) {
+        const window_sheet_t* sheet = list_get_data_at_position(window->sheets, i);
+
+        if(sheet->is_dirty) {
+            return true;
+        }
+    }
+
+    for(size_t i = 0; i < list_size(window->children); i++) {
+        const window_t* child = list_get_data_at_position(window->children, i);
+
+        if(wndmgr_is_window_dirty(child)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void wndmgr_set_window_writable(const window_t* window, boolean_t is_writable) {
+    if(window == NULL) {
         return;
     }
 
-    window_t* wnd = NULL;
-    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
-        if(wnd) {
-            wnd->is_dirty = true;
-        } else {
-            video_text_print("No window found for text cursor\n");
-        }
-    } else {
-        video_text_print("Failed to find window for text cursor\n");
+    if(!window->sheets) {
+        return;
     }
 
-    text_cursor_move_relative(dx, dy);
+    if(list_size(window->sheets) != 1) {
+        return;
+    }
 
-    wnd = NULL;
+    window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, 0);
 
-    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
-        if(wnd) {
-            wnd->is_dirty = true;
+    if(!sheet) {
+        return;
+    }
+
+    sheet->is_writable = is_writable;
+}
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+static int8_t wndmgr_add_sheet_fragment(list_t * result, window_sheet_t * source, rect_t new_abs_rect) {
+    if(new_abs_rect.width <= 0 || new_abs_rect.height <= 0) {
+        return 0;
+    }
+
+    window_sheet_t* fragment = memory_malloc(sizeof(window_sheet_t));
+    if (!fragment) {
+        return -1;
+    }
+
+    // Copy all properties
+    *fragment = *source;
+
+    // Calculate the offset between absolute and relative coordinates
+    int32_t offset_x = source->absolute_rect.x - source->rect.x;
+    int32_t offset_y = source->absolute_rect.y - source->rect.y;
+
+    // Update both rectangles
+    fragment->absolute_rect = new_abs_rect;
+    fragment->rect.x        = new_abs_rect.x - offset_x;
+    fragment->rect.y        = new_abs_rect.y - offset_y;
+    fragment->rect.width    = new_abs_rect.width;
+    fragment->rect.height   = new_abs_rect.height;
+
+    if(list_list_insert(result, fragment) == -1ULL) {
+        memory_free(fragment);
+        return -1;
+    }
+
+    return 0;
+}
+
+list_t* wndmgr_substract_sheets(list_t* sheets, const window_sheet_t* sheet) {
+    if(!sheets || !sheet) {
+        return NULL;
+    }
+
+    list_t* result = list_create_list();
+
+    if(!result) {
+        return NULL;
+    }
+
+    for(size_t i = 0; i < list_size(sheets); i++) {
+        window_sheet_t* s = (window_sheet_t*)list_get_data_at_position(sheets, i);
+
+        if(!wndmgr_is_rects_intersect(&s->absolute_rect, &sheet->absolute_rect)) {
+            window_sheet_t* new_sheet = memory_malloc(sizeof(window_sheet_t));
+
+            if(!new_sheet) {
+                goto err;
+            }
+
+            *new_sheet = *s;
+
+            if(list_list_insert(result, new_sheet) == -1ULL) {
+                memory_free(new_sheet);
+                goto err;
+            }
         } else {
-            video_text_print("No window found for text cursor after move\n");
+            // If the sheet intersects, split 's' into up to 4 fragments
+            rect_t s_rect = s->absolute_rect;
+            rect_t clip   = sheet->absolute_rect;
+
+            // Pre-check: Is 's' completely swallowed by 'sheet'?
+            if (s_rect.x >= clip.x &&
+                s_rect.y >= clip.y &&
+                s_rect.x + s_rect.width <= clip.x + clip.width &&
+                s_rect.y + s_rect.height <= clip.y + clip.height) {
+                continue; // 's' is entirely covered, discard it
+            }
+
+            // 1. Top fragment
+            if (clip.y > s_rect.y) {
+                rect_t r = {s_rect.x, s_rect.y, s_rect.width, clip.y - s_rect.y};
+                if(wndmgr_add_sheet_fragment(result, s, r) != 0) {
+                    goto err;
+                }
+            }
+
+            // 2. Bottom fragment
+            if (clip.y + clip.height < s_rect.y + s_rect.height) {
+                rect_t r = {s_rect.x, clip.y + clip.height, s_rect.width, (s_rect.y + s_rect.height) - (clip.y + clip.height)};
+                if(wndmgr_add_sheet_fragment(result, s, r) != 0) {
+                    goto err;
+                }
+            }
+
+            // 3. Left fragment (between the new top and bottom)
+            int32_t clip_top    = (clip.y > s_rect.y) ? clip.y : s_rect.y;
+            int32_t clip_bottom = (clip.y + clip.height < s_rect.y + s_rect.height) ? clip.y + clip.height : s_rect.y + s_rect.height;
+
+            if (clip.x > s_rect.x) {
+                rect_t r = {s_rect.x, clip_top, clip.x - s_rect.x, clip_bottom - clip_top};
+                if(wndmgr_add_sheet_fragment(result, s, r) != 0) {
+                    goto err;
+                }
+            }
+
+            // 4. Right fragment (between the new top and bottom)
+            if (clip.x + clip.width < s_rect.x + s_rect.width) {
+                rect_t r = {clip.x + clip.width, clip_top, (s_rect.x + s_rect.width) - (clip.x + clip.width), clip_bottom - clip_top};
+                if(wndmgr_add_sheet_fragment(result, s, r) != 0) {
+                    goto err;
+                }
+            }
+
         }
-    } else {
-        video_text_print("Failed to find window for text cursor after move\n");
+    }
+
+    for(size_t i = 0; i < list_size(sheets); i++) {
+        window_sheet_t* s = (window_sheet_t*)list_get_data_at_position(sheets, i);
+        memory_free(s);
+    }
+
+    list_destroy(sheets);
+
+    return result;
+err:
+    if(result) {
+        for(size_t i = 0; i < list_size(result); i++) {
+            window_sheet_t* s = (window_sheet_t*)list_get_data_at_position(result, i);
+            memory_free(s);
+        }
+        list_destroy(result);
+    }
+    return NULL;
+}
+#pragma GCC diagnostic pop
+
+void wndmgr_mark_window_sheets_always_redrawn(window_t* window, boolean_t is_always_redrawn) {
+    if(window == NULL) {
+        return;
+    }
+
+    if(window->sheets) {
+        for(size_t i = 0; i < list_size(window->sheets); i++) {
+            window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, i);
+            sheet->is_always_redrawn = is_always_redrawn;
+        }
+    }
+
+    // TODO: do we need this?
+    if(window->children) {
+        for(size_t i = 0; i < list_size(window->children); i++) {
+            window_t* child = (window_t*)list_get_data_at_position(window->children, i);
+            wndmgr_mark_window_sheets_always_redrawn(child, is_always_redrawn);
+        }
     }
 }
 

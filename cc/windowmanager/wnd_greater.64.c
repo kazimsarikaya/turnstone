@@ -17,13 +17,13 @@ MODULE("turnstone.windowmanager");
 extern char_t tos_logo_data_start;
 
 static int8_t wndmgr_rainbow_on_draw(const window_event_t* event) {
-    windowmanager_t* wndmgr = windowmanager_get_instance();
-
     window_t* window = event->window;
 
     if(!window) {
         return -1;
     }
+
+    windowmanager_t* wndmgr = window->wndmgr;
 
     uintptr_t angle_data_raw = (uintptr_t)window->extra_data;
     float32_t angle          = (float32_t)angle_data_raw / 2;
@@ -31,10 +31,10 @@ static int8_t wndmgr_rainbow_on_draw(const window_event_t* event) {
     sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
 
     sgfx_create_sub_context(gfx_ctx,
-                            0,
-                            0,
-                            window->rect.width,
-                            window->rect.height);
+                            window->owner_absolute_rect.x,
+                            window->owner_absolute_rect.y,
+                            window->owner_absolute_rect.width,
+                            window->owner_absolute_rect.height);
 
 
     sgfx_clear(gfx_ctx, 0.10f, 0.10f, 0.10f, 1.0f);
@@ -88,12 +88,12 @@ window_t* windowmanager_create_greater_window(void) {
 
     window_t* window = top_window.inside_window;
 
-    uint32_t window_width  = window->rect.width;
-    uint32_t window_height = window->rect.height;
+    uint32_t window_width  = window->owner_rect.width;
+    uint32_t window_height = window->owner_rect.height;
 
     char_t* windowmanager_turnstone_ascii_art = strdup((char_t*)&tos_logo_data_start);
 
-    rect_t rect = windowmanager_calc_text_rect(windowmanager_turnstone_ascii_art, window_width);
+    rect_t rect = wndmgr_calc_text_rect(windowmanager_turnstone_ascii_art, window_width);
 
     if(rect.width == 0 || rect.height == 0) {
         windowmanager_destroy_window(top_window.main_window);
@@ -115,10 +115,9 @@ window_t* windowmanager_create_greater_window(void) {
     rect.y = (rect.y / font_height) * font_height;
 
     window_t* child = windowmanager_create_window(window,
-                                                  windowmanager_turnstone_ascii_art,
                                                   rect,
-                                                  (color_t){.color = 0x00000000},
-                                                  (color_t){.color = 0xFF2288FF});
+                                                  (color_t){.color = 0xFF2288FF},
+                                                  .text = windowmanager_turnstone_ascii_art);
 
     if(child == NULL) {
         windowmanager_destroy_window(top_window.main_window);
@@ -131,17 +130,16 @@ window_t* windowmanager_create_greater_window(void) {
     int32_t old_height = rect.height;
     int32_t old_width  = rect.width;
 
-    char_t* text = strdup("Press F2 to open panel");
+    const char_t* text = "Press F2 to open panel";
 
-    rect   = windowmanager_calc_text_rect(text, window_width);
+    rect   = wndmgr_calc_text_rect(text, window_width);
     rect.x = old_x;
     rect.y = old_y + old_height + 4 * font_height;
 
     child = windowmanager_create_window(window,
-                                        text,
                                         rect,
-                                        (color_t){.color = 0x00000000},
-                                        (color_t){.color = 0xFF00FF00});
+                                        (color_t){.color = 0xFF00FF00},
+                                        .text = text);
 
     if(child == NULL) {
         windowmanager_destroy_window(top_window.main_window);
@@ -160,10 +158,8 @@ window_t* windowmanager_create_greater_window(void) {
     PRINTLOG(WINDOWMANAGER, LOG_INFO, "Rainbow rect: x=%d y=%d w=%d h=%d", rainbow_rect.x, rainbow_rect.y, rainbow_rect.width, rainbow_rect.height);
 
     window_t* rainbow_window = windowmanager_create_window(window,
-                                                           NULL,
                                                            rainbow_rect,
-                                                           (color_t){.color = 0xFFFFFFFF},
-                                                           (color_t){.color = 0xFFFFFFFF});
+                                                           .is_single_sheet = true);
 
     if(rainbow_window == NULL) {
         windowmanager_destroy_window(top_window.main_window);
@@ -173,8 +169,8 @@ window_t* windowmanager_create_greater_window(void) {
 
     rainbow_window->extra_data = (void*)(uintptr_t)0;
 
-    rainbow_window->on_draw           = wndmgr_rainbow_on_draw;
-    rainbow_window->is_always_redrawn = true;
+    rainbow_window->on_draw = wndmgr_rainbow_on_draw;
+    wndmgr_mark_window_sheets_always_redrawn(rainbow_window, true);
 
 
     rainbow_rect = (rect_t){
@@ -187,10 +183,8 @@ window_t* windowmanager_create_greater_window(void) {
     PRINTLOG(WINDOWMANAGER, LOG_INFO, "Rainbow rect: x=%d y=%d w=%d h=%d", rainbow_rect.x, rainbow_rect.y, rainbow_rect.width, rainbow_rect.height);
 
     rainbow_window = windowmanager_create_window(window,
-                                                 NULL,
                                                  rainbow_rect,
-                                                 (color_t){.color = 0xFFFFFFFF},
-                                                 (color_t){.color = 0xFFFFFFFF});
+                                                 .is_single_sheet = true);
 
     if(rainbow_window == NULL) {
         windowmanager_destroy_window(top_window.main_window);
@@ -200,8 +194,8 @@ window_t* windowmanager_create_greater_window(void) {
 
     rainbow_window->extra_data = (void*)(uintptr_t)0;
 
-    rainbow_window->on_draw           = wndmgr_rainbow_on_draw;
-    rainbow_window->is_always_redrawn = true;
+    rainbow_window->on_draw = wndmgr_rainbow_on_draw;
+    wndmgr_mark_window_sheets_always_redrawn(rainbow_window, true);
 
     return top_window.main_window;
 }

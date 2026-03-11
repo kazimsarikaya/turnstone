@@ -71,6 +71,9 @@ struct windowmanager_t {
     float32_t         translate_x;
     float32_t         translate_y;
     float32_t         translate_z;
+    boolean_t         has_alert;
+    window_t*         alert_window;
+    uint32_t          sheet_tile_size;
 };
 
 struct rect_t {
@@ -87,30 +90,35 @@ typedef struct window_event_t {
 
 typedef int8_t (*window_event_f)(const window_event_t* event);
 
+typedef struct window_sheet_t window_sheet_t;
+
+struct window_sheet_t {
+    rect_t    rect;
+    rect_t    absolute_rect;
+    char_t*   text;
+    boolean_t is_dirty;
+    boolean_t is_always_redrawn;
+    boolean_t is_drawing_occured;
+    boolean_t is_writable;
+    color_t   background_color;
+    color_t   foreground_color;
+    uint64_t  tile_bitmap[];
+};
+
 struct window_t {
     windowmanager_t* wndmgr;
+    window_t*        parent;
+    window_t*        next;
+    window_t*        prev;
     uint64_t         id;
-    char_t*          text;
-    boolean_t        is_text_readonly;
-    boolean_t        is_dirty;
-    boolean_t        is_always_redrawn;
-    boolean_t        is_drawing_occured;
-    boolean_t        is_visible;
-    boolean_t        is_writable;
-    boolean_t        has_alert;
+    boolean_t        is_hidden;
     int32_t          input_length;
     const char_t*    input_id;
     void*            extra_data;
     boolean_t        extra_data_is_allocated;
-    int32_t          tab_index;
-    rect_t           rect;
-    rect_t           absolute_rect;
-    color_t*         buffer;
-    color_t          background_color;
-    color_t          foreground_color;
-    window_t*        parent;
-    window_t*        next;
-    window_t*        prev;
+    rect_t           owner_rect;
+    rect_t           owner_absolute_rect;
+    list_t*          sheets;
     list_t*          children;
     window_event_f   on_enter;
     window_event_f   on_scroll;

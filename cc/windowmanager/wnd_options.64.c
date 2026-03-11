@@ -136,7 +136,7 @@ static int8_t wndmgr_options_on_enter(const window_event_t* event) {
 
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    list_t* inputs = windowmanager_get_input_values(wndmgr->current_window);
+    list_t* inputs = wndmgr_get_input_values(wndmgr->current_window);
 
     if(!list_size(inputs)) {
         list_destroy(inputs);
@@ -247,9 +247,8 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
         return NULL;
     }
 
-    uint32_t font_width   = wndmgr->font_width;
-    uint32_t screen_width = wndmgr->screen_width;
-
+    uint32_t font_width = wndmgr->font_width;
+    uint32_t max_width  = top_window.inside_window->owner_rect.width;
 
     int32_t option_list_height = 0;
     rect_t rect;
@@ -258,15 +257,16 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
 
         char_t* option_number = strprintf("% 8d.", i);
 
-        rect = windowmanager_calc_text_rect(option_number, screen_width);
+        rect = wndmgr_calc_text_rect(option_number, max_width);
 
         rect.y = option_list_height;
 
         window_t* option_number_area = windowmanager_create_window(top_window.inside_window,
-                                                                   option_number,
                                                                    rect,
-                                                                   (color_t){.color = 0x00000000},
-                                                                   (color_t){.color = 0xFF2288FF});
+                                                                   (color_t){.color = 0xFF2288FF},
+                                                                   .text = option_number);
+
+        memory_free(option_number);
 
         if(option_number_area == NULL) {
             windowmanager_destroy_window(top_window.main_window);
@@ -275,18 +275,20 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
 
         char_t* option_text = strprintf("%s", options_list->items[i].text);
 
-        rect = windowmanager_calc_text_rect(option_text, screen_width - option_number_area->rect.width - font_width);
+        rect = wndmgr_calc_text_rect(option_text,
+                                     max_width - option_number_area->owner_rect.width - font_width);
 
-        rect.x = option_number_area->rect.width +  font_width;
+        rect.x = option_number_area->owner_rect.width +  font_width;
 
         rect.y              = option_list_height;
         option_list_height += rect.height;
 
         window_t* option_text_area = windowmanager_create_window(top_window.inside_window,
-                                                                 option_text,
                                                                  rect,
-                                                                 (color_t){.color = 0x00000000},
-                                                                 (color_t){.color = 0xFF00FF00});
+                                                                 (color_t){.color = 0xFF00FF00},
+                                                                 .text = option_text);
+
+        memory_free(option_text);
 
         if(option_text_area == NULL) {
             windowmanager_destroy_window(top_window.main_window);

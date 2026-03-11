@@ -20,7 +20,6 @@ void windowmanager_draw_window(windowmanager_t* wndmgr, window_t* window);
 
 int8_t wndmgr_mouse_init(windowmanager_t* wndmgr);
 int8_t wndmgr_font_init(windowmanager_t* wndmgr);
-void   wndmgr_mouse_move_cursor(windowmanager_t* wndmgr, uint32_t x, uint32_t y);
 
 #ifdef __cplusplus
 }

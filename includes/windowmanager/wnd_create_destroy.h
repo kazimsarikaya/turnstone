@@ -30,7 +30,34 @@ void windowmanager_create_and_show_alert_window(windowmanager_alert_window_type_
 
 window_top_window_t windowmanager_create_top_window(const char_t* title, boolean_t has_command_input);
 
-window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rect, color_t background_color, color_t foreground_color);
+typedef struct windowmanager_create_window_args_t {
+    window_t*     parent;
+    rect_t        rect;
+    color_t       foreground_color;
+    color_t       background_color;
+    const char_t* text;
+    boolean_t     is_single_sheet;
+} windowmanager_create_window_args_t;
+
+window_t* windowmanager_create_window_internal(windowmanager_create_window_args_t args);
+
+#define windowmanager_create_window(p, r, ...) ({ \
+        _Pragma("GCC diagnostic push") \
+        _Pragma("GCC diagnostic ignored \"-Woverride-init\"") \
+        _Pragma("GCC diagnostic ignored \"-Woverride-init-side-effects\"") \
+        windowmanager_create_window_args_t __args = { \
+        .background_color = (color_t){.color = 0x00000000}, \
+        .foreground_color = (color_t){.color = 0xFFFFFFFF}, \
+        .text = NULL, \
+        .is_single_sheet = false, \
+        .parent = p, \
+        .rect = r, \
+        ## __VA_ARGS__ }; \
+        window_t* __rc = windowmanager_create_window_internal(__args); \
+        _Pragma("GCC diagnostic pop") \
+        __rc; \
+        })
+
 window_t* windowmanager_create_primary_options_window(void);
 window_t* windowmanager_create_greater_window(void);
 window_t* windowmanager_command_input_window(window_t* parent, rect_t pos,

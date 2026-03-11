@@ -23,16 +23,19 @@ MODULE("turnstone.windowmanager");
 void video_text_print(const char_t* text);
 
 
-static window_t* wnd_create_textbox(char_t* text, window_t* parent, int64_t x_offset, color_t bg_color, color_t fg_color) {
-    rect_t rect = windowmanager_calc_text_rect(text, parent->rect.width - x_offset);
+static window_t* wnd_create_textbox(char_t* text, window_t* parent,
+                                    int64_t x_offset, int64_t y_offset,
+                                    color_t bg_color, color_t fg_color) {
+    rect_t rect = wndmgr_calc_text_rect(text, parent->owner_rect.width - x_offset);
 
     rect.x = x_offset;
+    rect.y = y_offset;
 
     window_t* window = windowmanager_create_window(parent,
-                                                   text,
                                                    rect,
+                                                   fg_color,
                                                    bg_color,
-                                                   fg_color);
+                                                   text);
 
     if(window == NULL) {
         return NULL;
@@ -44,7 +47,7 @@ static window_t* wnd_create_textbox(char_t* text, window_t* parent, int64_t x_of
 static window_t* wnd_create_editor_ruler(windowmanager_t* wndmgr, window_t* parent, int64_t start, int64_t top, color_t bg_color, color_t fg_color) {
     uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
 
-    int64_t max_ruler       = (parent->rect.width / font_width) - 9;
+    int64_t max_ruler       = (parent->owner_rect.width / font_width) - 9;
     int64_t ruler_col_count = max_ruler;
     max_ruler += start;
 
@@ -97,13 +100,12 @@ static window_t* wnd_create_editor_ruler(windowmanager_t* wndmgr, window_t* pare
 
     int64_t ruler_line_top = top;
 
-    rect_t rect = {0, ruler_line_top, parent->rect.width, font_height * ruler_line_count};
+    rect_t rect = {0, ruler_line_top, parent->owner_rect.width, font_height * ruler_line_count};
 
     window_t* ruler_window = windowmanager_create_window(parent,
-                                                         NULL,
                                                          rect,
-                                                         bg_color,
-                                                         fg_color);
+                                                         fg_color,
+                                                         bg_color);
 
     if(ruler_window == NULL) {
         for(int64_t i = 0; i < ruler_line_count; i++) {
@@ -119,12 +121,13 @@ static window_t* wnd_create_editor_ruler(windowmanager_t* wndmgr, window_t* pare
     int64_t offset_y = 0;
 
     for(int64_t i = 0; i < ruler_line_count; i++) {
-        window_t* ruler_line_window = wnd_create_textbox(ruler_lines[i], ruler_window, offset_x, bg_color, fg_color);
+        window_t* ruler_line_window = wnd_create_textbox(ruler_lines[i], ruler_window,
+                                                         offset_x, offset_y,
+                                                         bg_color, fg_color);
+
+        memory_free(ruler_lines[i]);
 
         if(ruler_line_window == NULL) {
-            for(int64_t j = 0; j < ruler_line_count; j++) {
-                memory_free(ruler_lines[j]);
-            }
 
             memory_free(ruler_lines);
 
@@ -133,9 +136,7 @@ static window_t* wnd_create_editor_ruler(windowmanager_t* wndmgr, window_t* pare
             return NULL;
         }
 
-        ruler_line_window->rect.y = offset_y;
-
-        offset_y += ruler_line_window->rect.height;
+        offset_y += ruler_line_window->owner_rect.height;
     }
 
     memory_free(ruler_lines);
@@ -147,12 +148,10 @@ static window_t* wnd_create_numbered_line(windowmanager_t* wndmgr, int64_t line_
     uint32_t font_height = wndmgr->font_height;
 
     window_t* window = windowmanager_create_window(parent,
-                                                   NULL,
                                                    (rect_t){0,
                                                             top,
-                                                            parent->rect.width,
+                                                            parent->owner_rect.width,
                                                             font_height},
-                                                   (color_t){.color = 0x00000000},
                                                    (color_t){.color = 0xFFFFFFFF});
 
 
@@ -162,7 +161,8 @@ static window_t* wnd_create_numbered_line(windowmanager_t* wndmgr, int64_t line_
 
     char_t* line_number_str = strprintf("%08i ", line_number);
 
-    window_t* line_number_window = wnd_create_textbox(line_number_str, window, 0, (color_t){.color = 0x00000000}, (color_t){.color = 0xFFF00000});
+    window_t* line_number_window = wnd_create_textbox(line_number_str, window, 0, 0,
+                                                      (color_t){.color = 0x00000000}, (color_t){.color = 0xFFF00000});
 
     if(line_number_window == NULL) {
         windowmanager_destroy_window(window);
@@ -171,7 +171,8 @@ static window_t* wnd_create_numbered_line(windowmanager_t* wndmgr, int64_t line_
 
     char_t* line_str = strndup(line, line_length);
 
-    window_t* line_window = wnd_create_textbox(line_str, window, line_number_window->rect.width, (color_t){.color = 0x00000000}, (color_t){.color = 0xFFFFFFFF});
+    window_t* line_window = wnd_create_textbox(line_str, window, line_number_window->owner_rect.width, 0,
+                                               (color_t){.color = 0x00000000}, (color_t){.color = 0xFFFFFFFF});
 
     if(line_window == NULL) {
         windowmanager_destroy_window(window);
@@ -191,15 +192,16 @@ typedef struct wnd_editor_extra_data_t {
 } wnd_editor_extra_data_t;
 
 static int8_t wnd_editor_on_predraw(const window_event_t* event) {
-    windowmanager_t* wndmgr = windowmanager_get_instance();
+    window_t* window = event->window;
+
+    if(!wndmgr_is_window_dirty(window)) {
+        return 0;
+    }
+
+    windowmanager_t* wndmgr = window->wndmgr;
 
     uint32_t font_height = wndmgr->font_height;
 
-    window_t* window = event->window;
-
-    if(!window->is_dirty) {
-        return 0;
-    }
 
     wnd_editor_extra_data_t* extra_data = window->extra_data;
 
@@ -220,20 +222,17 @@ static int8_t wnd_editor_on_predraw(const window_event_t* event) {
 
     extra_data->ruler_window = ruler_window;
 
-    int64_t top        = ruler_window->rect.y + ruler_window->rect.height;
-    int64_t max_height = window->rect.height - font_height; // remove footer line
+    int64_t top        = ruler_window->owner_rect.y + ruler_window->owner_rect.height;
+    int64_t max_height = window->owner_rect.height - font_height; // remove footer line
 
-    rect_t rect_editor = {0, top, window->rect.width, max_height - top};
+    rect_t rect_editor = {0, top, window->owner_rect.width, max_height - top};
 
     if(extra_data->editor_window != NULL) {
         windowmanager_destroy_child_window(window, extra_data->editor_window);
     }
 
     window_t* editor_window = windowmanager_create_window(window,
-                                                          NULL,
-                                                          rect_editor,
-                                                          (color_t){.color = 0x00000000},
-                                                          (color_t){.color = 0xFFFFFFFF});
+                                                          rect_editor);
 
     if(editor_window == NULL) {
         return -1;
@@ -248,7 +247,7 @@ static int8_t wnd_editor_on_predraw(const window_event_t* event) {
 
     top = 0;
 
-    int64_t max_lines = editor_window->rect.height / font_height;
+    int64_t max_lines = editor_window->owner_rect.height / font_height;
 
     int64_t print_line_count = MIN(line_count, max_lines);
 
@@ -288,7 +287,7 @@ static int8_t wnd_editor_on_predraw(const window_event_t* event) {
             return -1;
         }
 
-        top += line_window->rect.height;
+        top += line_window->owner_rect.height;
     }
 
     memory_free(line_lengths);
@@ -317,19 +316,19 @@ static int8_t wnd_editor_on_scroll(const window_event_t* event) {
     if(event->type == WINDOW_EVENT_TYPE_SCROLL_UP) {
         if(row_start > 0) {
             row_start--;
-            window->is_dirty = true;
+            wndmgr_mark_all_windows_dirty(window);
         }
     } else if(event->type == WINDOW_EVENT_TYPE_SCROLL_DOWN) {
         row_start++;
-        window->is_dirty = true;
+        wndmgr_mark_all_windows_dirty(window);
     } else if(event->type == WINDOW_EVENT_TYPE_SCROLL_LEFT) {
         if(col_start > 0) {
             col_start--;
-            window->is_dirty = true;
+            wndmgr_mark_all_windows_dirty(window);
         }
     } else if(event->type == WINDOW_EVENT_TYPE_SCROLL_RIGHT) {
         col_start++;
-        window->is_dirty = true;
+        wndmgr_mark_all_windows_dirty(window);
     }
 
     extra_data->row_start = row_start;
@@ -348,9 +347,6 @@ int8_t windowmanager_create_and_show_editor_window(const char_t* title, const ch
     }
 
     window_t* window = top_window.inside_window;
-
-    window->is_writable = !is_text_readonly;
-
 
     wnd_editor_extra_data_t* extra_data = memory_malloc(sizeof(wnd_editor_extra_data_t));
 

@@ -82,10 +82,12 @@ static int8_t wnd_task_list_on_predraw(const window_event_t* event) {
         }
 
         window_t* wnd_task = windowmanager_create_window(wnd_task_list_area,
-                                                         task_str,
-                                                         (rect_t){0, top, wnd_task_list_area->rect.width, font_height},
+                                                         (rect_t){0, top, wnd_task_list_area->owner_rect.width, font_height},
+                                                         (color_t){.color = 0xFF00FF00},
                                                          bg_color,
-                                                         (color_t){.color = 0xFF00FF00});
+                                                         .text = task_str);
+
+        memory_free(task_str);
 
         if(!wnd_task) {
             memory_free(task_list_items);
@@ -122,12 +124,10 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
     window_t* window = top_window.inside_window;
 
     window_t* wnd_header = windowmanager_create_window(window,
-                                                       NULL,
                                                        (rect_t){0,
                                                                 0,
                                                                 screen_width,
                                                                 font_height},
-                                                       (color_t){.color = 0x00000000},
                                                        (color_t){.color = 0xFFee9900});
 
     if(!wnd_header) {
@@ -140,11 +140,12 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
                                     "State", "MQ Count", "Message Count", "Is VM", "Name");
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
-                                                            header_text,
                                                             (rect_t){0, 0, screen_width - font_width, font_height},
+                                                            (color_t){.color = 0xFFee9900},
                                                             (color_t){.color = 0xFF181818},
-                                                            (color_t){.color = 0xFFee9900});
+                                                            .text = header_text);
 
+    memory_free(header_text);
 
     if(!wnd_header_text) {
         windowmanager_destroy_window(top_window.main_window);
@@ -154,12 +155,10 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
     rect_t wnd_task_list_area_rect = {0,
                                       font_height,
                                       screen_width,
-                                      screen_height - wnd_header_text->rect.y - font_height - font_height};
+                                      screen_height - wnd_header_text->owner_rect.y - font_height - font_height};
 
     window_t* wnd_task_list_area = windowmanager_create_window(window,
-                                                               NULL,
                                                                wnd_task_list_area_rect,
-                                                               (color_t){.color = 0x00000000},
                                                                (color_t){.color = 0xFFee9900});
 
     if(!wnd_task_list_area) {
@@ -167,7 +166,7 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
         return -1;
     }
 
-    wnd_task_list_area->is_always_redrawn = true;
+    wndmgr_mark_window_sheets_always_redrawn(wnd_task_list_area, true);
 
     wnd_task_list_area->extra_data              = (void*)wnd_task_list_area;
     wnd_task_list_area->extra_data_is_allocated = false;
@@ -191,7 +190,7 @@ static int8_t wndmgr_create_vm_on_enter(const window_event_t* event) {
         return -1;
     }
 
-    list_t* inputs = windowmanager_get_input_values(window);
+    list_t* inputs = wndmgr_get_input_values(window);
 
     if(!list_size(inputs)) {
         list_destroy(inputs);
@@ -278,7 +277,7 @@ int8_t windowmanager_create_and_show_task_vm_create_window(void) {
     rect_t wnd_entry_point_rect = {
         .x      = 0,
         .y      = 0,
-        .width  = window->rect.width,
+        .width  = window->owner_rect.width,
         .height = font_height,
     };
 
@@ -296,7 +295,7 @@ int8_t windowmanager_create_and_show_task_vm_create_window(void) {
     rect_t wnd_heap_size_rect = {
         .x      = 0,
         .y      = font_height,
-        .width  = window->rect.width,
+        .width  = window->owner_rect.width,
         .height = font_height,
     };
 
@@ -314,7 +313,7 @@ int8_t windowmanager_create_and_show_task_vm_create_window(void) {
     rect_t wnd_stack_size_rect = {
         .x      = 0,
         .y      =  2 * font_height,
-        .width  = window->rect.width,
+        .width  = window->owner_rect.width,
         .height = font_height,
     };
 

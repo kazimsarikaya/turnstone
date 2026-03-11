@@ -16,6 +16,7 @@
 #include <device/mouse.h>
 #include <logging.h>
 #include <strings.h>
+#include <math.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -112,6 +113,13 @@ int8_t wndmgr_font_init(windowmanager_t* wndmgr) {
     wndmgr->font_width  = old_font->font_width;
     wndmgr->font_height = old_font->font_height;
 
+    uint32_t sheet_tile_size = math_lcm(wndmgr->font_width, wndmgr->font_height);
+    wndmgr->sheet_tile_size = sheet_tile_size;
+
+    while(wndmgr->sheet_tile_size < 64) {
+        wndmgr->sheet_tile_size += sheet_tile_size;
+    }
+
     PRINTLOG(WINDOWMANAGER, LOG_INFO, "Font width and height set to %dx%d", wndmgr->font_width, wndmgr->font_height);
 
     wndmgr->font_uv_table = memory_malloc(sizeof(wndmgr_font_uv_t) * font->glyph_count);
@@ -147,34 +155,6 @@ int8_t wndmgr_font_init(windowmanager_t* wndmgr) {
 
 }
 
-void wndmgr_mouse_move_cursor(windowmanager_t* wndmgr, uint32_t x, uint32_t y) {
-    if (!wndmgr->mouse_initialized) {
-        return;
-    }
-
-    if (x >= wndmgr->screen_width || y >= wndmgr->screen_height) {
-        return;
-    }
-
-    rect_t mouse_rect = {
-        .x      = wndmgr->mouse_x,
-        .y      = wndmgr->mouse_y,
-        .width  = wndmgr->mouse_image_width,
-        .height = wndmgr->mouse_image_height
-    };
-
-    windowmanager_mark_window_dirty_by_rect(wndmgr->current_window, &mouse_rect);
-
-
-    wndmgr->mouse_x = x;
-    wndmgr->mouse_y = y;
-
-    mouse_rect.x = wndmgr->mouse_x;
-    mouse_rect.y = wndmgr->mouse_y;
-
-    windowmanager_mark_window_dirty_by_rect(wndmgr->current_window, &mouse_rect);
-}
-
 static void wndmgr_mouse_draw_cursor(windowmanager_t* wndmgr) {
     if (!wndmgr->mouse_initialized) {
         return;
@@ -206,13 +186,13 @@ static void wndmgr_mouse_draw_cursor(windowmanager_t* wndmgr) {
 }
 
 static void wndmgr_draw_text_cursor(windowmanager_t* wndmgr) {
-    window_t* tcw = NULL;
-    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &tcw)) {
-        if(tcw == NULL) {
+    const window_sheet_t* tcs = NULL;
+    if(wndmgr_find_window_sheet_by_text_cursor(wndmgr->current_window, &tcs)) {
+        if(tcs == NULL) {
             return;
         }
 
-        if(!tcw->is_drawing_occured) {
+        if(!tcs->is_drawing_occured) {
             return;
         }
     }
@@ -268,11 +248,21 @@ static void windowmanager_print_text(const windowmanager_t* wndmgr, const window
         return;
     }
 
+    if(!window->sheets) {
+        return;
+    }
+
+    if(list_size(window->sheets) != 1) {
+        return;
+    }
+
     if(text == NULL) {
         return;
     }
 
-    if(window->rect.x + (int64_t)x >= wndmgr->screen_width || window->rect.y + (int64_t)y >= wndmgr->screen_height) {
+    const window_sheet_t* sheet = list_get_data_at_position(window->sheets, 0);
+
+    if(sheet->rect.x + (int64_t)x >= wndmgr->screen_width || sheet->rect.y + (int64_t)y >= wndmgr->screen_height) {
         return;
     }
 
@@ -281,14 +271,14 @@ static void windowmanager_print_text(const windowmanager_t* wndmgr, const window
     uint32_t cur_x = 0;
     uint32_t cur_y = 0;
 
-    uint32_t max_cur_x = window->rect.width / font_width;
-    uint32_t max_cur_y = window->rect.height / font_height;
+    uint32_t max_cur_x = sheet->rect.width / font_width;
+    uint32_t max_cur_y = sheet->rect.height / font_height;
 
     if(cur_x >= max_cur_x || cur_y >= max_cur_y) {
         return;
     }
 
-    color_t fg = window->foreground_color;
+    color_t fg = sheet->foreground_color;
 
     sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
 
@@ -352,60 +342,51 @@ static void windowmanager_draw_window_internal(windowmanager_t* wndmgr, window_t
         return;
     }
 
-    if(!window->is_visible) {
+    if(window->is_hidden) {
         return;
     }
 
-    boolean_t parent_is_dirty = false;
-
-    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
-
-    rect_t rect = window->rect;
-
-    sgfx_create_sub_context(gfx_ctx, rect.x, rect.y, rect.width, rect.height);
+    UNUSED(parent);
 
     if(window->on_predraw) {
         window_event_t event = {.type = WINDOW_EVENT_TYPE_PREDRAW, .window = window};
         window->on_predraw(&event);
     }
 
-    if(window->is_dirty || window->is_always_redrawn) {
-        if(window->on_draw) {
-            window_event_t event = {.type = WINDOW_EVENT_TYPE_DRAW, .window = window};
-            window->on_draw(&event);
-        } else {
-            if(0 && parent && parent->background_color.color == window->background_color.color) {
-                // No need to redraw if background color is same as parent
+    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
+
+    for(size_t i = 0; i < list_size(window->sheets); i++) {
+        window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, i);
+
+        if(sheet->is_dirty || sheet->is_always_redrawn) {
+            if(window->on_draw) {
+                window_event_t event = {.type = WINDOW_EVENT_TYPE_DRAW, .window = window};
+                window->on_draw(&event);
             } else {
-                color_t bg = window->background_color;
+                rect_t rect = sheet->absolute_rect;
 
-                while(bg.color == 0x00000000 && parent != NULL) {
-                    bg     = parent->background_color;
-                    parent = parent->parent;
-                }
+                sgfx_create_sub_context(gfx_ctx, rect.x, rect.y, rect.width, rect.height);
 
-                sgfx_clear_color(gfx_ctx, bg);
+                sgfx_clear_color(gfx_ctx, sheet->background_color);
+
+                windowmanager_print_text(wndmgr, window, 0, 0, sheet->text);
+
+                sgfx_destroy_sub_context(gfx_ctx);
             }
 
-            windowmanager_print_text(wndmgr, window, 0, 0, window->text);
+            sheet->is_dirty           = false;
+            sheet->is_drawing_occured = true;
+        } else {
+            sheet->is_drawing_occured = false;
         }
 
-        parent_is_dirty            = true;
-        window->is_dirty           = false;
-        window->is_drawing_occured = true;
-    } else {
-        window->is_drawing_occured = false;
     }
 
     for (size_t i = 0; i < list_size(window->children); i++) {
         window_t* child = (window_t*)list_get_data_at_position(window->children, i);
 
-        child->is_dirty = child->is_dirty || parent_is_dirty;
-
         windowmanager_draw_window_internal(wndmgr, window, child);
     }
-
-    sgfx_destroy_sub_context(gfx_ctx);
 
     return;
 }
