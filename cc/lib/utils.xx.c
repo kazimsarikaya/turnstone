@@ -22,7 +22,7 @@ number_t power(number_t base, number_t p) {
         if(p & 0x1) {
             ret *= base;
         }
-        p /= 2;
+        p    /= 2;
         base *= base;
 
     }
@@ -48,11 +48,11 @@ int8_t ito_base_with_buffer(char_t* buffer, number_t number, number_t base) {
 
     if(number < 0) {
         buffer[0] = '-';
-        sign = 1;
-        number *= -1;
+        sign      = 1;
+        number   *= -1;
     }
 
-    size_t len = 0;
+    size_t len    = 0;
     number_t temp = number;
 
     while(temp) {
@@ -64,7 +64,7 @@ int8_t ito_base_with_buffer(char_t* buffer, number_t number, number_t base) {
     number_t r;
 
     while(number) {
-        r = number % base;
+        r       = number % base;
         number /= base;
 
         if(r < 10) {
@@ -96,7 +96,7 @@ int8_t uto_base_with_buffer(char_t* buffer, unumber_t number, number_t base) {
         return 0;
     }
 
-    size_t len = 0;
+    size_t len     = 0;
     unumber_t temp = number;
 
     while(temp) {
@@ -108,7 +108,7 @@ int8_t uto_base_with_buffer(char_t* buffer, unumber_t number, number_t base) {
     unumber_t r;
 
     while(number) {
-        r = number % base;
+        r       = number % base;
         number /= base;
 
         buffer[len - i] = DIGIT_TO_HEX(r);
@@ -163,7 +163,7 @@ int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, num
         }
     }
 
-    buffer += strlen(buffer);
+    buffer   += strlen(buffer);
     buffer[0] = '.';
     buffer++;
 
@@ -187,9 +187,9 @@ int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, num
 }
 
 uint8_t byte_count(const uint64_t num) {
-    uint8_t res = sizeof(uint64_t);
+    uint8_t res      = sizeof(uint64_t);
     uint64_t tmp_num = BYTE_SWAP64(num);
-    uint8_t* blist = (uint8_t*)&tmp_num;
+    uint8_t* blist   = (uint8_t*)&tmp_num;
 
     while(*blist == 0) {
         blist++;
@@ -197,34 +197,6 @@ uint8_t byte_count(const uint64_t num) {
     }
 
     return res;
-}
-
-uint64_t __attribute__((noinline, optimize("O0"))) read_memio(uint64_t va, uint8_t size) {
-    uint64_t res = 0;
-
-    if(size == 8) {
-        res = *(volatile uint8_t*)va;
-    } else if(size == 16) {
-        res = *(volatile uint16_t*)va;
-    } else if(size == 32) {
-        res = *(volatile uint32_t*)va;
-    } else if(size == 64) {
-        res = *(volatile uint64_t*)va;
-    }
-
-    return res;
-}
-
-void __attribute__((noinline, optimize("O0"))) write_memio(uint64_t va, uint64_t val, uint8_t size) {
-    if(size == 8) {
-        *(volatile uint8_t*)va = val;
-    } else if(size == 16) {
-        *(volatile uint16_t*)va = val;
-    } else if(size == 32) {
-        *(volatile uint32_t*)va = val;
-    } else if(size == 64) {
-        *(volatile uint64_t*)va = val;
-    }
 }
 
 boolean_t isalpha(char_t c) {

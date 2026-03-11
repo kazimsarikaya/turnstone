@@ -14,6 +14,7 @@
 #include <utils.h>
 #include <ports.h>
 #include <apic.h>
+#include <device/mmio.h>
 
 MODULE("turnstone.kernel.hw.pci.utils");
 
@@ -36,25 +37,25 @@ int8_t pci_msix_configure(const pci_generic_device_t* pci_gen_dev, const pci_cap
 
     pci_capability_msix_t* msix_cap = (pci_capability_msix_t*)_msix_cap;
 
-    msix_cap->enable = 1;
+    msix_cap->enable        = 1;
     msix_cap->function_mask = 0;
 
     PRINTLOG(PCI, LOG_TRACE, "device has msix cap enabled %i fmask %i", msix_cap->enable, msix_cap->function_mask);
     PRINTLOG(PCI, LOG_TRACE, "msix bir %i tables offset 0x%x  size 0x%x", msix_cap->bir, msix_cap->table_offset, msix_cap->table_size + 1);
     PRINTLOG(PCI, LOG_TRACE, "msix pending bit bir %i tables offset 0x%x", msix_cap->pending_bit_bir, msix_cap->pending_bit_offset);
 
-    uint64_t bar_fa = 0;
+    uint64_t bar_fa   = 0;
     uint64_t bar_size = 0;
-    uint64_t bar_va = 0;
+    uint64_t bar_va   = 0;
 
-    bar_fa = pci_get_bar_address(pci_gen_dev, msix_cap->bir);
+    bar_fa   = pci_get_bar_address(pci_gen_dev, msix_cap->bir);
     bar_size = pci_get_bar_size(pci_gen_dev, msix_cap->bir);
-    bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
+    bar_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
 
     frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
 
     uint64_t bar_frm_cnt = (bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
-    frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+    frame_t bar_req_frm  = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
     if(bar_frames == NULL) {
         PRINTLOG(PCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
@@ -69,15 +70,15 @@ int8_t pci_msix_configure(const pci_generic_device_t* pci_gen_dev, const pci_cap
     memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
     if(msix_cap->bir != msix_cap->pending_bit_bir) {
-        bar_fa = pci_get_bar_address(pci_gen_dev, msix_cap->pending_bit_bir);
+        bar_fa   = pci_get_bar_address(pci_gen_dev, msix_cap->pending_bit_bir);
         bar_size = pci_get_bar_size(pci_gen_dev, msix_cap->pending_bit_bir);
-        bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
+        bar_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
 
         bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
 
-        bar_frm_cnt = (bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
+        bar_frm_cnt               = (bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
         bar_req_frm.frame_address = bar_fa;
-        bar_req_frm.frame_count = bar_frm_cnt;
+        bar_req_frm.frame_count   = bar_frm_cnt;
 
         if(bar_frames == NULL) {
             PRINTLOG(PCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
@@ -108,21 +109,21 @@ uint8_t pci_msix_set_isr(const pci_generic_device_t* pci_dev, const pci_capabili
     pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_table_address);
 
     uint32_t msg_addr = 0xFEE00000;
-    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t apic_id  = apic_get_local_apic_id();
     apic_id <<= 12;
     msg_addr |= apic_id;
 
     uint8_t intnum = 0;
 
     if(!msix_table->entries[msix_vector].message_data) {
-        intnum = interrupt_get_next_empty_interrupt();
+        intnum                                        = interrupt_get_next_empty_interrupt();
         msix_table->entries[msix_vector].message_data = intnum;
     } else {
         intnum = msix_table->entries[msix_vector].message_data;
     }
 
     msix_table->entries[msix_vector].message_address = msg_addr;
-    msix_table->entries[msix_vector].masked = 0;
+    msix_table->entries[msix_vector].masked          = 0;
 
     uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
     interrupt_irq_set_handler(isrnum, isr);
@@ -219,7 +220,7 @@ uint64_t pci_get_bar_size(const pci_generic_device_t* _pci_dev, uint8_t bar_no){
     pci_generic_device_t* pci_dev = (pci_generic_device_t*)_pci_dev;
 
     uint64_t old_address = pci_get_bar_address(pci_dev, bar_no);
-    uint64_t mask = -1ULL;
+    uint64_t mask        = -1ULL;
     pci_set_bar_address(pci_dev, bar_no, mask);
 
     uint64_t size = pci_get_bar_address(pci_dev, bar_no);
@@ -254,17 +255,17 @@ uint64_t pci_get_bar_address(const pci_generic_device_t* _pci_dev, uint8_t bar_n
     uint64_t bar_fa = 0;
 
     if(bar->bar_type.type == 0) {
-        bar_fa = (uint64_t)bar->memory_space_bar.base_address;
+        bar_fa   = (uint64_t)bar->memory_space_bar.base_address;
         bar_fa <<= 4;
 
         if(bar->memory_space_bar.type == 2) {
             bar++;
-            uint64_t tmp = (uint64_t)(*((uint32_t*)bar));
+            uint64_t tmp = (uint64_t)(*((uint32_t*)(void*)bar));
             bar_fa = tmp << 32 | bar_fa;
         }
 
     } else {
-        bar_fa = (uint64_t)bar->io_space_bar.base_address;
+        bar_fa   = (uint64_t)bar->io_space_bar.base_address;
         bar_fa <<= 2;
     }
 
@@ -292,7 +293,7 @@ int8_t pci_set_bar_address(const pci_generic_device_t* _pci_dev, uint8_t bar_no,
         if(bar->memory_space_bar.type == 2) {
             bar++;
 
-            (*(uint32_t*)bar) = bar_fa >> 32;
+            (*(uint32_t*)(void*)bar) = bar_fa >> 32;
         }
 
     } else {
@@ -309,15 +310,15 @@ void pci_disable_interrupt(const pci_generic_device_t* pci_dev) {
 
     uint64_t dest = ((uint64_t)pci_dev) + 4;
 
-    uint32_t value = read_memio(dest, 32);
+    uint32_t value = mmio_read(dest, 4);
     PRINTLOG(PCI, LOG_TRACE, "interrupt disable 0x%p 0x%llx: 0x%x 0x%x", pci_dev, dest, value, value | (1 << 10));
     value |= (1 << 10);
-    write_memio(dest, 32, value);
+    mmio_write(dest, value, 4);
 
     for(int32_t i = 0; i < 1000; i++) {
         asm volatile ("pause");
 
-        value = read_memio(dest, 32);
+        value = mmio_read(dest, 4);
 
         if((value & (1 << 10)) == (1 << 10)) {
             break;
@@ -337,15 +338,15 @@ void pci_enable_interrupt(const pci_generic_device_t* pci_dev) {
     uint64_t dest = ((uint64_t)pci_dev) + 4;
 
     // only change bit 10
-    uint32_t value = read_memio(dest, 32);
+    uint32_t value = mmio_read(dest, 4);
     PRINTLOG(PCI, LOG_TRACE, "interrupt enable 0x%p 0x%llx: 0x%x 0x%x", pci_dev, dest, value, value & ~(1 << 10));
     value &= ~(1 << 10);
-    write_memio(((uint64_t)pci_dev) + 4, 32, value);
+    mmio_write(((uint64_t)pci_dev) + 4, value, 4);
 
     for(int32_t i = 0; i < 1000; i++) {
         asm volatile ("pause");
 
-        value = read_memio(dest, 32);
+        value = mmio_read(dest, 4);
 
         if((value & (1 << 10)) == 0) {
             break;
