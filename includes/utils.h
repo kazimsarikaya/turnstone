@@ -256,6 +256,12 @@ static inline uint64_t reverse_bits(uint64_t bits, uint8_t bit_count) {
     return result;
 }
 
+static inline uint64_t trailing_zero_count(uint64_t num) {
+    uint64_t res = 0;
+    asm volatile ("tzcnt %1, %0" : "=r" (res) : "r" (num));
+    return res;
+}
+
 boolean_t isalpha(char_t c);
 boolean_t isdigit(char_t c);
 boolean_t isalnum(char_t c);
