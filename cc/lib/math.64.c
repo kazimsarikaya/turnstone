@@ -7,6 +7,7 @@
  */
 
 #include <math.h>
+#include <utils.h>
 
 MODULE("turnstone.lib");
 
@@ -20,7 +21,7 @@ MODULE("turnstone.lib");
 float64_t math_sin_approx(float64_t number);
 
 int64_t math_ceil(float64_t num) {
-    int64_t res = 0;
+    int64_t res   = 0;
     boolean_t pos = true;
 
     if(num < 0) {
@@ -42,7 +43,7 @@ int64_t math_ceil(float64_t num) {
 }
 
 int64_t math_floor(float64_t num) {
-    int64_t res = 0;
+    int64_t res   = 0;
     boolean_t pos = true;
 
     if(num < 0) {
@@ -65,16 +66,16 @@ float64_t math_power(float64_t base, float64_t p) {
 
 float64_t math_exp(float64_t number){
     float64_t x, p, frac, i, l;
-    x = number;
+    x    = number;
     frac = x;
-    p = (1.0 + x);
-    i = 1.0;
+    p    = (1.0 + x);
+    i    = 1.0;
 
     do {
         i++;
         frac *= (x / i);
-        l = p;
-        p += frac;
+        l     = p;
+        p    += frac;
     }while(l != p);
 
     return p;
@@ -92,7 +93,7 @@ float64_t math_log(float64_t number){
     }
 
     n += (p / EXP);
-    p = number;
+    p  = number;
 
     do {
         a = n;
@@ -132,7 +133,7 @@ float64_t math_sin_approx(float64_t number) {
 }
 
 float64_t math_sin(float64_t number) {
-    uint64_t k = math_floor(number / 180);
+    uint64_t k    = math_floor(number / 180);
     float64_t tmp = number - k * 180;
 
     if(tmp == 0 || tmp == 180) {
@@ -155,12 +156,48 @@ float64_t math_sin(float64_t number) {
 
 boolean_t math_isnan(float64_t number) {
     uint64_t mem_address = (uint64_t)&number;
-    uint64_t parsed = *((uint64_t*)mem_address);
+    uint64_t parsed      = *((uint64_t*)mem_address);
     return ((parsed & MATH_EXP_MASK) == MATH_EXP_MASK) && ((parsed & MATH_FRAC_MASK) != 0);
 }
 
 boolean_t math_isinf(float64_t number) {
     uint64_t mem_address = (uint64_t)&number;
-    uint64_t parsed = *((uint64_t*)mem_address);
+    uint64_t parsed      = *((uint64_t*)mem_address);
     return ((parsed & MATH_EXP_MASK) == MATH_EXP_MASK) && ((parsed & MATH_FRAC_MASK) == 0);
+}
+
+uint64_t math_gcd(uint64_t a, uint64_t b) {
+    if (!a || !b) {
+        return a | b;
+    }
+
+    // Common power of 2
+    uint64_t shift = trailing_zero_count(a | b);
+    a >>= trailing_zero_count(a);
+
+    do {
+        b >>= trailing_zero_count(b);
+        // Use conditional move (CMOV) logic via a simple temp swap
+        // to keep the pipeline clean of branch mispredictions
+        asm volatile (
+            "cmp %1, %2\n"
+            "cmovb %1, %0\n"
+            "cmovb %2, %1\n"
+            : "+r" (a), "+r" (b)
+            :
+            : "cc"
+            );
+        b -= a;
+    } while (b);
+
+    return a << shift;
+}
+
+uint64_t math_lcm(uint64_t a, uint64_t b) {
+    if (a == 0 || b == 0) {
+        return 0;
+    }
+
+    uint64_t gcd = math_gcd(a, b);
+    return (a / gcd) * b; // This order of operations helps prevent overflow
 }

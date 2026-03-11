@@ -109,6 +109,10 @@ boolean_t math_isnan(float64_t number);
  */
 boolean_t math_isinf(float64_t number);
 
+uint64_t math_gcd(uint64_t a, uint64_t b);
+
+uint64_t math_lcm(uint64_t a, uint64_t b);
+
 #ifdef __cplusplus
 }
 #endif
