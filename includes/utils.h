@@ -245,12 +245,12 @@ static inline uint64_t bit_most_significant(uint64_t num) {
 }
 
 static inline uint64_t reverse_bits(uint64_t bits, uint8_t bit_count) {
-    int16_t result = 0;
+    uint64_t result = 0;
 
     for (uint8_t i = 0; i < bit_count; i++) {
         result <<= 1;
-        result |= bits & 1;
-        bits >>= 1;
+        result  |= bits & 1;
+        bits   >>= 1;
     }
 
     return result;
