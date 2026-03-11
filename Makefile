@@ -244,6 +244,8 @@ bear:
 	# Find .o files newer than the json file and delete them
 	@if [ -f $(OBJDIR)/compile_commands.json ]; then \
 		find $(OBJDIR) -type f -name '*.o' -newer $(OBJDIR)/compile_commands.json -delete; \
+	else \
+	    find $(OBJDIR) -type f -name '*.o' -delete; \
 	fi
 	bear --output $(OBJDIR)/compile_commands.json --append -- make qemu
 	bear --output $(OBJDIR)/compile_commands.json --append -- make -j $(shell nproc) tests
