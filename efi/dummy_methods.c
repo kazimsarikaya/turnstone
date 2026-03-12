@@ -25,6 +25,8 @@
 #include <efi.h>
 #include <stdbufs.h>
 #include <deflate.h>
+#include <zpack.h>
+#include <gzip.h>
 #include <compression.h>
 #include <quicksort.h>
 #include <assert.h>

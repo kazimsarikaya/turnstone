@@ -23,6 +23,7 @@
 #include <compression.h>
 #include <deflate.h>
 #include <zpack.h>
+#include <gzip.h>
 #include <binarysearch.h>
 #include <tokenizer.h>
 #include <set.h>

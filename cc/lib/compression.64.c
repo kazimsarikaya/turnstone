@@ -10,6 +10,7 @@
 #include <compression.h>
 #include <deflate.h>
 #include <zpack.h>
+#include <gzip.h>
 
 MODULE("turnstone.lib");
 
@@ -22,21 +23,27 @@ int8_t compression_null_unpack(buffer_t* in, buffer_t* out) {
 }
 
 const compression_t compression_null = {
-    .type = COMPRESSION_TYPE_NONE,
-    .pack = compression_null_pack,
+    .type   = COMPRESSION_TYPE_NONE,
+    .pack   = compression_null_pack,
     .unpack = compression_null_unpack,
 };
 
 const compression_t deflate_compression = {
-    .type = COMPRESSION_TYPE_DEFLATE,
-    .pack = deflate_deflate,
+    .type   = COMPRESSION_TYPE_DEFLATE,
+    .pack   = deflate_deflate,
     .unpack = deflate_inflate,
 };
 
 const compression_t zpack_compression = {
-    .type = COMPRESSION_TYPE_ZPACK,
-    .pack = zpack_pack,
+    .type   = COMPRESSION_TYPE_ZPACK,
+    .pack   = zpack_pack,
     .unpack = zpack_unpack,
+};
+
+const compression_t gzip_compression = {
+    .type   = COMPRESSION_TYPE_GZIP,
+    .pack   = gzip_pack,
+    .unpack = gzip_unpack,
 };
 
 const compression_t* compression_get(compression_type_t type) {
@@ -47,6 +54,8 @@ const compression_t* compression_get(compression_type_t type) {
         return &deflate_compression;
     case COMPRESSION_TYPE_ZPACK:
         return &zpack_compression;
+    case COMPRESSION_TYPE_GZIP:
+        return &gzip_compression;
     default:
         return NULL;
     }

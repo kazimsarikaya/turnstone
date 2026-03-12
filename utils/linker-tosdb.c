@@ -29,6 +29,7 @@
 #include <zpack.h>
 #include <math.h>
 #include <deflate.h>
+#include <gzip.h>
 #include <quicksort.h>
 // end of dep headers
 

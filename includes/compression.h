@@ -25,6 +25,7 @@ typedef enum compression_type_t {
     COMPRESSION_TYPE_NONE = 0, ///< No compression applied.
     COMPRESSION_TYPE_ZPACK, ///< ZPACK compression algorithm.
     COMPRESSION_TYPE_DEFLATE, ///< DEFLATE compression algorithm.
+    COMPRESSION_TYPE_GZIP, ///< GZIP compression algorithm.
     COMPRESSION_MAX, ///< Sentinel value for the maximum compression type.
 } compression_type_t;
 

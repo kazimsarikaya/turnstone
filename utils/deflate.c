@@ -30,7 +30,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
     boolean_t compress = argv[0][0] == 'c';
 
-    char_t* input = argv[1];
+    char_t* input  = argv[1];
     char_t* output = argv[2];
 
     FILE* in = fopen(input, "rb");
