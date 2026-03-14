@@ -29,13 +29,13 @@ typedef struct buffer_t {
 }buffer_t;
 
 buffer_t buffer_tmp_buffer_for_printf = {
-    .heap = NULL,
-    .lock = NULL,
+    .heap     = NULL,
+    .lock     = NULL,
     .capacity = BUFFER_PRINTF_BUFFER_SIZE,
-    .length = 0,
+    .length   = 0,
     .position = 0,
     .readonly = false,
-    .data = buffer_tmp_buffer_area_for_printf
+    .data     = buffer_tmp_buffer_area_for_printf
 };
 
 buffer_t* buffer_get_tmp_buffer_for_printf(void) {
@@ -43,7 +43,7 @@ buffer_t* buffer_get_tmp_buffer_for_printf(void) {
 }
 
 void buffer_reset_tmp_buffer_for_printf(void) {
-    buffer_tmp_buffer_for_printf.length = 0;
+    buffer_tmp_buffer_for_printf.length   = 0;
     buffer_tmp_buffer_for_printf.position = 0;
     memory_memclean(buffer_tmp_buffer_for_printf.data, buffer_tmp_buffer_for_printf.capacity);
 }
@@ -61,10 +61,10 @@ buffer_t* buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
         capacity = 1;
     }
 
-    buffer->heap = heap;
-    buffer->lock = lock_create_with_heap(buffer->heap);
+    buffer->heap     = heap;
+    buffer->lock     = lock_create_with_heap(buffer->heap);
     buffer->capacity = capacity;
-    buffer->data = memory_malloc_ext(buffer->heap, buffer->capacity, 0);
+    buffer->data     = memory_malloc_ext(buffer->heap, buffer->capacity, 0);
 
     if(buffer->data == NULL) {
         memory_free_ext(heap, buffer);
@@ -90,11 +90,11 @@ buffer_t* buffer_encapsulate(uint8_t* data, uint64_t length) {
         return NULL;
     }
 
-    buffer->lock = lock_create_with_heap(buffer->heap);
+    buffer->lock     = lock_create_with_heap(buffer->heap);
     buffer->capacity = length;
-    buffer->length = length;
+    buffer->length   = length;
     buffer->readonly = true;
-    buffer->data = data;
+    buffer->data     = data;
 
     return buffer;
 }
@@ -148,7 +148,7 @@ boolean_t buffer_reset(buffer_t* buffer) {
 
     memory_memclean(buffer->data, buffer->length);
 
-    buffer->length = 0;
+    buffer->length   = 0;
     buffer->position = 0;
 
     lock_release(buffer->lock);
@@ -315,8 +315,8 @@ uint8_t* buffer_get_all_bytes_and_reset(buffer_t* buffer, uint64_t* length) {
         *length = buffer->length;
     }
 
-    buffer->data = memory_malloc_ext(buffer->heap, buffer->capacity, 0);
-    buffer->length = 0;
+    buffer->data     = memory_malloc_ext(buffer->heap, buffer->capacity, 0);
+    buffer->length   = 0;
     buffer->position = 0;
 
     lock_release(buffer->lock);
@@ -402,30 +402,30 @@ uint64_t buffer_peek_ints_at_position(buffer_t* buffer, uint64_t position, uint8
         return 0;
     }
 
-    uint64_t* res_p = (uint64_t*)&buffer->data[position];
-    uint64_t res = *res_p;
+    uint64_t* res_p = (uint64_t*)(void*)&buffer->data[position];
+    uint64_t res    = *res_p;
 
     switch(bc) {
     case 1:
-        res &= 0xFF;
+        res &= 0xFFULL;
         break;
     case 2:
-        res &= 0xFFFF;
+        res &= 0xFFFFULL;
         break;
     case 3:
-        res &= 0xFFFFFF;
+        res &= 0xFFFFFFULL;
         break;
     case 4:
-        res &= 0xFFFFFFFF;
+        res &= 0xFFFFFFFFULL;
         break;
     case 5:
-        res &= 0xFFFFFFFFFF;
+        res &= 0xFFFFFFFFFFULL;
         break;
     case 6:
-        res &= 0xFFFFFFFFFFFF;
+        res &= 0xFFFFFFFFFFFFULL;
         break;
     case 7:
-        res &= 0xFFFFFFFFFFFFFF;
+        res &= 0xFFFFFFFFFFFFFFULL;
         break;
     case 8:
         break;
@@ -604,33 +604,34 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
 
         if(data == '%') {
             fmt++;
-            int8_t wfmtb = 1;
+            int8_t format_block_ended = true;
             char_t buf[257];
+            number_t ito_base = 10;
             char_t ito_buf[64];
-            int32_t val = 0;
-            boolean_t fill_after = false;
-            const char_t* str = NULL;
-            int32_t slen = 0;
+            int32_t val                = 0;
+            boolean_t fill_after       = false;
+            const char_t* str          = NULL;
+            int32_t slen               = 0;
             boolean_t is_slen_from_arg = false;
-            number_t ival = 0;
-            unumber_t uval = 0;
-            int32_t idx = 0;
-            int8_t l_flag = 0;
-            int8_t sign = 0;
+            number_t ival              = 0;
+            unumber_t uval             = 0;
+            int32_t idx                = 0;
+            int8_t l_flag              = 0;
+            int8_t sign                = 0;
             char_t fto_buf[128];
             // float128_t fval = 0; // TODO: float128_t ops
             float64_t fval = 0;
-            number_t prec = 0;
-            char_t filler = ' ';
+            number_t prec  = 0;
+            char_t filler  = ' ';
 
-            while(1) {
-                wfmtb = 1;
+            while(true) {
+                format_block_ended = true;
 
                 switch (*fmt) {
                 case '-':
                     fill_after = true;
                     fmt++;
-                    wfmtb = 0;
+                    format_block_ended = false;
                     break;
                 case '0':
                 case ' ':
@@ -642,7 +643,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         val = val * 10 + *fmt - '0';
                         fmt++;
                     }
-                    wfmtb = 0;
+                    format_block_ended = false;
                     break;
                 case '.':
                     fmt++;
@@ -652,7 +653,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         prec = prec * 10 + *fmt - 0x30;
                         fmt++;
                     }
-                    wfmtb = 0;
+                    format_block_ended = false;
                     break;
                 case '*':
                     if(is_slen_from_arg) {
@@ -660,14 +661,14 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         break;
                     }
                     is_slen_from_arg = true;
-                    prec = va_arg(args, int32_t);
+                    prec             = va_arg(args, int32_t);
                     fmt++;
-                    wfmtb = 0;
+                    format_block_ended = false;
                     break;
                 case 'c':
-                    val = va_arg(args, int32_t);
+                    val                                                = va_arg(args, int32_t);
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)val;
-                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx]   = '\0';
                     cnt++;
                     fmt++;
                     break;
@@ -700,7 +701,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     if(!fill_after && val) {
                         cnt += val;
                         for(idx = 0; idx < val; idx++) {
-                            buf[idx] = filler;
+                            buf[idx]     = filler;
                             buf[idx + 1] = '\0';
                         }
 
@@ -715,18 +716,18 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
 
                     while(slen > BUFFER_PRINTF_BUFFER_SIZE - 1) {
                         buffer_append_bytes(buffer, (uint8_t*)str, BUFFER_PRINTF_BUFFER_SIZE - 1);
-                        str += BUFFER_PRINTF_BUFFER_SIZE - 1;
+                        str  += BUFFER_PRINTF_BUFFER_SIZE - 1;
                         slen -= BUFFER_PRINTF_BUFFER_SIZE - 1;
                     }
 
                     strcopy(str, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
-                    buffer_vprintf_buffer_idx += slen;
+                    buffer_vprintf_buffer_idx                       += slen;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     if(fill_after && val) {
                         cnt += val;
                         for(idx = 0; idx < val; idx++) {
-                            buf[idx] = filler;
+                            buf[idx]     = filler;
                             buf[idx + 1] = '\0';
                         }
 
@@ -742,6 +743,9 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     cnt += slen;
                     fmt++;
                     break;
+                case 'o':
+                    ito_base = 8;
+                    nobreak;
                 case 'i':
                 case 'd':
                     if(l_flag == 2) {
@@ -753,11 +757,11 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         ival = va_arg(args, int32_t);
                     }
 
-                    itoa_with_buffer(ito_buf, ival);
+                    ito_base_with_buffer(ito_buf, ival, ito_base);
                     slen = strlen(ito_buf);
 
                     for(idx = 0; idx < val - slen; idx++) {
-                        buf[idx] = filler;
+                        buf[idx]     = filler;
                         buf[idx + 1] = '\0';
                         cnt++;
                     }
@@ -771,16 +775,21 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     }
 
                     strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
-                    buffer_vprintf_buffer_idx += idx;
+                    buffer_vprintf_buffer_idx                       += idx;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     strcopy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
-                    buffer_vprintf_buffer_idx += slen;
+                    buffer_vprintf_buffer_idx                       += slen;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     cnt += slen;
                     fmt++;
                     l_flag = 0;
+                    break;
+                case 'z':
+                    fmt++;
+                    l_flag             = 2;
+                    format_block_ended = false;
                     break;
                 case 'u':
                     if(l_flag == 2) {
@@ -796,17 +805,17 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     slen = strlen(ito_buf);
 
                     for(idx = 0; idx < val - slen; idx++) {
-                        buf[idx] = filler;
+                        buf[idx]     = filler;
                         buf[idx + 1] = '\0';
                         cnt++;
                     }
 
                     strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
-                    buffer_vprintf_buffer_idx += idx;
+                    buffer_vprintf_buffer_idx                       += idx;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     strcopy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
-                    buffer_vprintf_buffer_idx += slen;
+                    buffer_vprintf_buffer_idx                       += slen;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     cnt += slen;
@@ -814,11 +823,11 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     break;
                 case 'l':
                     fmt++;
-                    wfmtb = 0;
+                    format_block_ended = false;
                     l_flag++;
                     break;
                 case 'p':
-                    l_flag = 1;
+                    l_flag = 2;
                     nobreak;
                 case 'x':
                 case 'X':
@@ -836,17 +845,17 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     slen = strlen(ito_buf);
 
                     for(idx = 0; idx < val - slen; idx++) {
-                        buf[idx] = filler;
+                        buf[idx]     = filler;
                         buf[idx + 1] = '\0';
                         cnt++;
                     }
 
                     strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
-                    buffer_vprintf_buffer_idx += idx;
+                    buffer_vprintf_buffer_idx                       += idx;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     strcopy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
-                    buffer_vprintf_buffer_idx += slen;
+                    buffer_vprintf_buffer_idx                       += slen;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     cnt += slen;
@@ -855,7 +864,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     break;
                 case '%':
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)'%';
-                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx]   = '\0';
                     fmt++;
                     cnt++;
                     break;
@@ -874,7 +883,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     slen = strlen(fto_buf);
 
                     strcopy(fto_buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
-                    buffer_vprintf_buffer_idx += slen;
+                    buffer_vprintf_buffer_idx                       += slen;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     cnt += slen;
@@ -884,7 +893,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     break;
                 }
 
-                if(wfmtb) {
+                if(format_block_ended) {
                     break;
                 }
             }
@@ -901,7 +910,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                 }
 
                 buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = *fmt;
-                buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = 0;
+                buffer_vprintf_buffer[buffer_vprintf_buffer_idx]   = 0;
                 fmt++;
                 cnt++;
             }
