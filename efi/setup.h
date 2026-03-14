@@ -16,6 +16,15 @@
 #include <disk.h>
 #include <memory.h>
 
+/*! EFI system table  global variable */
+extern efi_system_table_t* ST;
+
+/*! efi boot services global variable */
+extern efi_boot_services_t* BS;
+
+/*! efi runtime services global variable */
+extern efi_runtime_services_t* RS;
+
 /**
  * @brief prints string to console with efi system table's console output protocol.
  * @param[in] string string to print.

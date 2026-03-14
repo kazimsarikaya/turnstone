@@ -34,160 +34,10 @@
 /*! module name */
 MODULE("turnstone.efi");
 
-/*! dummy task_t type for efi */
-typedef void * task_t;
-
-
-/*! global video lock for efi */
-lock_t* video_lock = NULL;
-
-/*! global kernel panic lock for efi */
-boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
-
-/*! dummy future_t type for efi */
-typedef void * future_t;
-
-/*! windowmanager initialized flag global variable */
-boolean_t windowmanager_initialized = false;
-
 boolean_t windowmanager_is_initialized(void);
 boolean_t windowmanager_is_initialized(void) {
-    return windowmanager_initialized;
+    return false;
 }
-
-/**
- * @brief dummy method for efi for getting the current task.
- * @details this method is not required for efi however is required for linking.
- * @return NULL
- */
-void* task_get_current_task(void);
-
-/**
- * @brief dummy method for efi for yielding the current task.
- * @details this method is not required for efi however is required for linking.
- */
-void task_yield(void);
-
-/**
- * @brief dummy method for efi for backtracing.
- * @details this method is not required for efi however is required for linking.
- */
-void backtrace(void);
-
-/**
- * @brief dummy method for efi for getting the current task id.
- * @details this method is not required for efi however is required for linking.
- * @return 0
- */
-uint64_t task_get_id(void);
-
-/**
- * @brief dummy method for efi for getting local apic id.
- * @details this method is not required for efi however is required for linking.
- * @return 0
- */
-int8_t apic_get_local_apic_id(void);
-
-/**
- * @brief dummy method for efi for creating a future.
- * @details this method is not required for efi however is required for linking. if data is not NULL then it is returned. otherwise 0xdeadbeaf is returned.
- * @param heap heap to allocate future on. (ignored)
- * @param lock lock to use for future. (ignored)
- * @param data data to store in future.
- * @return data if data is not NULL. otherwise 0xdeadbeaf.
- */
-future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, void* data);
-
-/**
- * @brief dummy method for efi for getting data from future and destroying it.
- * @details this method is not required for efi however is required for linking. if fut is 0xdeadbeaf then NULL is returned. otherwise fut is returned. fut value may be a data pointer. see future_create_with_heap_and_data.
- * @param fut future to get data from.
- * @return fut if fut is not 0xdeadbeaf. otherwise NULL.
- */
-void* future_get_data_and_destroy(future_t fut);
-
-/**
- * @brief dummy method for efi for getting input buffer.
- * @details this method is not required for efi however is required for linking. NULL is returned.
- * @return NULL
- */
-buffer_t* task_get_input_buffer(void);
-
-/**
- * @brief dummy method for efi for getting output buffer.
- * @details this method is not required for efi however is required for linking. NULL is returned.
- * @return NULL
- */
-buffer_t* task_get_output_buffer(void);
-
-/**
- * @brief dummy method for efi for getting error buffer.
- * @details this method is not required for efi however is required for linking. NULL is returned.
- * @return NULL
- */
-buffer_t* task_get_error_buffer(void);
-
-void future_task_wait_toggler(uint64_t task_id);
-
-uint64_t task_get_id(void){
-    return 0;
-}
-
-void* task_get_current_task(void){
-    return NULL;
-}
-
-void task_yield(void) {
-}
-
-buffer_t* task_get_input_buffer(void) {
-    return NULL;
-}
-
-buffer_t* task_get_output_buffer(void) {
-    return NULL;
-}
-
-buffer_t* task_get_error_buffer(void) {
-    return NULL;
-}
-
-void backtrace(void) {
-}
-
-int8_t apic_get_local_apic_id(void) {
-    return 0;
-}
-
-future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, void* data) {
-    UNUSED(heap);
-    UNUSED(lock);
-
-    if(data) {
-        return data;
-    }
-
-    return (void*)0xdeadbeaf;
-}
-
-void future_task_wait_toggler(uint64_t task_id) {
-    UNUSED(task_id);
-}
-
-void* future_get_data_and_destroy(future_t fut) {
-    if(!fut) {
-        return NULL;
-    }
-
-    if(((uint64_t)fut) == 0xdeadbeaf) {
-        return NULL;
-    }
-
-    return fut;
-}
-
-/*! efi boot services global variable */
-extern efi_boot_services_t* BS;
 
 /**
  * brief allocates a frame from the efi boot services.
@@ -258,11 +108,8 @@ efi_status_t efi_frame_allocator_init(void) {
     return EFI_SUCCESS;
 }
 
-/*! efi runtime services global variable */
-extern efi_runtime_services_t* RS;
-
 /*! day count of each month */
-const int32_t time_days_of_month[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+static const int32_t time_days_of_month[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
 /**
  * @brief check if a year is leap year
@@ -290,41 +137,16 @@ static inline boolean_t time_is_leap(int64_t year) {
 /*! days of a leap year */
 #define TIME_DAYS_AT_LEAP_YEAR      366
 
-time_t efi_current_time_ns = 0;
+static time_t efi_current_time_ns = 0;
 
-void        efi_timer_init(void);
-EFIAPI void efi_timer_cb(efi_event_t event, void* context);
-void        efi_set_current_time_ns(void);
-
-void efi_timer_init(void) {
-    efi_set_current_time_ns();
-    efi_event_t event = {0};
-
-    efi_status_t res = BS->create_event(EFI_EVT_TIMER | EFI_EVT_NOTIFY_SIGNAL, EFI_TPL_NOTIFY, efi_timer_cb, NULL, &event);
-
-    if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot create event: 0x%llx", res);
-        return;
-    }
-
-    res = BS->set_timer(event, EFI_TIMER_PERIODIC, 100000000ULL / 100); // 100ms period is in 100ns units
-
-    if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot set timer: 0x%llx", res);
-        return;
-    }
-
-    PRINTLOG(EFI, LOG_INFO, "timer initialized. current time: %llu", efi_current_time_ns);
-}
-
-EFIAPI void efi_timer_cb(efi_event_t event, void* context) {
+EFIAPI static void efi_timer_cb(efi_event_t event, void* context) {
     UNUSED(event);
     UNUSED(context);
 
     efi_current_time_ns += 100000000ULL; // 100ms
 }
 
-void efi_set_current_time_ns(void) {
+static void efi_set_current_time_ns(void) {
     efi_time_t time                   = {0};
     efi_time_capabilities_t time_caps = {0};
 
@@ -369,6 +191,27 @@ void efi_set_current_time_ns(void) {
     res += time.nano_second;
 
     efi_current_time_ns = res;
+}
+
+static void efi_timer_init(void) {
+    efi_set_current_time_ns();
+    efi_event_t event = {0};
+
+    efi_status_t res = BS->create_event(EFI_EVT_TIMER | EFI_EVT_NOTIFY_SIGNAL, EFI_TPL_NOTIFY, efi_timer_cb, NULL, &event);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot create event: 0x%llx", res);
+        return;
+    }
+
+    res = BS->set_timer(event, EFI_TIMER_PERIODIC, 100000000ULL / 100); // 100ms period is in 100ns units
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot set timer: 0x%llx", res);
+        return;
+    }
+
+    PRINTLOG(EFI, LOG_INFO, "timer initialized. current time: %llu", efi_current_time_ns);
 }
 
 time_t time_ns(time_t* t) {

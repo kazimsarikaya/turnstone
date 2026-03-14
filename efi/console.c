@@ -15,9 +15,6 @@
 /*! module name */
 MODULE("turnstone.efi");
 
-/*! EFI system table  global variable */
-extern efi_system_table_t* ST;
-
 void screen_clear(void) {
     ST->console_output->clear_screen(ST->console_output);
 }
