@@ -323,8 +323,7 @@ static int8_t windowmanager_main(void) {
 
             task_msleep(16); // ~60 FPS
         } else {
-            task_set_message_waiting();
-            task_yield();
+            task_yield_with_message_waiting();
         }
     }
 

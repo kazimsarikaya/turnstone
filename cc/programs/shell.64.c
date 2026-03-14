@@ -55,7 +55,7 @@ static int8_t shell_handle_module_command(char_t* arguments) {
 
     command = argument_parser_advance(&parser);
 
-    if(strncmp(command, "info", 4) == 0){
+    if(strncmp(command, "info", 4) == 0) {
         linker_print_module_info_at_memory(module_id);
         return 0;
     }
@@ -308,9 +308,9 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         printf("rdtsc: 0x%llx\n", rdtsc());
         res = 0;
     } else if(strcmp(command, "kill") == 0) {
-        uint64_t pid = atoh(argument_parser_advance(&parser));
+        uint64_t pid      = atoh(argument_parser_advance(&parser));
         char_t* force_str = argument_parser_advance(&parser);
-        boolean_t force = false;
+        boolean_t force   = false;
 
         if(strncmp(force_str, "force", 5) == 0) {
             force = true;
@@ -326,7 +326,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         }
     } else if(strcmp(command, "log") == 0) {
         char_t* log_module = argument_parser_advance(&parser);
-        char_t* log_level = argument_parser_advance(&parser);
+        char_t* log_level  = argument_parser_advance(&parser);
 
         if(!log_module || !log_level) {
             printf("Usage: log <module> <level>\n");
@@ -375,26 +375,25 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
     task_set_interruptible();
 
-    kbd_buffer = buffer_new_with_capacity(NULL, 4100);
+    kbd_buffer   = buffer_new_with_capacity(NULL, 4100);
     mouse_buffer = buffer_new_with_capacity(NULL, 4096);
-    buffer_t* command_buffer = buffer_new_with_capacity(NULL, 4096);
+    buffer_t* command_buffer  = buffer_new_with_capacity(NULL, 4096);
     buffer_t* argument_buffer = buffer_new_with_capacity(NULL, 4096);
-    boolean_t first_space = false;
+    boolean_t first_space     = false;
 
     while(true) {
-        uint64_t kbd_length = 0;
-        uint32_t kbd_ev_cnt = 0;
+        uint64_t kbd_length   = 0;
+        uint32_t kbd_ev_cnt   = 0;
         uint64_t mouse_length = 0;
         uint32_t mouse_ev_cnt = 0;
 
-        kbd_report_t* kbd_data = (kbd_report_t*)buffer_get_all_bytes_and_reset(kbd_buffer, &kbd_length);
-        mouse_report_t* mouse_data = (mouse_report_t*)buffer_get_all_bytes_and_reset(mouse_buffer, &mouse_length);
+        kbd_report_t* kbd_data     = (kbd_report_t*)(void*)buffer_get_all_bytes_and_reset(kbd_buffer, &kbd_length);
+        mouse_report_t* mouse_data = (mouse_report_t*)(void*)buffer_get_all_bytes_and_reset(mouse_buffer, &mouse_length);
 
         if(kbd_length == 0 && mouse_length == 0) {
             memory_free(kbd_data);
             memory_free(mouse_data);
-            task_set_message_waiting();
-            task_yield();
+            task_yield_with_message_waiting();
 
             continue;
         }
@@ -408,8 +407,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
         if(kbd_length == 0) {
             memory_free(kbd_data);
-            task_set_message_waiting();
-            task_yield();
+            task_yield_with_message_waiting();
 
             continue;
         }
@@ -480,7 +478,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
             if(c == '\b') {
                 data_idx -= 2; // remove ' \b'
-                idx += 2; // remove ' \b'
+                idx      += 2; // remove ' \b'
 
                 if(first_space) {
                     buffer_seek(argument_buffer, -1, BUFFER_SEEK_DIRECTION_CURRENT);

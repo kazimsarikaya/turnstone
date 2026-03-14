@@ -75,12 +75,17 @@ void task_set_interrupt_received(uint64_t tid) {
 
     if(task) {
         if(task->attributes & TASK_ATTRIBUTE_INTERRUPTIBLE) {
-            int32_t newval = TASK_STATE_INTERRUPT_RECEIVED;
+            boolean_t changed = false;
             asm volatile (
-                "lock xchg %[val], %[state_ptr]"
-                : [state_ptr] "+m" (task->state)
-                : [val] "r" (newval)
-                : "memory"
+                "movl %[expected], %%eax\n\t"
+                "movl %[newval], %%edx\n\t"
+                "lock cmpxchg %%edx, %[state_ptr]\n\t"
+                "sete %[changed]"
+                : [state_ptr] "+m" (task->state),
+                [changed] "=q" (changed)
+                : [expected] "r" (TASK_STATE_MESSAGE_WAITING),
+                [newval] "r" (TASK_STATE_INTERRUPT_RECEIVED)
+                : "eax", "edx", "memory"
                 );
 
             if(current_task->cpu_id != task->cpu_id) {
@@ -119,12 +124,35 @@ boolean_t task_set_message_waiting(void){
     return false;
 }
 
+boolean_t task_yield_with_message_waiting(void) {
+    cpu_cli();
+    boolean_t waiting_set = task_set_message_waiting();
+    if(waiting_set) {
+        // task_yield will enable interrupts, so no need to enable here
+        task_yield();
+    } else{
+        cpu_sti();
+    }
+    return waiting_set;
+}
+
 void task_set_message_received(uint64_t tid) {
     task_t* task         = (task_t*)hashmap_get(task_map, (void*)tid);
     task_t* current_task = cpu_state->current_task;
 
     if(task) {
-        task->state = TASK_STATE_SUSPENDED;
+        boolean_t changed = false;
+        asm volatile (
+            "movl %[expected], %%eax\n\t"
+            "movl %[newval], %%edx\n\t"
+            "lock cmpxchg %%edx, %[state_ptr]\n\t"
+            "sete %[changed]"
+            : [state_ptr] "+m" (task->state),
+            [changed] "=q" (changed)
+            : [expected] "r" (TASK_STATE_MESSAGE_WAITING),
+            [newval] "r" (TASK_STATE_SUSPENDED)
+            : "eax", "edx", "memory"
+            );
 
         if(current_task->cpu_id != task->cpu_id) {
             apic_send_ipi(task->cpu_id, 0xFE, false);

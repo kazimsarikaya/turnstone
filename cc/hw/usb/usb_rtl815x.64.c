@@ -1295,8 +1295,7 @@ static int8_t usb_rtl815x_process_tx(uint64_t arg_cnt, void** args) {
 
 
         if(!packet_exists) {
-            task_set_message_waiting();
-            task_yield();
+            task_yield_with_message_waiting();
         }
 
     }

@@ -215,6 +215,16 @@ task_t* task_get_current_task(void);
 boolean_t task_set_message_waiting(void);
 
 /**
+ * @brief yields task for waiting message. this function should be called instead of
+ * task_set_message_waiting();
+ * task_yield();
+ * pattern. because a task switch can be occurred between these two functions,
+ * and task switched twice.
+ * @return if message waiting state is set true, false otherwise
+ */
+boolean_t task_yield_with_message_waiting(void);
+
+/**
  * @brief sets current task's message waiting timeout in milliseconds
  * @param[in] msecs timeout in milliseconds
  */

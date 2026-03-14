@@ -299,14 +299,12 @@ static int8_t hypervisor_svm_vmexit_handler_hlt(hypervisor_vm_t* vm) { // halt
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "vm (0x%llx) is halted", vm->vmcb_frame_fa);
 
-    task_set_message_waiting();
-
-    task_yield();
+    task_yield_with_message_waiting();
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "vm (0x%llx) is resumed", vm->vmcb_frame_fa);
 
     if(vm->is_halt_need_next_instruction) {
-        vm->is_halted = false;
+        vm->is_halted                     = false;
         vm->is_halt_need_next_instruction = false;
         hypervisor_svm_goto_next_instruction(vm);
     }
@@ -361,7 +359,7 @@ static int8_t hypervisor_svm_vmexit_handle_eoi(hypervisor_vm_t* vm) {
 
     svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
 
-    list_t* mq = vm->interrupt_queue;
+    list_t* mq                   = vm->interrupt_queue;
     interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)list_queue_peek(mq);
 
     if(!frame) {
@@ -377,11 +375,11 @@ static int8_t hypervisor_svm_vmexit_handle_eoi(hypervisor_vm_t* vm) {
     list_queue_pop(mq);
     memory_free_ext(vm->heap, frame);
 
-    vm->lapic.in_service_vector = 0;
-    vmcb->control_area.vint_control.fields.v_irq = 0;
-    vmcb->control_area.vint_control.fields.v_ign_tpr = 0;
+    vm->lapic.in_service_vector                          = 0;
+    vmcb->control_area.vint_control.fields.v_irq         = 0;
+    vmcb->control_area.vint_control.fields.v_ign_tpr     = 0;
     vmcb->control_area.vint_control.fields.v_intr_vector = 0;
-    vmcb->control_area.clean_bits.fields.tpr = 1;
+    vmcb->control_area.clean_bits.fields.tpr             = 1;
 
     return 0;
 }
@@ -390,7 +388,7 @@ static int8_t hypervisor_svm_vmexit_handle_eoi(hypervisor_vm_t* vm) {
 static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
     svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
 
-    uint32_t msr = vm->guest_registers->rcx;
+    uint32_t msr   = vm->guest_registers->rcx;
     uint64_t value = vmcb->save_state_area.rax;
     value |= ((uint64_t)vm->guest_registers->rdx << 32);
     boolean_t is_write = vmcb->control_area.exit_info_1 & 0x1;
@@ -423,7 +421,7 @@ static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
         } else {
             vmcb->save_state_area.rax = vm->lapic.timer_current_value & 0xFFFFFFFF;
             vm->guest_registers->rdx  = (vm->lapic.timer_current_value >> 32) & 0xFFFFFFFF;
-            ret = 0;
+            ret                       = 0;
         }
 
         break;
@@ -468,9 +466,9 @@ static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
         break;
     case APIC_X2APIC_MSR_LVT_TIMER:
         if(is_write) {
-            vm->lapic.timer_vector = value & 0xFF;
+            vm->lapic.timer_vector   = value & 0xFF;
             vm->lapic.timer_periodic = (value >> 17) & 0x1;
-            vm->lapic.timer_masked = (value >> 16) & 0x1;
+            vm->lapic.timer_masked   = (value >> 16) & 0x1;
         } else {
             vmcb->save_state_area.rax = (vm->lapic.timer_periodic << 17) | (vm->lapic.timer_masked << 16) | (vm->lapic.timer_vector & 0xFF);
             vm->guest_registers->rdx  = 0;
@@ -514,14 +512,14 @@ static int8_t hypervisor_svm_vmexit_handler_vmmcall(hypervisor_vm_t* vm) { // vm
 
         break;
     case HYPERVISOR_VMCALL_NUMBER_ATTACH_PCI_DEV:
-        ret = hypervisor_attach_pci_dev(vm, vm->guest_registers->rdi);
+        ret                                     = hypervisor_attach_pci_dev(vm, vm->guest_registers->rdi);
         vmcb->control_area.clean_bits.fields.np = 1;
 
         break;
     case HYPERVISOR_VMCALL_NUMBER_ATTACH_INTERRUPT: {
-        uint64_t pci_dev_address = vm->guest_registers->rdi;
+        uint64_t pci_dev_address                 = vm->guest_registers->rdi;
         vm_guest_interrupt_type_t interrupt_type = (vm_guest_interrupt_type_t)vm->guest_registers->rsi;
-        uint8_t interrupt_number = (uint8_t)vm->guest_registers->rdx;
+        uint8_t interrupt_number                 = (uint8_t)vm->guest_registers->rdx;
 
         ret = hypervisor_attach_interrupt(vm, pci_dev_address, interrupt_type, interrupt_number);
 
@@ -530,7 +528,7 @@ static int8_t hypervisor_svm_vmexit_handler_vmmcall(hypervisor_vm_t* vm) { // vm
     }
     case HYPERVISOR_VMCALL_NUMBER_LOAD_MODULE: {
         uint64_t got_entry_address = vm->guest_registers->r11;
-        ret = hypervisor_load_module(vm, got_entry_address);
+        ret                                     = hypervisor_load_module(vm, got_entry_address);
         vmcb->control_area.clean_bits.fields.np = 1;
 
         break;
@@ -742,9 +740,9 @@ static int8_t hypervisor_svm_vmexit_handler_ioio(hypervisor_vm_t* vm) {
 }
 
 static int8_t hypervisor_svm_vmexit_handler_excp14(hypervisor_vm_t* vm) { // page fault
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    svm_vmcb_t* vmcb    = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
     uint64_t error_code = vmcb->control_area.exit_info_1;
-    uint64_t address = vmcb->control_area.exit_info_2;
+    uint64_t address    = vmcb->control_area.exit_info_2;
 
     uint64_t ret = hypervisor_ept_page_fault_handler(NULL, error_code, address);
 
@@ -760,14 +758,14 @@ static int8_t hypervisor_svm_vmexit_handler_excp14(hypervisor_vm_t* vm) { // pag
 
 
 hypervisor_svm_vmexit_handler_f hypervisor_svm_vmexit_handlers[SVM_VMEXIT_REASON_ARRAY_SIZE] = {
-    [SVM_VMEXIT_REASON_INTR]  = hypervisor_svm_vmexit_handler_intr,
-    [SVM_VMEXIT_REASON_HLT]   = hypervisor_svm_vmexit_handler_hlt,
-    [SVM_VMEXIT_REASON_PAUSE] = hypervisor_svm_vmexit_handler_pause,
-    [SVM_VMEXIT_REASON_CPUID] = hypervisor_svm_vmexit_handler_cpuid,
-    [SVM_VMEXIT_REASON_MSR]   = hypervisor_svm_vmexit_handler_msr,
+    [SVM_VMEXIT_REASON_INTR]    = hypervisor_svm_vmexit_handler_intr,
+    [SVM_VMEXIT_REASON_HLT]     = hypervisor_svm_vmexit_handler_hlt,
+    [SVM_VMEXIT_REASON_PAUSE]   = hypervisor_svm_vmexit_handler_pause,
+    [SVM_VMEXIT_REASON_CPUID]   = hypervisor_svm_vmexit_handler_cpuid,
+    [SVM_VMEXIT_REASON_MSR]     = hypervisor_svm_vmexit_handler_msr,
     [SVM_VMEXIT_REASON_VMMCALL] = hypervisor_svm_vmexit_handler_vmmcall,
-    [SVM_VMEXIT_REASON_IOIO] = hypervisor_svm_vmexit_handler_ioio,
-    [SVM_VMEXIT_REASON_EXCP14] = hypervisor_svm_vmexit_handler_excp14,
+    [SVM_VMEXIT_REASON_IOIO]    = hypervisor_svm_vmexit_handler_ioio,
+    [SVM_VMEXIT_REASON_EXCP14]  = hypervisor_svm_vmexit_handler_excp14,
 };
 
 static uint64_t hypervisor_svm_vmexit_remap_exit_code(uint64_t exit_code) {
@@ -839,7 +837,7 @@ int8_t hypervisor_svm_vm_run(uint64_t hypervisor_vm_ptr) {
     }
 
     uint64_t guest_vmcb = vm->vmcb_frame_fa;
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_vmcb);
+    svm_vmcb_t* vmcb    = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_vmcb);
 
     while(true) {
         asm volatile ("clgi");

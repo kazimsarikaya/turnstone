@@ -176,8 +176,7 @@ static int8_t network_igb_process_tx(void) {
         }
 
         if(!packet_exists) {
-            task_set_message_waiting();
-            task_yield();
+            task_yield_with_message_waiting();
         }
 
     }
@@ -502,8 +501,7 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
 
         }
 
-        task_set_message_waiting();
-        task_yield();
+        task_yield_with_message_waiting();
     }
 
     return 0;

@@ -35,8 +35,7 @@ static int8_t network_process_rx(void){
     while(true) {
         if(list_size(network_received_packets) == 0) {
             PRINTLOG(NETWORK, LOG_TRACE, "no packet received, changing task");
-            task_set_message_waiting();
-            task_yield();
+            task_yield_with_message_waiting();
         }
 
         while(list_size(network_received_packets)) {
