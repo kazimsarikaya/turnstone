@@ -32,9 +32,83 @@ size_t strlen_safe(const char_t* string, size_t max_len) {
     return ret;
 }
 
+size_t wstrlen_safe(const char16_t* string, size_t max_len) {
+    if(string == NULL) {
+        return 0;
+    }
+
+    size_t ret = 0;
+
+    while(string[ret]) {
+        if(ret == max_len) {
+            break;
+        }
+
+        ret++;
+    }
+
+    return ret;
+}
+
+size_t lstrlen_safe(const char32_t* string, size_t max_len) {
+    if(string == NULL) {
+        return 0;
+    }
+
+    size_t ret = 0;
+
+    while(string[ret]) {
+        if(ret == max_len) {
+            break;
+        }
+
+        ret++;
+    }
+
+    return ret;
+}
+
 int8_t strcmp(const char_t* string1, const char_t* string2) {
     size_t len1 = strlen(string1);
     size_t len2 = strlen(string2);
+
+    size_t minlen = MIN(len1, len2);
+
+    int8_t res = memory_memcompare(string1, string2, minlen);
+
+    if(res) {
+        return res;
+    }
+
+    if(len1 == len2) {
+        return 0;
+    }
+
+    return (minlen == len1) ? -1 : 1;
+}
+
+int8_t wstrcmp(const char16_t* string1, const char16_t* string2) {
+    size_t len1 = wstrlen(string1);
+    size_t len2 = wstrlen(string2);
+
+    size_t minlen = MIN(len1, len2);
+
+    int8_t res = memory_memcompare(string1, string2, minlen);
+
+    if(res) {
+        return res;
+    }
+
+    if(len1 == len2) {
+        return 0;
+    }
+
+    return (minlen == len1) ? -1 : 1;
+}
+
+int8_t lstrcmp(const char32_t* string1, const char32_t* string2) {
+    size_t len1 = lstrlen(string1);
+    size_t len2 = lstrlen(string2);
 
     size_t minlen = MIN(len1, len2);
 
@@ -109,6 +183,72 @@ number_t ato_base(const char_t* source, number_t base) {
     return sign * ret;
 }
 
+number_t wato_base(const char16_t* source, number_t base) {
+    number_t ret = 0;
+    number_t p   = 0;
+
+    if(source == NULL) {
+        return 0;
+    }
+
+    number_t sign = 1;
+
+    if(source[0] == '+') {
+        source++;
+    }
+
+    if(source[0] == '-') {
+        sign = -1;
+        source++;
+    }
+
+    size_t l = wstrlen(source);
+    for(size_t i = 1; i <= l; i++) {
+        if(source[l - i] <= '9') {
+            ret += ((number_t)(source[l - i] - '0')) * power(base, p);
+        } else if(source[l - i] <= 'Z') {
+            ret += ((number_t)(source[l - i] - 'A') + 10) * power(base, p);
+        } else {
+            ret += ((number_t)(source[l - i] - 'a') + 10) * power(base, p);
+        }
+        p++;
+    }
+    return sign * ret;
+}
+
+number_t lato_base(const char32_t* source, number_t base) {
+    number_t ret = 0;
+    number_t p   = 0;
+
+    if(source == NULL) {
+        return 0;
+    }
+
+    number_t sign = 1;
+
+    if(source[0] == '+') {
+        source++;
+    }
+
+    if(source[0] == '-') {
+        sign = -1;
+        source++;
+    }
+
+    size_t l = lstrlen(source);
+    for(size_t i = 1; i <= l; i++) {
+        if(source[l - i] <= '9') {
+            ret += ((number_t)(source[l - i] - '0')) * power(base, p);
+        } else if(source[l - i] <= 'Z') {
+            ret += ((number_t)(source[l - i] - 'A') + 10) * power(base, p);
+        } else {
+            ret += ((number_t)(source[l - i] - 'a') + 10) * power(base, p);
+        }
+        p++;
+    }
+    return sign * ret;
+}
+
 unumber_t atou_base(const char_t* source, number_t base) {
     number_t ret = 0;
     number_t p   = 0;
@@ -118,6 +258,50 @@ unumber_t atou_base(const char_t* source, number_t base) {
     }
 
     size_t l = strlen(source);
+    for(size_t i = 1; i <= l; i++) {
+        if(source[l - i] <= '9') {
+            ret += ((number_t)(source[l - i] - '0')) * power(base, p);
+        } else if(source[l - i] <= 'Z') {
+            ret += ((number_t)(source[l - i] - 'A') + 10) * power(base, p);
+        } else {
+            ret += ((number_t)(source[l - i] - 'a') + 10) * power(base, p);
+        }
+        p++;
+    }
+    return ret;
+}
+
+unumber_t watou_base(const char16_t* source, number_t base) {
+    number_t ret = 0;
+    number_t p   = 0;
+
+    if(source == NULL) {
+        return 0;
+    }
+
+    size_t l = wstrlen(source);
+    for(size_t i = 1; i <= l; i++) {
+        if(source[l - i] <= '9') {
+            ret += ((number_t)(source[l - i] - '0')) * power(base, p);
+        } else if(source[l - i] <= 'Z') {
+            ret += ((number_t)(source[l - i] - 'A') + 10) * power(base, p);
+        } else {
+            ret += ((number_t)(source[l - i] - 'a') + 10) * power(base, p);
+        }
+        p++;
+    }
+    return ret;
+}
+
+unumber_t latou_base(const char32_t* source, number_t base) {
+    number_t ret = 0;
+    number_t p   = 0;
+
+    if(source == NULL) {
+        return 0;
+    }
+
+    size_t l = lstrlen(source);
     for(size_t i = 1; i <= l; i++) {
         if(source[l - i] <= '9') {
             ret += ((number_t)(source[l - i] - '0')) * power(base, p);
@@ -213,7 +397,7 @@ char_t* strndup_at_heap(memory_heap_t* heap, const char_t* src, size_t l){
 
     l = MIN(l, strlen(src));
 
-    if(l == 0) {
+    if(0 && l == 0) {
         return NULL;
     }
 
@@ -223,7 +407,51 @@ char_t* strndup_at_heap(memory_heap_t* heap, const char_t* src, size_t l){
         return res;
     }
 
-    memory_memcopy(src, res, l);
+    memory_memcopy(src, res, l * sizeof(char_t));
+
+    return res;
+}
+
+char16_t* wstrndup_at_heap(memory_heap_t* heap, const char16_t* src, size_t l){
+    if(src == NULL) {
+        return NULL;
+    }
+
+    l = MIN(l, wstrlen(src));
+
+    if(0 && l == 0) {
+        return NULL;
+    }
+
+    char16_t* res = memory_malloc_ext(heap, sizeof(char16_t) * l + 1, 0x0);
+
+    if(res == NULL) {
+        return res;
+    }
+
+    memory_memcopy(src, res, l * sizeof(char16_t));
+
+    return res;
+}
+
+char32_t* lstrndup_at_heap(memory_heap_t* heap, const char32_t* src, size_t l){
+    if(src == NULL) {
+        return NULL;
+    }
+
+    l = MIN(l, lstrlen(src));
+
+    if(0 && l == 0) {
+        return NULL;
+    }
+
+    char32_t* res = memory_malloc_ext(heap, sizeof(char32_t) * l + 1, 0x0);
+
+    if(res == NULL) {
+        return res;
+    }
+
+    memory_memcopy(src, res, l * sizeof(char32_t));
 
     return res;
 }
@@ -327,6 +555,52 @@ int8_t strncmp(const char_t* string1, const char_t* string2, size_t n) {
     return strcmp(string1, string2);
 }
 
+int8_t wstrncmp(const char16_t* string1, const char16_t* string2, size_t n) {
+    size_t len1 = wstrlen(string1);
+    size_t len2 = wstrlen(string2);
+
+    size_t minlen_of_strs = MIN(len1, len2);
+
+    if(n <= minlen_of_strs) {
+        for(size_t i = 0; i < n; i++) {
+            if(string1[i] < string2[i]) {
+                return -1;
+            }
+
+            if(string1[i] > string2[i]) {
+                return 1;
+            }
+        }
+
+        return 0;
+    }
+
+    return wstrcmp(string1, string2);
+}
+
+int8_t lstrncmp(const char32_t* string1, const char32_t* string2, size_t n) {
+    size_t len1 = lstrlen(string1);
+    size_t len2 = lstrlen(string2);
+
+    size_t minlen_of_strs = MIN(len1, len2);
+
+    if(n <= minlen_of_strs) {
+        for(size_t i = 0; i < n; i++) {
+            if(string1[i] < string2[i]) {
+                return -1;
+            }
+
+            if(string1[i] > string2[i]) {
+                return 1;
+            }
+        }
+
+        return 0;
+    }
+
+    return lstrcmp(string1, string2);
+}
+
 char_t** strsplit(const char_t* str, const char_t token, int64_t** lengths, int64_t* count) {
     if(str == NULL) {
         return NULL;
@@ -402,6 +676,155 @@ char_t** strsplit(const char_t* str, const char_t token, int64_t** lengths, int6
     return result_start;
 }
 
+char16_t** wstrsplit(const char16_t* str, const char16_t token, int64_t** lengths, int64_t* count) {
+    if(str == NULL) {
+        return NULL;
+    }
+
+    char16_t* tmp = (char16_t*)str;
+
+    if(count == NULL || lengths == NULL) {
+        return NULL;
+    }
+
+    *count = 0;
+
+    while(*tmp != NULL) {
+        if(*tmp == token) {
+            (*count)++;
+        }
+
+        tmp++;
+    }
+
+    (*count)++;
+
+    *lengths = memory_malloc(sizeof(int64_t) * (*count));
+
+    if(*lengths == NULL) {
+
+        return NULL;
+    }
+
+    char16_t** result = memory_malloc(sizeof(char16_t*) * (*count));
+
+    if(result == NULL) {
+        memory_free(*lengths);
+
+        return NULL;
+    }
+
+    char16_t** result_start = result;
+
+    tmp = (char16_t*)str;
+
+    int64_t* tmp_lengths = *lengths;
+    int64_t len          = 0;
+
+    *result = tmp;
+
+    while(*tmp != NULL) {
+        if(*tmp == token) {
+            tmp++;
+
+            if(*tmp == NULL) {
+                break;
+            }
+
+            result++;
+            *result = tmp;
+
+            *tmp_lengths = len;
+            len          = 0;
+            tmp_lengths++;
+
+        } else {
+            len++;
+            tmp++;
+        }
+
+    }
+
+    *tmp_lengths = len;
+
+
+    return result_start;
+}
+
+char32_t** lstrsplit(const char32_t* str, const char32_t token, int64_t** lengths, int64_t* count) {
+    if(str == NULL) {
+        return NULL;
+    }
+
+    char32_t* tmp = (char32_t*)str;
+
+    if(count == NULL || lengths == NULL) {
+        return NULL;
+    }
+
+    *count = 0;
+
+    while(*tmp != NULL) {
+        if(*tmp == token) {
+            (*count)++;
+        }
+
+        tmp++;
+    }
+
+    (*count)++;
+
+    *lengths = memory_malloc(sizeof(int64_t) * (*count));
+
+    if(*lengths == NULL) {
+
+        return NULL;
+    }
+
+    char32_t** result = memory_malloc(sizeof(char32_t*) * (*count));
+
+    if(result == NULL) {
+        memory_free(*lengths);
+
+        return NULL;
+    }
+
+    char32_t** result_start = result;
+
+    tmp = (char32_t*)str;
+
+    int64_t* tmp_lengths = *lengths;
+    int64_t len          = 0;
+
+    *result = tmp;
+
+    while(*tmp != NULL) {
+        if(*tmp == token) {
+            tmp++;
+
+            if(*tmp == NULL) {
+                break;
+            }
+
+            result++;
+            *result = tmp;
+
+            *tmp_lengths = len;
+            len          = 0;
+            tmp_lengths++;
+
+        } else {
+            len++;
+            tmp++;
+        }
+
+    }
+
+    *tmp_lengths = len;
+
+
+    return result_start;
+}
 
 char_t* strupper(char_t* str) {
 
@@ -449,29 +872,13 @@ char_t* strlowercopy(const char_t* str) {
     return strlower(strdup(str));
 }
 
-int64_t wchar_size(const char16_t* str){
-
-    if(str == NULL) {
-        return 0;
-    }
-
-    int64_t res = 0;
-    int64_t i   = 0;
-
-    while(str[i++] != 0) {
-        res++;
-    }
-
-    return res;
-}
-
-char_t* char16_to_char(char16_t* src){
+char_t* wstr_to_str(char16_t* src){
 
     if(src == NULL) {
         return NULL;
     }
 
-    int64_t len = wchar_size(src);
+    int64_t len = wstrlen(src);
     char_t* dst = memory_malloc(sizeof(char_t) * len * 4 + 1);
 
     if(dst == NULL) {
@@ -499,7 +906,7 @@ char_t* char16_to_char(char16_t* src){
     return dst;
 }
 
-char16_t* char_to_wchar(const char_t* str){
+char16_t* str_to_wstr(const char_t* str){
 
     if(str == NULL) {
         return NULL;
@@ -542,24 +949,13 @@ char16_t* char_to_wchar(const char_t* str){
     return res;
 }
 
-int64_t lchar_size(const char32_t* str){
-    int64_t res = 0;
-    int64_t i   = 0;
-
-    while(str[i++] != 0) {
-        res++;
-    }
-
-    return res;
-}
-
-char_t* char32_to_char(char32_t* src){
+char_t* lstr_to_str(char32_t* src){
 
     if(src == NULL) {
         return NULL;
     }
 
-    int64_t len = lchar_size(src);
+    int64_t len = lstrlen(src);
     char_t* dst = memory_malloc(sizeof(char_t) * len * 4 + 1);
 
     if(dst == NULL) {
@@ -592,7 +988,7 @@ char_t* char32_to_char(char32_t* src){
     return dst;
 }
 
-char32_t* char_to_lchar(char_t* str){
+char32_t* str_to_lstr(char_t* str){
 
     if(str == NULL) {
         return NULL;
@@ -700,9 +1096,43 @@ char_t* strprintf(const char_t* format, ...) {
     return res;
 }
 
+char16_t* wstrprintf(const char_t* format, ...) {
+    va_list args;
+    va_start(args, format);
+    char16_t* res = wvstrprintf(format, args);
+    va_end(args);
+    return res;
+}
+
+char32_t* lstrprintf(const char_t* format, ...) {
+    va_list args;
+    va_start(args, format);
+    char32_t* res = lvstrprintf(format, args);
+    va_end(args);
+    return res;
+}
+
 char_t* vstrprintf(const char_t* format, va_list args) {
     buffer_t* buffer = buffer_new_with_capacity(NULL, 1024);
     buffer_vprintf(buffer, format, args);
     char_t* res = (char_t*)buffer_get_all_bytes_and_destroy(buffer, NULL);
     return res;
+}
+
+char16_t* wvstrprintf(const char_t* format, va_list args) {
+    buffer_t* buffer = buffer_new_with_capacity(NULL, 1024);
+    buffer_vprintf(buffer, format, args);
+    char_t* res    = (char_t*)buffer_get_all_bytes_and_destroy(buffer, NULL);
+    char16_t* wres = str_to_wstr(res);
+    memory_free(res);
+    return wres;
+}
+
+char32_t* lvstrprintf(const char_t* format, va_list args) {
+    buffer_t* buffer = buffer_new_with_capacity(NULL, 1024);
+    buffer_vprintf(buffer, format, args);
+    char_t* res    = (char_t*)buffer_get_all_bytes_and_destroy(buffer, NULL);
+    char32_t* lres = str_to_lstr(res);
+    memory_free(res);
+    return lres;
 }

@@ -94,7 +94,7 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
         return;
     }
 
-    char_t data[4096];
+    char16_t data[4096];
     uint32_t data_idx = 0;
     data[data_idx] = NULL;
 
@@ -122,7 +122,7 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
 
                     wndmgr_move_cursor_to_next_input(wndmgr->current_window, is_reverse);
                 }else {
-                    data_idx = wndmgr_append_char16_to_buffer(kbd_data[i].key, data, data_idx);
+                    data[data_idx++] = kbd_data[i].key;
                 }
             } else {
                 if(kbd_data[i].key == KBD_SCANCODE_BACKSPACE) {
@@ -181,7 +181,7 @@ static void windowmanager_handle_events(windowmanager_t* wndmgr) {
 
     const window_t* edit_area = NULL;
 
-    if(strlen(data) && wndmgr_find_window_by_text_cursor(wndmgr->current_window, &edit_area)) {
+    if(wstrlen(data) && wndmgr_find_window_by_text_cursor(wndmgr->current_window, &edit_area)) {
         if(edit_area != NULL) {
             wndmgr_set_window_text(edit_area, data);
         }

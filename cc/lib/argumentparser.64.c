@@ -11,7 +11,7 @@
 
 MODULE("turnstone.lib.argumentparser");
 
-char_t* argument_parser_advance(argument_parser_t* parser) {
+char16_t* argument_parser_advance(argument_parser_t* parser) {
     if(parser == NULL) {
         return NULL;
     }
@@ -30,9 +30,9 @@ char_t* argument_parser_advance(argument_parser_t* parser) {
         i++;
     }
 
-    char_t* start = &parser->arguments[i]; // save start
+    char16_t* start = &parser->arguments[i]; // save start
 
-    if(start[0] == '\'' || start[0] == '\"'){
+    if(start[0] == '\'' || start[0] == '\"') {
         char_t quote = start[0];
         start++;
         i++;
@@ -45,7 +45,7 @@ char_t* argument_parser_advance(argument_parser_t* parser) {
             parser->arguments[i] = NULL;
             i++;
         } else {
-            printf("Cannot parse argument: -%s-\n", start);
+            printf("Cannot parse argument: -%hs-\n", start);
             return NULL;
         }
     } else {

@@ -45,9 +45,9 @@ static int8_t wndmgr_footer_time_on_predraw(const window_event_t* event) {
 
     timeparsed(&tp);
 
-    char_t* time_str = strprintf("%02d:%02d:%02d %04d-%02d-%02d",
-                                 tp.hours, tp.minutes, tp.seconds,
-                                 tp.year, tp.month, tp.day);
+    char16_t* time_str = wstrprintf("%02d:%02d:%02d %04d-%02d-%02d",
+                                    tp.hours, tp.minutes, tp.seconds,
+                                    tp.year, tp.month, tp.day);
 
     memory_free(sheet->text);
 
@@ -79,7 +79,7 @@ static int8_t wndmgr_footer_fps_on_predraw(const window_event_t* event) {
 
     window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, 0);
 
-    char_t* fps_str = strprintf("FPS: %.02f", (wndmgr->previous_render_time) ? (1000000.0f / (float32_t)wndmgr->previous_render_time) : 1000000.0f);
+    char16_t* fps_str = wstrprintf("FPS: %.02f", (wndmgr->previous_render_time) ? (1000000.0f / (float32_t)wndmgr->previous_render_time) : 1000000.0f);
 
     memory_free(sheet->text);
 
@@ -107,9 +107,9 @@ static int8_t wndmgr_create_footer(window_t* parent) {
 
     timeparsed(&tp);
 
-    char_t* time_str = strprintf("%02d:%02d:%02d %04d-%02d-%02d",
-                                 tp.hours, tp.minutes, tp.seconds,
-                                 tp.year, tp.month, tp.day);
+    char16_t* time_str = wstrprintf("%02d:%02d:%02d %04d-%02d-%02d",
+                                    tp.hours, tp.minutes, tp.seconds,
+                                    tp.year, tp.month, tp.day);
 
     rect = wndmgr_calc_text_rect(time_str, wndmgr->screen_width);
 
@@ -117,7 +117,8 @@ static int8_t wndmgr_create_footer(window_t* parent) {
 
     window_t* time_wnd = windowmanager_create_window(footer, rect,
                                                      (color_t){.color = 0xFF2288FF},
-                                                     .text = time_str);
+                                                     .text            = time_str,
+                                                     .is_single_sheet = true);
 
     memory_free(time_str);
 
@@ -133,11 +134,12 @@ static int8_t wndmgr_create_footer(window_t* parent) {
 
     rect = (rect_t){wndmgr->font_width, 0, fps_wnd_width, wndmgr->font_height};
 
-    char_t* fps_str = strprintf("FPS: %.02f", (wndmgr->previous_render_time) ? (1000000.0f / (float32_t)wndmgr->previous_render_time) : 1000000.0f);
+    char16_t* fps_str = wstrprintf("FPS: %.02f", (wndmgr->previous_render_time) ? (1000000.0f / (float32_t)wndmgr->previous_render_time) : 1000000.0f);
 
     window_t* fps_wnd = windowmanager_create_window(footer, rect,
                                                     (color_t){.color = 0xFF22FF22},
-                                                    .text = fps_str);
+                                                    .text            = fps_str,
+                                                    .is_single_sheet = true);
 
     memory_free(fps_str);
 
@@ -153,12 +155,34 @@ static int8_t wndmgr_create_footer(window_t* parent) {
 }
 
 window_t* windowmanager_command_input_window(window_t* parent, rect_t pos,
-                                             const char_t* label_text,
-                                             const char_t* input_text,
-                                             const char_t* input_text_id,
-                                             const char_t* tooltip_text) {
+                                             const char16_t* label_text,
+                                             uint32_t input_length,
+                                             const char16_t* default_input_text,
+                                             const char16_t* input_text_id,
+                                             const char16_t* tooltip_text) {
+    if(!parent || !label_text || !input_text_id || !input_length) {
+        return NULL;
+    }
 
-    windowmanager_t* wndmgr = windowmanager_get_instance();
+    char16_t* input_text = NULL;
+
+    if(!default_input_text) {
+        input_text = memory_malloc((input_length + 1) * sizeof(char16_t));
+
+        if(!input_text) {
+            return NULL;
+        }
+
+        for(uint32_t i = 0; i < input_length; i++) {
+            input_text[i] = u' ';
+        }
+
+        input_text[input_length] = '\0';
+    } else {
+        input_text = wstrndup(default_input_text, input_length);
+    }
+
+    windowmanager_t* wndmgr = parent->wndmgr;
     uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
     uint32_t screen_width = wndmgr->screen_width;
 
@@ -174,7 +198,7 @@ window_t* windowmanager_command_input_window(window_t* parent, rect_t pos,
         return NULL;
     }
 
-    char_t* input_label_text = strprintf("%s ==> ", label_text);
+    char16_t* input_label_text = wstrprintf("%hs ==> ", label_text);
 
     rect_t rect = wndmgr_calc_text_rect(input_label_text, screen_width);
 
@@ -188,23 +212,23 @@ window_t* windowmanager_command_input_window(window_t* parent, rect_t pos,
         return NULL;
     }
 
-    char_t* wnd_input_text = strdup(input_text);
-
-    rect = wndmgr_calc_text_rect(input_text, screen_width);
+    rect.width  = MIN(input_length * font_width, screen_width);
+    rect.height = font_height;
 
     rect.x = option_input_label->owner_rect.width + 2 * font_width;
 
     window_t* option_input_text = windowmanager_create_window(option_input_row,
                                                               rect,
                                                               (color_t){.color = 0xFFFF0000},
-                                                              .text = wnd_input_text);
+                                                              .text            = input_text,
+                                                              .is_writable     = true,
+                                                              .is_single_sheet = true);
 
     if(option_input_text == NULL) {
         return NULL;
     }
 
-    wndmgr_set_window_writable(option_input_text, true);
-    option_input_text->input_length = strlen(input_text);
+    option_input_text->input_length = input_length;
     option_input_text->input_id     = input_text_id;
 
     if(tooltip_text == NULL) {
@@ -215,7 +239,7 @@ window_t* windowmanager_command_input_window(window_t* parent, rect_t pos,
 
     rect.x = option_input_text->owner_rect.x + option_input_text->owner_rect.width  + 2 * font_width;
 
-    char_t* tooltip_text_str = strndup(tooltip_text, rect.width);
+    char16_t* tooltip_text_str = wstrndup(tooltip_text, rect.width);
 
     window_t* option_input_tooltip = windowmanager_create_window(option_input_row,
                                                                  rect,
@@ -243,7 +267,7 @@ static int8_t wndmgr_window_sheet_destroyer(memory_heap_t* heap, void* item){
     return 0;
 }
 
-window_top_window_t windowmanager_create_top_window(const char_t* title, boolean_t has_command_input) {
+window_top_window_t windowmanager_create_top_window(const char16_t* title, boolean_t has_command_input) {
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
     window_t* window = memory_malloc(sizeof(window_t));
@@ -299,7 +323,7 @@ window_top_window_t windowmanager_create_top_window(const char_t* title, boolean
     rect_t title_rect = {0, 0, 0, 0};
 
     if(title) {
-        char_t* title_str = strdup(title);
+        char16_t* title_str = wstrdup(title);
 
         title_rect   = wndmgr_calc_text_rect(title_str, wndmgr->screen_width);
         title_rect.x = (window->owner_rect.width - title_rect.width) / 2;
@@ -327,8 +351,9 @@ window_top_window_t windowmanager_create_top_window(const char_t* title, boolean
     if(has_command_input) {
         window_t* command_input_row = windowmanager_command_input_window(window, title_rect,
                                                                          WINDOWMANAGER_COMMAND_TEXT,
-                                                                         WINDOWMANAGER_COMMAND_INPUT_TEXT,
-                                                                         "option",
+                                                                         32,
+                                                                         NULL,
+                                                                         u"option",
                                                                          NULL);
 
         if(!command_input_row) {
@@ -406,107 +431,169 @@ window_t* windowmanager_create_window_internal(windowmanager_create_window_args_
         return NULL;
     }
 
-    window_sheet_t* sheet = memory_malloc(sizeof(window_sheet_t));
+    if(args.is_single_sheet) {
+        window_sheet_t* sheet = memory_malloc(sizeof(window_sheet_t));
 
-    if(!sheet) {
-        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to allocate memory for window sheet");
-        list_destroy(window->sheets);
-        memory_free(window);
-        return NULL;
+        if(!sheet) {
+            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to allocate memory for window sheet");
+            list_destroy(window->sheets);
+            memory_free(window);
+            return NULL;
+        }
+
+        if(list_list_insert(window->sheets, sheet) == -1ULL) {
+            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to insert sheet into window sheets list");
+            memory_free(sheet);
+            list_destroy(window->sheets);
+            memory_free(window);
+            return NULL;
+        }
+
+        sheet->rect          = args.rect;
+        sheet->absolute_rect = (rect_t){
+            .x      = args.parent->owner_absolute_rect.x + args.rect.x,
+            .y      = args.parent->owner_absolute_rect.y + args.rect.y,
+            .width  = args.rect.width,
+            .height = args.rect.height,
+        };
+        sheet->is_dirty         = true;
+        sheet->background_color = args.background_color;
+        sheet->foreground_color = args.foreground_color;
+        sheet->is_writable      = args.is_writable;
+        sheet->text             = wstrdup(args.text);
+
+        window->wndmgr              = wndmgr;
+        window->parent              = args.parent;
+        window->id                  = wndmgr->next_window_id++;
+        window->owner_rect          = sheet->rect;
+        window->owner_absolute_rect = sheet->absolute_rect;
+
+        args.parent->sheets = wndmgr_substract_sheets(args.parent->sheets, sheet);
+
+        if(!args.parent->sheets) {
+            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to substruct sheet from parent sheets list");
+            memory_free(sheet->text);
+            memory_free(sheet);
+            list_destroy(window->sheets);
+            memory_free(window);
+            return NULL;
+        }
+
+        if(args.parent->children == NULL) {
+            args.parent->children = list_create_queue();
+
+            if(args.parent->children == NULL) {
+                PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create children list for parent window");
+                memory_free(sheet->text);
+                memory_free(sheet);
+                list_destroy(window->sheets);
+                memory_free(window);
+                return NULL;
+            }
+        }
+
+        if(list_queue_push(args.parent->children, window) == -1ULL) {
+            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to push window into parent children list");
+            memory_free(sheet->text);
+            memory_free(sheet);
+            list_destroy(window->sheets);
+            memory_free(window);
+            return NULL;
+        }
+
+        return window;
     }
 
-    boolean_t should_be_single_sheet = args.is_single_sheet || (args.text != NULL);
-
-    if(should_be_single_sheet && list_list_insert(window->sheets, sheet) == -1ULL) {
-        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to insert sheet into window sheets list");
-        memory_free(sheet);
-        list_destroy(window->sheets);
-        memory_free(window);
-        return NULL;
-    }
-
-    sheet->rect          = args.rect;
-    sheet->absolute_rect = (rect_t){
-        .x      = args.parent->owner_absolute_rect.x + args.rect.x,
-        .y      = args.parent->owner_absolute_rect.y + args.rect.y,
-        .width  = args.rect.width,
-        .height = args.rect.height,
+    window_sheet_t tmp_container_sheet = {
+        .rect          = args.rect,
+        .absolute_rect = (rect_t){
+            .x      = args.parent->owner_absolute_rect.x + args.rect.x,
+            .y      = args.parent->owner_absolute_rect.y + args.rect.y,
+            .width  = args.rect.width,
+            .height = args.rect.height,
+        },
     };
-    sheet->is_dirty         = true;
-    sheet->background_color = args.background_color;
-    sheet->foreground_color = args.foreground_color;
-    sheet->text             = strdup(args.text);
 
-    args.parent->sheets = wndmgr_substract_sheets(args.parent->sheets, sheet);
+    args.parent->sheets = wndmgr_substract_sheets(args.parent->sheets, &tmp_container_sheet);
 
     if(!args.parent->sheets) {
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to substruct sheet from parent sheets list");
-        memory_free(sheet);
         list_destroy(window->sheets);
         memory_free(window);
         return NULL;
     }
 
     window->wndmgr              = wndmgr;
+    window->parent              = args.parent;
     window->id                  = wndmgr->next_window_id++;
-    window->owner_rect          = sheet->rect;
-    window->owner_absolute_rect = sheet->absolute_rect;
-
-    window->parent = args.parent;
+    window->owner_rect          = tmp_container_sheet.rect;
+    window->owner_absolute_rect = tmp_container_sheet.absolute_rect;
 
     if(args.parent->children == NULL) {
         args.parent->children = list_create_queue();
-    }
 
-    list_queue_push(args.parent->children, window);
-
-    if(!should_be_single_sheet) {
-        if(sheet->rect.width <= wndmgr->sheet_tile_size && sheet->rect.height <= wndmgr->sheet_tile_size &&
-           list_list_insert(window->sheets, sheet) == -1ULL) {
-            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to insert sheet into window sheets list");
-            memory_free(sheet);
+        if(args.parent->children == NULL) {
+            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create children list for parent window");
             list_destroy(window->sheets);
             memory_free(window);
             return NULL;
-        } else {
-            // divide sheet into tiles and insert into window sheets list
-            for(uint32_t x = args.rect.x; x < args.rect.x + args.rect.width; x += wndmgr->sheet_tile_size) {
-                for(uint32_t y = args.rect.y; y < args.rect.y + args.rect.height; y += wndmgr->sheet_tile_size) {
-                    uint64_t max_sheet_width  = MIN(wndmgr->sheet_tile_size, args.rect.x + args.rect.width - x);
-                    uint64_t max_sheet_height = MIN(wndmgr->sheet_tile_size, args.rect.y + args.rect.height - y);
+        }
+    }
 
-                    window_sheet_t* tile_sheet = memory_malloc(sizeof(window_sheet_t));
 
-                    if(!tile_sheet) {
-                        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to allocate memory for window sheet tile");
-                        list_destroy(window->sheets);
-                        memory_free(window);
-                        return NULL;
-                    }
+    // divide sheet into tiles and insert into window sheets list
+    for(uint32_t x = args.rect.x; x < args.rect.x + args.rect.width; x += wndmgr->sheet_tile_size) {
+        for(uint32_t y = args.rect.y; y < args.rect.y + args.rect.height; y += wndmgr->sheet_tile_size) {
+            uint64_t max_sheet_width  = MIN(wndmgr->sheet_tile_size, args.rect.x + args.rect.width - x);
+            uint64_t max_sheet_height = MIN(wndmgr->sheet_tile_size, args.rect.y + args.rect.height - y);
 
-                    tile_sheet->rect          = (rect_t){x, y, max_sheet_width, max_sheet_height};
-                    tile_sheet->absolute_rect = (rect_t){
-                        .x      = args.parent->owner_absolute_rect.x + x,
-                        .y      = args.parent->owner_absolute_rect.y + y,
-                        .width  = max_sheet_width,
-                        .height = max_sheet_height,
-                    };
-                    tile_sheet->is_dirty         = true;
-                    tile_sheet->background_color = args.background_color;
-                    tile_sheet->foreground_color = args.foreground_color;
+            window_sheet_t* tile_sheet = memory_malloc(sizeof(window_sheet_t));
 
-                    if(list_list_insert(window->sheets, tile_sheet) == -1ULL) {
-                        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to insert sheet tile into window sheets list");
-                        memory_free(tile_sheet);
-                        list_destroy_with_type(window->sheets, LIST_DESTROY_WITH_DATA, wndmgr_window_sheet_destroyer);
-                        memory_free(window);
-                        return NULL;
-                    }
-                }
+            if(!tile_sheet) {
+                PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to allocate memory for window sheet tile");
+                list_destroy_with_type(window->sheets, LIST_DESTROY_WITH_DATA, wndmgr_window_sheet_destroyer);
+                memory_free(window);
+                return NULL;
             }
 
-            memory_free(sheet);
+            tile_sheet->rect          = (rect_t){x, y, max_sheet_width, max_sheet_height};
+            tile_sheet->absolute_rect = (rect_t){
+                .x      = args.parent->owner_absolute_rect.x + x,
+                .y      = args.parent->owner_absolute_rect.y + y,
+                .width  = max_sheet_width,
+                .height = max_sheet_height,
+            };
+            tile_sheet->is_dirty         = true;
+            tile_sheet->background_color = args.background_color;
+            tile_sheet->foreground_color = args.foreground_color;
+            tile_sheet->is_writable      = args.is_writable;
+            tile_sheet->text             = wndmgr_crop_text_to_rect(wndmgr, args.text, args.rect, tile_sheet->rect);
+
+            if(args.text && !tile_sheet->text) {
+                PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to crop text to sheet tile rect");
+                memory_free(tile_sheet);
+                list_destroy_with_type(window->sheets, LIST_DESTROY_WITH_DATA, wndmgr_window_sheet_destroyer);
+                memory_free(window);
+                return NULL;
+            }
+
+
+            if(list_queue_push(window->sheets, tile_sheet) == -1ULL) {
+                PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to insert sheet tile into window sheets list");
+                memory_free(tile_sheet->text);
+                memory_free(tile_sheet);
+                list_destroy_with_type(window->sheets, LIST_DESTROY_WITH_DATA, wndmgr_window_sheet_destroyer);
+                memory_free(window);
+                return NULL;
+            }
         }
+    }
+
+    if(list_queue_push(args.parent->children, window) == -1ULL) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to push window into parent children list");
+        list_destroy_with_type(window->sheets, LIST_DESTROY_WITH_DATA, wndmgr_window_sheet_destroyer);
+        memory_free(window);
+        return NULL;
     }
 
     return window;
@@ -577,6 +664,15 @@ void windowmanager_insert_and_set_current_window(window_t* window) {
 void windowmanager_destroy_window(window_t* window) {
     if(window == NULL) {
         return;
+    }
+
+    if(window->on_destroy) {
+        window_event_t event = {
+            .type   = WINDOW_EVENT_TYPE_DESTROY,
+            .window = window,
+        };
+
+        window->on_destroy(&event);
     }
 
     if(window->children != NULL) {
@@ -704,7 +800,7 @@ static int8_t wndmgr_alert_window_on_enter(const window_event_t* event) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-void windowmanager_create_and_show_alert_window(windowmanager_alert_window_type_t type, const char_t* text) {
+void windowmanager_create_and_show_alert_window(windowmanager_alert_window_type_t type, const char16_t* text) {
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
     rect_t rect = wndmgr_calc_text_rect(text, 400);
@@ -728,20 +824,20 @@ void windowmanager_create_and_show_alert_window(windowmanager_alert_window_type_
     }
 
     for(int32_t i = 0; i < linecount - 2; i++) {
-        buffer_append_bytes(text_buffer, (uint8_t*)"* ", 2);
+        buffer_append_bytes(text_buffer, (uint8_t*)u"* ", 4);
 
         for(int32_t j = 0; j < linecharcount - 4; j++) {
-            buffer_append_byte(text_buffer, ' ');
+            buffer_append_bytes(text_buffer, (uint8_t*)u" ", 2);
         }
 
-        buffer_append_bytes(text_buffer, (uint8_t*)" *", 2);
+        buffer_append_bytes(text_buffer, (uint8_t*)u" *", 4);
     }
 
     for(int32_t i = 0; i < linecharcount; i++) {
         buffer_append_byte(text_buffer, '*');
     }
 
-    char_t* frame_text = (char_t*)buffer_get_all_bytes_and_destroy(text_buffer, NULL);
+    char16_t* frame_text = (char16_t*)(void*)buffer_get_all_bytes_and_destroy(text_buffer, NULL);
 
     color_t foreground_color;
     color_t background_color = {.color = 0x00000000};

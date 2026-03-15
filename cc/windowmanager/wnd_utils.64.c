@@ -58,7 +58,7 @@ windowmanager_t* windowmanager_get_instance(void) {
     return wndmgr_instance;
 }
 
-rect_t wndmgr_calc_text_rect(const char_t* text, uint32_t max_width) {
+rect_t wndmgr_calc_text_rect(const char16_t* text, uint32_t max_width) {
     if(!text) {
         return (rect_t){0};
     }
@@ -75,10 +75,10 @@ rect_t wndmgr_calc_text_rect(const char_t* text, uint32_t max_width) {
     rect.height = 0;
 
     uint32_t max_calc_width = 0;
-    size_t len              = strlen(text);
+    size_t len              = wstrlen(text);
 
     while(*text) {
-        if(*text == '\n') {
+        if(*text == u'\n') {
             rect.height   += font_height;
             max_calc_width = MAX(max_calc_width, rect.width);
             rect.width     = 0;
@@ -104,25 +104,64 @@ rect_t wndmgr_calc_text_rect(const char_t* text, uint32_t max_width) {
     return rect;
 }
 
-uint32_t wndmgr_append_char16_to_buffer(char16_t src, char_t* dst, uint32_t dst_idx) {
-    if(dst == NULL) {
+char16_t* wndmgr_crop_text_to_rect(const windowmanager_t* wndmgr, const char16_t* text, rect_t text_rect, rect_t rect) {
+    if(!wndmgr || !text) {
         return NULL;
     }
 
-    int64_t j = dst_idx;
+    // 1. Calculate how many characters fit in the sheet
+    int32_t sheet_cols = rect.width / wndmgr->font_width;
+    int32_t sheet_rows = rect.height / wndmgr->font_height;
 
-    if(src >= 0x800) {
-        dst[j++] = ((src >> 12) & 0xF) | 0xE0;
-        dst[j++] = ((src >> 6) & 0x3F) | 0x80;
-        dst[j++] = (src & 0x3F) | 0x80;
-    } else if(src >= 0x80) {
-        dst[j++] = ((src >> 6) & 0x1F) | 0xC0;
-        dst[j++] = (src & 0x3F) | 0x80;
-    } else {
-        dst[j++] = src & 0x7F;
+    // 2. Calculate the character offset into the source text
+    // Offset = (Sheet relative X / font_width)
+    int32_t start_col     = (rect.x - text_rect.x) / wndmgr->font_width;
+    int32_t start_row     = (rect.y - text_rect.y) / wndmgr->font_height;
+    int32_t source_stride = text_rect.width / wndmgr->font_width + 1;
+
+    // 3. Allocate buffer
+    // Size: (chars per row + newline) * rows + null terminator
+    size_t buf_size  = (sheet_cols + 1) * sheet_rows + 1;
+    char16_t* buffer = memory_malloc(buf_size * sizeof(char16_t));
+    if(!buffer) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to allocate memory for cropped text buffer");
+        return NULL;
     }
 
-    return j;
+    size_t text_len = wstrlen(text);
+
+    uint32_t out_idx = 0;
+
+    for(int32_t i = 0; i < sheet_rows && out_idx < buf_size - 1; i++) {
+        boolean_t text_ended = false;
+        for(int32_t j = 0; j < sheet_cols && out_idx < buf_size - 1; j++) {
+            // Calculate coordinate in the source "2D array"
+            int32_t src_y = start_row + i;
+            int32_t src_x = start_col + j;
+
+            size_t text_index = (src_y * source_stride) + src_x;
+
+            if(text_index >= text_len) {
+                text_ended = true;
+                break;
+            }
+
+            buffer[out_idx++] = text[text_index];
+        }
+
+        if(text_ended) {
+            break;
+        }
+
+        // dont put new line after last line
+        if(i < sheet_rows - 1) {
+            buffer[out_idx++] = u'\n';
+        }
+    }
+
+    buffer[out_idx] = u'\0';
+
+    return buffer;
 }
 
 static boolean_t wndmgr_is_point_in_rect(const rect_t* rect, uint32_t x, uint32_t y) {
@@ -252,7 +291,7 @@ static void wndmgr_mark_window_sheet_dirty_by_rect(const window_t* window, const
     }
 }
 
-boolean_t wndmgr_find_window_by_text_cursor(window_t* window, const window_t** result) {
+boolean_t wndmgr_find_window_by_text_cursor(const window_t* window, const window_t** result) {
     if(!window || !result) {
         return false;
     }
@@ -267,7 +306,7 @@ boolean_t wndmgr_find_window_by_text_cursor(window_t* window, const window_t** r
     return wndmgr_find_window_by_point(window, x, y, result);
 }
 
-boolean_t wndmgr_find_window_sheet_by_text_cursor(window_t* window, const window_sheet_t** result) {
+boolean_t wndmgr_find_window_sheet_by_text_cursor(const window_t* window, const window_sheet_t** result) {
     if(!window || !result) {
         return false;
     }
@@ -282,7 +321,7 @@ boolean_t wndmgr_find_window_sheet_by_text_cursor(window_t* window, const window
     return wndmgr_find_window_sheet_by_point(window, x, y, result);
 }
 
-int8_t wndmgr_set_window_text(const window_t* window, const char_t* text) {
+int8_t wndmgr_set_window_text(const window_t* window, const char16_t* text) {
     if(window == NULL) {
         return -1;
     }
@@ -291,15 +330,11 @@ int8_t wndmgr_set_window_text(const window_t* window, const char_t* text) {
         return -1;
     }
 
-    if(list_size(window->sheets) != 1) {
-        return -1;
-    }
-
     if(text == NULL) {
         return -1;
     }
 
-    if(strlen(text) == 0) {
+    if(wstrlen(text) == 0) {
         return -1;
     }
 
@@ -309,7 +344,11 @@ int8_t wndmgr_set_window_text(const window_t* window, const char_t* text) {
 
     uint32_t font_width = window->wndmgr->font_width, font_height = window->wndmgr->font_height;
 
-    window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, 0);
+    const window_sheet_t* sheet = NULL;
+
+    if(!wndmgr_find_window_sheet_by_text_cursor(window, &sheet)) {
+        return -1;
+    }
 
     int32_t win_x = sheet->absolute_rect.x / font_width;
     int32_t win_y = sheet->absolute_rect.y / font_height;
@@ -347,9 +386,9 @@ int8_t wndmgr_set_window_text(const window_t* window, const char_t* text) {
         text_idx++;
     }
 
-    text_cursor_move(x, y);
+    wndmgr_text_cursor_move(x, y);
 
-    sheet->is_dirty = true;
+    ((window_sheet_t*)sheet)->is_dirty = true;
 
     return 0;
 }
@@ -399,7 +438,7 @@ void wndmgr_text_cursor_move_relative(int32_t dx, int32_t dy) {
     wndmgr_mark_window_sheet_dirty_by_text_cursor(wndmgr->current_window);
 }
 
-void wndmgr_mouse_move_cursor(windowmanager_t* wndmgr, uint32_t x, uint32_t y) {
+void wndmgr_mouse_move_cursor(const windowmanager_t* wndmgr, uint32_t x, uint32_t y) {
     if (!wndmgr->mouse_initialized) {
         return;
     }
@@ -419,8 +458,8 @@ void wndmgr_mouse_move_cursor(windowmanager_t* wndmgr, uint32_t x, uint32_t y) {
     wndmgr_mark_window_sheet_dirty_by_rect(wndmgr->current_window, &mouse_rect);
 
 
-    wndmgr->mouse_x = x;
-    wndmgr->mouse_y = y;
+    ((windowmanager_t*)wndmgr)->mouse_x = x;
+    ((windowmanager_t*)wndmgr)->mouse_y = y;
 
     mouse_rect.x = wndmgr->mouse_x;
     mouse_rect.y = wndmgr->mouse_y;
@@ -484,60 +523,70 @@ list_t* wndmgr_get_input_values(const window_t* window) {
             continue;
         }
 
-        if(list_size(w->sheets) != 1) {
+        boolean_t has_writable_sheet = true;
+        for(size_t i = 0; i < list_size(w->sheets); i++) {
+            const window_sheet_t* sheet = list_get_data_at_position(w->sheets, i);
+
+            if(!sheet->is_writable) {
+                has_writable_sheet = false;
+                break;
+            }
+        }
+
+        if(!has_writable_sheet) {
             continue;
         }
 
-        window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(w->sheets, 0);
+        char16_t input_buffer[w->input_length + 1];
+        memory_memclean(input_buffer, sizeof(input_buffer));
 
-        if(!sheet) {
-            continue;
+        for(size_t i = 0; i < list_size(w->sheets); i++) {
+            const window_sheet_t* sheet = list_get_data_at_position(w->sheets, i);
+
+            memory_memcopy(sheet->text, input_buffer + wstrlen(input_buffer),
+                           MIN(wstrlen(sheet->text), sizeof(input_buffer) - wstrlen(input_buffer) - 1));
         }
 
-        if(sheet->is_writable) {
-            window_input_value_t* value = memory_malloc(sizeof(window_input_value_t));
 
-            if(value == NULL) {
-                list_destroy_with_type(values, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);
-                list_destroy(ws);
-                return NULL;
-            }
-
-            value->id         = w->input_id;
-            value->value      = strdup(sheet->text);
-            value->extra_data = w->extra_data;
-            value->rect       = sheet->absolute_rect;
-
-            for(size_t i = 0; i < strlen(value->value); i++) { // TODO: find best way for this
-                if(value->value[i] == '_') {
-                    value->value[i] = ' ';
-                }
-            }
-
-            for(size_t i = strlen(value->value); i > 0; i--) { // remove trailing spaces
-                if(value->value[i - 1] == ' ') {
-                    value->value[i - 1] = '\0';
-                } else {
-                    break;
-                }
-            }
-
-            if(!value->value) {
-                memory_free(value);
-                list_destroy_with_type(values, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);
-                list_destroy(ws);
-                return NULL;
-            }
-
-            list_stack_push(values, value);
+        // remove spaces from the beginning and the end of the input buffer
+        size_t start = 0, end = wstrlen(input_buffer);
+        while(input_buffer[start] == ' ' && start < end) {
+            start++;
         }
+        while(end > start && input_buffer[end - 1] == ' ') {
+            end--;
+        }
+        input_buffer[end] = '\0';
+
+        window_input_value_t* value = memory_malloc(sizeof(window_input_value_t));
+
+        if(value == NULL) {
+            list_destroy_with_type(values, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);
+            list_destroy(ws);
+            return NULL;
+        }
+
+        value->id         = w->input_id;
+        value->value      = wstrdup(input_buffer + start);
+        value->extra_data = w->extra_data;
+        value->rect       = w->owner_absolute_rect;
+
+
+        if(!value->value) {
+            memory_free(value);
+            list_destroy_with_type(values, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);
+            list_destroy(ws);
+            return NULL;
+        }
+
+        list_stack_push(values, value);
     }
 
     return values;
 }
 #pragma GCC diagnostic pop
 
-void wndmgr_move_cursor_to_next_input(window_t* window, boolean_t is_reverse) {
+void wndmgr_move_cursor_to_next_input(const window_t* window, boolean_t is_reverse) {
     if(!window) {
         return;
     }
@@ -545,6 +594,7 @@ void wndmgr_move_cursor_to_next_input(window_t* window, boolean_t is_reverse) {
     list_t* inputs = wndmgr_get_input_values(window);
 
     if(!inputs) {
+        video_text_print("Failed to get input values\n");
         return;
     }
 
@@ -694,17 +744,10 @@ void wndmgr_set_window_writable(const window_t* window, boolean_t is_writable) {
         return;
     }
 
-    if(list_size(window->sheets) != 1) {
-        return;
+    for(size_t i = 0; i < list_size(window->sheets); i++) {
+        window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, i);
+        sheet->is_writable = is_writable;
     }
-
-    window_sheet_t* sheet = (window_sheet_t*)list_get_data_at_position(window->sheets, 0);
-
-    if(!sheet) {
-        return;
-    }
-
-    sheet->is_writable = is_writable;
 }
 
 #pragma GCC diagnostic push
@@ -840,7 +883,7 @@ err:
 #pragma GCC diagnostic pop
 
 void wndmgr_mark_window_sheets_always_redrawn(window_t* window, boolean_t is_always_redrawn) {
-    if(window == NULL) {
+    if(!window) {
         return;
     }
 

@@ -249,18 +249,172 @@ char_t* strtrim_right(char_t* str);
 
 int8_t str_is_upper(char_t * str);
 
-int64_t   wchar_size(const char16_t* str);
-char_t*   char16_to_char(char16_t* src);
-char16_t* char_to_wchar(const char_t* str);
+size_t wstrlen_safe(const char16_t * string, size_t max_len);
 
-int64_t   lchar_size(const char32_t * str);
-char_t*   char32_to_char(char32_t* src);
-char32_t* char_to_lchar(char_t* str);
+/*! strlen macro with max size */
+#define wstrlen(s) wstrlen_safe(s, SIZE_MAX)
+
+char_t*   wstr_to_str(char16_t* src);
+char16_t* str_to_wstr(const char_t* str);
+
+/**
+ * @brief compares two string
+ * @param  string1 first string
+ * @param  string2 second string
+ * @return <0 if string1>string2, 0 string1=string2, >0 string1<string2
+ */
+int8_t wstrcmp(const char16_t * string1, const char16_t * string2);
+
+/**
+ * @brief compares two string with first n bytes
+ * @param  string1 first string
+ * @param  string2 second string
+ * @param  n first n bytes
+ * @return <0 if string1>string2, 0 string1=string2, >0 string1<string2
+ **/
+int8_t wstrncmp(const char16_t * string1, const char16_t * string2, size_t n);
+
+/**
+ * @brief duplicate string at heap
+ * @param[in] heap destination heap
+ * @param[in] src source string
+ * @param[in] length of destination string
+ * @return duplicate at heap
+ */
+char16_t* wstrndup_at_heap(memory_heap_t* heap, const char16_t* src, size_t n);
+
+/*! string duplicate at heap */
+#define wstrdup_at_heap(heap, src) wstrndup_at_heap(heap, src, wstrlen(src))
+
+/*! string duplicate at default heap */
+#define wstrdup(src) wstrndup_at_heap(NULL, src, wstrlen(src))
+
+/*! string duplicate with length at default heap */
+#define wstrndup(src, n) wstrndup_at_heap(NULL, src, n)
+
+/**
+ * @brief splits string into array
+ * @param[in] str string to tokinize
+ * @param[in] token split char
+ * @param[out] lengths array of each splitted part's length
+ * @param[out] count splitted array length
+ * @return array of starts of each part
+ */
+char16_t** wstrsplit(const char16_t* str, const char16_t token, int64_t** lengths, int64_t* count);
+
+/**
+ * @brief converts string into number
+ * @param[in]  source string represents number in base
+ * @param[in]  base   base of number inside string
+ * @return number
+ */
+number_t wato_base(const char16_t * source, number_t base);
+
+/*! ato_base macro for base 10 */
+#define watoi(number) wato_base(number, 10)
+
+/**
+ * @brief converts string into number
+ * @param[in]  source string represents number in base
+ * @param[in]  base   base of number inside string
+ * @return number
+ */
+unumber_t watou_base(const char16_t * source, number_t base);
+
+
+/*! atou_base macro for base 10 */
+#define watou(number) watou_base(number, 10)
+/*! atou_base macro for base 16 */
+#define watoh(number) watou_base(number, 16)
+
+size_t lstrlen_safe(const char32_t * str, size_t max_len);
+
+/*! strlen macro with max size */
+#define lstrlen(s) lstrlen_safe(s, SIZE_MAX)
+
+char_t*   lstr_to_str(char32_t* src);
+char32_t* str_to_lstr(char_t* str);
+
+/**
+ * @brief compares two string
+ * @param  string1 first string
+ * @param  string2 second string
+ * @return <0 if string1>string2, 0 string1=string2, >0 string1<string2
+ */
+int8_t lstrcmp(const char32_t * string1, const char32_t * string2);
+
+/**
+ * @brief compares two string with first n bytes
+ * @param  string1 first string
+ * @param  string2 second string
+ * @param  n first n bytes
+ * @return <0 if string1>string2, 0 string1=string2, >0 string1<string2
+ **/
+int8_t lstrncmp(const char32_t * string1, const char32_t * string2, size_t n);
+
+/**
+ * @brief duplicate string at heap
+ * @param[in] heap destination heap
+ * @param[in] src source string
+ * @param[in] length of destination string
+ * @return duplicate at heap
+ */
+char32_t* lstrndup_at_heap(memory_heap_t* heap, const char32_t* src, size_t n);
+
+/*! string duplicate at heap */
+#define lstrdup_at_heap(heap, src) lstrndup_at_heap(heap, src, lstrlen(src))
+
+/*! string duplicate at default heap */
+#define lstrdup(src) lstrndup_at_heap(NULL, src, lstrlen(src))
+
+/*! string duplicate with length at default heap */
+#define lstrndup(src, n) lstrndup_at_heap(NULL, src, n)
+
+/**
+ * @brief splits string into array
+ * @param[in] str string to tokinize
+ * @param[in] token split char
+ * @param[out] lengths array of each splitted part's length
+ * @param[out] count splitted array length
+ * @return array of starts of each part
+ */
+char32_t** lstrsplit(const char32_t* str, const char32_t token, int64_t** lengths, int64_t* count);
+
+/**
+ * @brief converts string into number
+ * @param[in]  source string represents number in base
+ * @param[in]  base   base of number inside string
+ * @return number
+ */
+number_t lato_base(const char32_t * source, number_t base);
+
+/*! ato_base macro for base 10 */
+#define latoi(number) lato_base(number, 10)
+
+/**
+ * @brief converts string into number
+ * @param[in]  source string represents number in base
+ * @param[in]  base   base of number inside string
+ * @return number
+ */
+unumber_t latou_base(const char32_t * source, number_t base);
+
+
+/*! atou_base macro for base 10 */
+#define latou(number) latou_base(number, 10)
+/*! atou_base macro for base 16 */
+#define latoh(number) latou_base(number, 16)
 
 uint64_t strhash(const char_t * input);
 
-char_t* strprintf(const char_t* format, ...);
-char_t* vstrprintf(const char_t* format, va_list args);
+char_t* strprintf(const char_t* format, ...) __attribute__((format(printf, 1, 2)));
+char_t* vstrprintf(const char_t* format, va_list args) __attribute__((format(printf, 1, 0)));
+
+char16_t* wstrprintf(const char_t* format, ...) __attribute__((format(printf, 1, 2)));
+char16_t* wvstrprintf(const char_t* format, va_list args) __attribute__((format(printf, 1, 0)));
+
+char32_t* lstrprintf(const char_t* format, ...) __attribute__((format(printf, 1, 2)));
+char32_t* lvstrprintf(const char_t* format, va_list args) __attribute__((format(printf, 1, 0)));
 
 #ifdef __cplusplus
 }

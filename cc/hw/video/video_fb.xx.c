@@ -45,15 +45,15 @@ void video_fb_refresh_frame_buffer_address(void) {
 }
 
 static void video_fb_graphics_scroll(void){
-    font_table_t* ft = font_get_font_table();
+    font_table_t* ft          = font_get_font_table();
     screen_info_t screen_info = screen_get_info();
 
-    int64_t j = 0;
-    int64_t i = (ft->font_height * screen_info.pixels_per_scanline) / 2;
-    int64_t x = 0;
-    uint64_t* dst = (uint64_t*)VIDEO_BASE_ADDRESS;
+    int64_t j               = 0;
+    int64_t i               = (ft->font_height * screen_info.pixels_per_scanline) / 2;
+    int64_t x               = 0;
+    uint64_t* dst           = (uint64_t*)(void*)VIDEO_BASE_ADDRESS;
     int64_t empty_area_size = (screen_info.pixels_per_scanline - screen_info.width) / 2;
-    int64_t half_width = screen_info.width / 2;
+    int64_t half_width      = screen_info.width / 2;
 
     while(i < screen_info.pixels_per_scanline * screen_info.height / 2) {
         dst[j] = dst[i];
@@ -63,7 +63,7 @@ static void video_fb_graphics_scroll(void){
         x++;
 
         if(x == half_width) {
-            x = 0;
+            x  = 0;
             i += empty_area_size;
             j += empty_area_size;
         }
@@ -82,20 +82,20 @@ static void video_fb_graphics_scroll(void){
         x++;
 
         if(x == screen_info.width) {
-            x = 0;
+            x  = 0;
             i += empty_area_size;
         }
     }
 }
 
 static void video_fb_graphics_print(const char_t* string) {
-    int64_t i = 0;
+    int64_t i             = 0;
     uint64_t flush_offset = 0;
-    uint32_t min_x = 0;
-    uint32_t max_x = 0;
-    uint32_t min_y = 0;
-    uint32_t max_y = 0;
-    boolean_t full_flush = false;
+    uint32_t min_x        = 0;
+    uint32_t max_x        = 0;
+    uint32_t min_y        = 0;
+    uint32_t max_y        = 0;
+    boolean_t full_flush  = false;
 
     int32_t cursor_graphics_x = 0;
     int32_t cursor_graphics_y = 0;
@@ -162,7 +162,7 @@ static void video_fb_graphics_print(const char_t* string) {
             if(cursor_graphics_y >= screen_info.lines_on_screen) {
                 SCREEN_SCROLL();
                 cursor_graphics_y = screen_info.lines_on_screen - 1;
-                full_flush = true;
+                full_flush        = true;
             }
 
             continue;
@@ -171,7 +171,7 @@ static void video_fb_graphics_print(const char_t* string) {
         if(cursor_graphics_y >= screen_info.lines_on_screen) {
             SCREEN_SCROLL();
             cursor_graphics_y = screen_info.lines_on_screen - 1;
-            full_flush = true;
+            full_flush        = true;
         }
 
         SCREEN_PRINT_GLYPH_WITH_STRIDE(wc,
@@ -189,7 +189,7 @@ static void video_fb_graphics_print(const char_t* string) {
             if(cursor_graphics_y >= screen_info.lines_on_screen) {
                 SCREEN_SCROLL();
                 cursor_graphics_y = screen_info.lines_on_screen - 1;
-                full_flush = true;
+                full_flush        = true;
             }
         }
 
@@ -234,9 +234,9 @@ static void video_fb_graphics_print(const char_t* string) {
 
 static void video_fb_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background) {
     if(GRAPHICS_MODE) {
-        uint32_t i = 0;
-        uint32_t j = 0;
-        uint32_t line = 0;
+        uint32_t i                = 0;
+        uint32_t j                = 0;
+        uint32_t line             = 0;
         screen_info_t screen_info = screen_get_info();
 
         for(i = 0; i < height; i++) {
@@ -280,12 +280,12 @@ void video_fb_init(void) {
 
 
     if(VIDEO_BASE_ADDRESS) {
-        GRAPHICS_MODE = true;
-        SCREEN_FLUSH = video_fb_display_flush_dummy;
+        GRAPHICS_MODE                  = true;
+        SCREEN_FLUSH                   = video_fb_display_flush_dummy;
         SCREEN_PRINT_GLYPH_WITH_STRIDE = font_print_glyph_with_stride;
-        SCREEN_SCROLL = video_fb_graphics_scroll;
-        SCREEN_CLEAR_AREA = video_fb_clear_screen_area;
-        VIDEO_GRAPHICS_PRINT = video_fb_graphics_print;
+        SCREEN_SCROLL                  = video_fb_graphics_scroll;
+        SCREEN_CLEAR_AREA              = video_fb_clear_screen_area;
+        VIDEO_GRAPHICS_PRINT           = video_fb_graphics_print;
     }
 
     video_lock = lock_create();
@@ -307,8 +307,8 @@ int8_t video_fb_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_widt
     UNUSED(new_width);
     UNUSED(new_height);
 
-    int64_t j = 0;
-    color_t* buf = (color_t*)buffer;
+    int64_t j    = 0;
+    color_t* buf = (color_t*)(void*)buffer;
 
     int64_t i = 0;
     int64_t x = 0;
@@ -321,7 +321,7 @@ int8_t video_fb_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_widt
         x++;
 
         if(x == screen_info.width) {
-            x = 0;
+            x  = 0;
             i += screen_info.pixels_per_scanline - screen_info.width;
             j += (new_pixels_per_scanline - screen_info.pixels_per_scanline);
         }

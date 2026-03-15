@@ -611,6 +611,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
             int32_t val                = 0;
             boolean_t fill_after       = false;
             const char_t* str          = NULL;
+            const char16_t* c16_str    = NULL;
             int32_t slen               = 0;
             boolean_t is_slen_from_arg = false;
             number_t ival              = 0;
@@ -620,9 +621,10 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
             int8_t sign                = 0;
             char_t fto_buf[128];
             // float128_t fval = 0; // TODO: float128_t ops
-            float64_t fval = 0;
-            number_t prec  = 0;
-            char_t filler  = ' ';
+            float64_t fval     = 0;
+            number_t prec      = 0;
+            char_t filler      = ' ';
+            boolean_t is_16bit = false;
 
             while(true) {
                 format_block_ended = true;
@@ -634,9 +636,19 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     format_block_ended = false;
                     break;
                 case '0':
-                case ' ':
-                    filler = *fmt;
+                    filler = '0';
                     fmt++;
+                    format_block_ended = false;
+                    break;
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
                     val = *fmt - '0';
                     fmt++;
                     if(*fmt >= '0' && *fmt <= '9') {
@@ -665,79 +677,190 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     fmt++;
                     format_block_ended = false;
                     break;
+                case 'h':
+                    is_16bit = true;
+                    fmt++;
+                    format_block_ended = false;
+                    break;
                 case 'c':
-                    val                                                = va_arg(args, int32_t);
-                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)val;
-                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx]   = '\0';
+                    val = va_arg(args, int32_t);
+                    if(is_16bit) {
+                        val = (int16_t)val;
+                        // encode 16-bit char into utf-8
+                        if(val <= 0x7F) {
+                            buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)val;
+                            buffer_vprintf_buffer[buffer_vprintf_buffer_idx]   = '\0';
+
+                        } else if(val <= 0x7FF) {
+                            buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)(0xC0 | ((val >> 6) & 0x1F));
+                            buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)(0x80 | (val & 0x3F));
+                            buffer_vprintf_buffer[buffer_vprintf_buffer_idx]   = '\0';
+                        } else {
+                            buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)(0xE0 | ((val >> 12) & 0x0F));
+                            buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)(0x80 | ((val >> 6) & 0x3F));
+                            buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)(0x80 | (val & 0x3F));
+                            buffer_vprintf_buffer[buffer_vprintf_buffer_idx]   = '\0';
+                        }
+                    } else {
+                        buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)val;
+                        buffer_vprintf_buffer[buffer_vprintf_buffer_idx]   = '\0';
+                    }
                     cnt++;
                     fmt++;
                     break;
                 case 's':
-                    str = va_arg(args, char_t*);
-                    if(str == NULL) {
-                        str = "(null)";
-                    }
-
-                    if(is_slen_from_arg) {
-                        slen = prec;
-                        size_t slen_safe = strlen_safe(str, slen);
-                        if((int32_t)slen_safe < slen) {
-                            slen = slen_safe;
-                        }
-                    } else {
-                        slen = strlen(str);
-                    }
-
-                    if(prec && slen > prec) {
-                        slen = prec;
-                    }
-
-                    if(val > slen) {
-                        val -= slen;
-                    } else {
-                        val = 0;
-                    }
-
-                    if(!fill_after && val) {
-                        cnt += val;
-                        for(idx = 0; idx < val; idx++) {
-                            buf[idx]     = filler;
-                            buf[idx + 1] = '\0';
+                    if(is_16bit) {
+                        c16_str = va_arg(args, char16_t*);
+                        if(c16_str == NULL) {
+                            c16_str = (char16_t*)u"(null)";
                         }
 
-                        strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
-                        buffer_vprintf_buffer_idx += idx;
-                    }
-
-                    if((slen > BUFFER_PRINTF_BUFFER_SIZE - 1) && buffer_vprintf_buffer_idx) {
-                        buffer_append_bytes(buffer, (uint8_t*)buffer_vprintf_buffer, buffer_vprintf_buffer_idx);
-                        buffer_vprintf_buffer_idx = 0;
-                    }
-
-                    while(slen > BUFFER_PRINTF_BUFFER_SIZE - 1) {
-                        buffer_append_bytes(buffer, (uint8_t*)str, BUFFER_PRINTF_BUFFER_SIZE - 1);
-                        str  += BUFFER_PRINTF_BUFFER_SIZE - 1;
-                        slen -= BUFFER_PRINTF_BUFFER_SIZE - 1;
-                    }
-
-                    strcopy(str, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
-                    buffer_vprintf_buffer_idx                       += slen;
-                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
-
-                    if(fill_after && val) {
-                        cnt += val;
-                        for(idx = 0; idx < val; idx++) {
-                            buf[idx]     = filler;
-                            buf[idx + 1] = '\0';
+                        if(is_slen_from_arg) {
+                            slen = prec;
+                            size_t slen_safe = wstrlen_safe(c16_str, slen);
+                            if((int32_t)slen_safe < slen) {
+                                slen = slen_safe;
+                            }
+                        } else {
+                            slen = wstrlen(c16_str);
                         }
 
-                        if(buffer_vprintf_buffer_idx + val >= BUFFER_PRINTF_BUFFER_SIZE - 1) {
+                        if(prec && slen > prec) {
+                            slen = prec;
+                        }
+
+                        if(val > slen) {
+                            val -= slen;
+                        } else {
+                            val = 0;
+                        }
+
+                        if(!fill_after && val) {
+                            cnt += val;
+                            for(idx = 0; idx < val; idx++) {
+                                buf[idx]     = filler;
+                                buf[idx + 1] = '\0';
+                            }
+
+                            strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                            buffer_vprintf_buffer_idx += idx;
+                        }
+
+                        if(buffer_vprintf_buffer_idx) {
                             buffer_append_bytes(buffer, (uint8_t*)buffer_vprintf_buffer, buffer_vprintf_buffer_idx);
                             buffer_vprintf_buffer_idx = 0;
                         }
 
-                        strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
-                        buffer_vprintf_buffer_idx += idx;
+                        // encode 16-bit char into utf-8 use buf for temporary storage then
+                        // append buffer with buffer_append_bytes to avoid overflow in buffer_vprintf_buffer
+                        // TODO: use buffer_vprintf_buffer for speedup.
+                        idx = 0;
+                        while(idx < slen) {
+                            uint32_t buf_idx = 0;
+                            while(buf_idx < sizeof(buf) - 8 && idx < slen) {
+                                char16_t c = c16_str[idx++];
+                                if(c <= 0x7F) {
+                                    buf[buf_idx++] = (char_t)c;
+                                    buf[buf_idx]   = '\0';
+                                } else if(c <= 0x7FF) {
+                                    buf[buf_idx++] = (char_t)(0xC0 | ((c >> 6) & 0x1F));
+                                    buf[buf_idx++] = (char_t)(0x80 | (c & 0x3F));
+                                    buf[buf_idx]   = '\0';
+                                } else {
+                                    buf[buf_idx++] = (char_t)(0xE0 | ((c >> 12) & 0x0F));
+                                    buf[buf_idx++] = (char_t)(0x80 | ((c >> 6) & 0x3F));
+                                    buf[buf_idx++] = (char_t)(0x80 | (c & 0x3F));
+                                    buf[buf_idx]   = '\0';
+                                }
+                            }
+                            buffer_append_bytes(buffer, (uint8_t*)buf, buf_idx);
+                        }
+
+                        if(fill_after && val) {
+                            cnt += val;
+                            for(idx = 0; idx < val; idx++) {
+                                buf[idx]     = filler;
+                                buf[idx + 1] = '\0';
+                            }
+
+                            if(buffer_vprintf_buffer_idx + val >= BUFFER_PRINTF_BUFFER_SIZE - 1) {
+                                buffer_append_bytes(buffer, (uint8_t*)buffer_vprintf_buffer, buffer_vprintf_buffer_idx);
+                                buffer_vprintf_buffer_idx = 0;
+                            }
+
+                            strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                            buffer_vprintf_buffer_idx += idx;
+                        }
+
+                    } else {
+                        str = va_arg(args, char_t*);
+                        if(str == NULL) {
+                            str = "(null)";
+                        }
+
+                        if(is_slen_from_arg) {
+                            slen = prec;
+                            size_t slen_safe = strlen_safe(str, slen);
+                            if((int32_t)slen_safe < slen) {
+                                slen = slen_safe;
+                            }
+                        } else {
+                            slen = strlen(str);
+                        }
+
+                        if(prec && slen > prec) {
+                            slen = prec;
+                        }
+
+                        if(val > slen) {
+                            val -= slen;
+                        } else {
+                            val = 0;
+                        }
+
+                        if(!fill_after && val) {
+                            cnt += val;
+                            for(idx = 0; idx < val; idx++) {
+                                buf[idx]     = filler;
+                                buf[idx + 1] = '\0';
+                            }
+
+                            strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                            buffer_vprintf_buffer_idx += idx;
+                        }
+
+                        if((slen > BUFFER_PRINTF_BUFFER_SIZE - 1) && buffer_vprintf_buffer_idx) {
+                            buffer_append_bytes(buffer, (uint8_t*)buffer_vprintf_buffer, buffer_vprintf_buffer_idx);
+                            buffer_vprintf_buffer_idx = 0;
+                        }
+
+                        while(slen > BUFFER_PRINTF_BUFFER_SIZE - 1) {
+                            buffer_append_bytes(buffer, (uint8_t*)str, BUFFER_PRINTF_BUFFER_SIZE - 1);
+                            str  += BUFFER_PRINTF_BUFFER_SIZE - 1;
+                            slen -= BUFFER_PRINTF_BUFFER_SIZE - 1;
+                            cnt  += BUFFER_PRINTF_BUFFER_SIZE - 1;
+                        }
+
+                        strcopy(str, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                        buffer_vprintf_buffer_idx                       += slen;
+                        buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
+
+                        if(fill_after && val) {
+                            cnt += val;
+                            for(idx = 0; idx < val; idx++) {
+                                buf[idx]     = filler;
+                                buf[idx + 1] = '\0';
+                            }
+
+                            if(buffer_vprintf_buffer_idx + val >= BUFFER_PRINTF_BUFFER_SIZE - 1) {
+                                buffer_append_bytes(buffer, (uint8_t*)buffer_vprintf_buffer, buffer_vprintf_buffer_idx);
+                                buffer_vprintf_buffer_idx = 0;
+                            }
+
+                            strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                            buffer_vprintf_buffer_idx += idx;
+                        }
+
                     }
 
                     cnt += slen;
@@ -831,7 +954,6 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     nobreak;
                 case 'x':
                 case 'X':
-                case 'h':
                     if(l_flag == 2) {
                         uval = va_arg(args, uint64_t);
                     } else if(l_flag == 1) {

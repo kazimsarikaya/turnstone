@@ -676,15 +676,15 @@ static const void* fat32_dir_list_iter_get_item(iterator_t* iter){
         while(list_size(name_parts)) {
             p = (char16_t*)list_stack_pop(name_parts);
 
-            memory_memcopy(p, wname + wname_idx, sizeof(char16_t) * wchar_size(p));
-            wname_idx += wchar_size(p);
+            memory_memcopy(p, wname + wname_idx, sizeof(char16_t) * wstrlen(p));
+            wname_idx += wstrlen(p);
 
             memory_free(p);
         }
 
         list_destroy(name_parts);
 
-        dirent_name = char16_to_char(wname);
+        dirent_name = wstr_to_str(wname);
 
         memory_free(wname);
     }

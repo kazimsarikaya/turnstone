@@ -320,7 +320,7 @@ int64_t buffer_printf(buffer_t* buffer, const char* format, ...) __attribute__((
  * @param[in] args va_list of arguments
  * @return int64_t number of bytes written
  */
-int64_t buffer_vprintf(buffer_t* buffer, const char* format, va_list args);
+int64_t buffer_vprintf(buffer_t* buffer, const char* format, va_list args) __attribute__((format(printf, 2, 0)));
 
 /**
  * @brief returns a temporary buffer for printf, before gui is initialized, this is a static buffer, after gui is initialized, this is a buffer allocated with malloc

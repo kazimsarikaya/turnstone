@@ -15,17 +15,15 @@
 extern "C" {
 #endif
 
-void wndmgr_mouse_move_cursor(windowmanager_t* wndmgr, uint32_t x, uint32_t y);
+void wndmgr_mouse_move_cursor(const windowmanager_t* wndmgr, uint32_t x, uint32_t y);
 void wndmgr_text_cursor_move(int32_t x, int32_t y);
 void wndmgr_text_cursor_move_relative(int32_t dx, int32_t dy);
-void wndmgr_move_cursor_to_next_input(window_t* window, boolean_t is_reverse);
+void wndmgr_move_cursor_to_next_input(const window_t* window, boolean_t is_reverse);
 
-boolean_t wndmgr_find_window_by_text_cursor(window_t* window, const window_t** result);
-boolean_t wndmgr_find_window_sheet_by_text_cursor(window_t* window, const window_sheet_t** result);
+boolean_t wndmgr_find_window_by_text_cursor(const window_t* window, const window_t** result);
+boolean_t wndmgr_find_window_sheet_by_text_cursor(const window_t* window, const window_sheet_t** result);
 
-uint32_t wndmgr_append_char16_to_buffer(char16_t src, char_t* dst, uint32_t dst_idx);
-
-int8_t wndmgr_set_window_text(const window_t* window, const char_t* text);
+int8_t wndmgr_set_window_text(const window_t* window, const char16_t* text);
 
 void      wndmgr_mark_all_windows_dirty(window_t* window);
 boolean_t wndmgr_is_window_dirty(const window_t* window);
@@ -35,7 +33,8 @@ void wndmgr_mark_window_sheets_always_redrawn(window_t* window, boolean_t is_alw
 
 int8_t wndmgr_destroy_inputs(list_t* inputs);
 
-rect_t wndmgr_calc_text_rect(const char_t* text, uint32_t max_width);
+rect_t    wndmgr_calc_text_rect(const char16_t* text, uint32_t max_width);
+char16_t* wndmgr_crop_text_to_rect(const windowmanager_t* wndmgr, const char16_t* text, rect_t text_rect, rect_t rect);
 
 boolean_t wndmgr_is_drawing_occured(const window_t* window);
 

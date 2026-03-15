@@ -33,13 +33,13 @@ typedef enum wnd_options_windows_t {
 static window_t* windowmanager_create_options_window(wnd_options_windows_t option_window_type);
 
 typedef struct wnd_options_list_item_t {
-    const char_t*         text;
+    const char16_t*       text;
     wnd_options_windows_t next_options_window;
     wndmgr_opt_action_f   action;
 } wnd_options_list_item_t;
 
 typedef struct wnd_options_list_t {
-    const char_t*                  title;
+    const char16_t*                title;
     const wnd_options_list_item_t* items;
     int64_t                        items_count;
 } wnd_options_list_t;
@@ -53,11 +53,11 @@ typedef enum wnd_task_vm_manager_list_item_type_t {
 
 const wnd_options_list_item_t wnd_task_manager_item_list[WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_END] = {
     [WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_LIST] =    {
-        .text   = "Task and VM List",
+        .text   = u"Task and VM List",
         .action = windowmanager_create_and_show_task_vm_list_window,
     },
     [WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_CREATE] =    {
-        .text   = "Create Task and VM",
+        .text   = u"Create Task and VM",
         .action = windowmanager_create_and_show_task_vm_create_window,
     },
 };
@@ -74,40 +74,40 @@ typedef enum wnd_primary_options_list_item_type_t {
 
 const wnd_options_list_item_t wnd_primary_options_item_list[WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_END] = {
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_SPOOL_BROWSER] =    {
-        .text   = "Spool Browser",
+        .text   = u"Spool Browser",
         .action = windowmanager_create_and_show_spool_browser_window,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_VM_MANAGER] =    {
-        .text                = "Task and Virtual Machine Manager",
+        .text                = u"Task and Virtual Machine Manager",
         .next_options_window = WND_OPTIONS_TASK_VM_MANAGER,
         .action              = NULL,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_NETWORK_MANAGER] =    {
-        .text   = "Network Manager",
+        .text   = u"Network Manager",
         .action = NULL,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TURNSTONE_DATABASE_MANAGER] =    {
-        .text   = "Turnstone Database Manager",
+        .text   = u"Turnstone Database Manager",
         .action = NULL,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_REBOOT] =    {
-        .text   = "Reboot",
+        .text   = u"Reboot",
         .action = wndmgr_reboot,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_POWER_OFF] =    {
-        .text   = "Power Off",
+        .text   = u"Power Off",
         .action = wndmgr_power_off,
     },
 };
 
 const wnd_options_list_t wnd_options_list[WND_OPTIONS_END] = {
     [WND_OPTIONS_PRIMARY] =    {
-        .title       = "tOS Primary Options Menu",
+        .title       = u"tOS Primary Options Menu",
         .items       = wnd_primary_options_item_list,
         .items_count = WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_END,
     },
     [WND_OPTIONS_TASK_VM_MANAGER] =    {
-        .title       = "tOS Task and Virtual Machine Manager",
+        .title       = u"tOS Task and Virtual Machine Manager",
         .items       = wnd_task_manager_item_list,
         .items_count = WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_END,
     },
@@ -139,6 +139,7 @@ static int8_t wndmgr_options_on_enter(const window_event_t* event) {
     list_t* inputs = wndmgr_get_input_values(wndmgr->current_window);
 
     if(!list_size(inputs)) {
+        video_text_print("No input provided\n");
         list_destroy(inputs);
         return -1;
     }
@@ -147,7 +148,7 @@ static int8_t wndmgr_options_on_enter(const window_event_t* event) {
 
     argument_parser_t argparser = {input->value, 0};
 
-    char_t* option = argument_parser_advance(&argparser);
+    char16_t* option = argument_parser_advance(&argparser);
 
     if(option == NULL) {
         memory_free(input->value);
@@ -158,7 +159,7 @@ static int8_t wndmgr_options_on_enter(const window_event_t* event) {
         return -1;
     }
 
-    if(strlen(option) == 0) {
+    if(wstrlen(option) == 0) {
         memory_free(input->value);
         memory_free(input);
 
@@ -167,7 +168,7 @@ static int8_t wndmgr_options_on_enter(const window_event_t* event) {
         return -1;
     }
 
-    wnd_primary_options_list_item_type_t option_number = atoi(option);
+    wnd_primary_options_list_item_type_t option_number = watoi(option);
 
     wnd_options_windows_t window_type = (wnd_options_windows_t)(uint64_t)window->extra_data;
 
@@ -255,7 +256,7 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
 
     for(int64_t i = 0; i < options_list->items_count; i++) {
 
-        char_t* option_number = strprintf("% 8d.", i);
+        char16_t* option_number = wstrprintf("%8lld.", i);
 
         rect = wndmgr_calc_text_rect(option_number, max_width);
 
@@ -273,7 +274,7 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
             return NULL;
         }
 
-        char_t* option_text = strprintf("%s", options_list->items[i].text);
+        char16_t* option_text = wstrprintf("%hs", options_list->items[i].text);
 
         rect = wndmgr_calc_text_rect(option_text,
                                      max_width - option_number_area->owner_rect.width - font_width);

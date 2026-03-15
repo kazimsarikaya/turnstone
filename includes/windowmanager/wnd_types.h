@@ -25,6 +25,8 @@ typedef struct window_event_t       window_event_t;
 typedef struct window_input_value_t window_input_value_t;
 
 typedef enum window_event_type_t {
+    WINDOW_EVENT_TYPE_NONE,
+    WINDOW_EVENT_TYPE_DESTROY,
     WINDOW_EVENT_TYPE_ENTER,
     WINDOW_EVENT_TYPE_PREDRAW,
     WINDOW_EVENT_TYPE_DRAW,
@@ -95,7 +97,7 @@ typedef struct window_sheet_t window_sheet_t;
 struct window_sheet_t {
     rect_t    rect;
     rect_t    absolute_rect;
-    char_t*   text;
+    char16_t* text;
     boolean_t is_dirty;
     boolean_t is_always_redrawn;
     boolean_t is_drawing_occured;
@@ -113,13 +115,14 @@ struct window_t {
     uint64_t         id;
     boolean_t        is_hidden;
     int32_t          input_length;
-    const char_t*    input_id;
+    const char16_t*  input_id;
     void*            extra_data;
     boolean_t        extra_data_is_allocated;
     rect_t           owner_rect;
     rect_t           owner_absolute_rect;
     list_t*          sheets;
     list_t*          children;
+    window_event_f   on_destroy;
     window_event_f   on_enter;
     window_event_f   on_scroll;
     window_event_f   on_predraw;
@@ -132,15 +135,13 @@ typedef struct window_top_window_t {
 } window_top_window_t;
 
 typedef struct window_input_value_t {
-    const char_t* id;
-    char_t*       value;
-    void*         extra_data;
-    rect_t        rect;
+    const char16_t* id;
+    char16_t*       value;
+    void*           extra_data;
+    rect_t          rect;
 } window_input_value_t;
 
-#define WINDOWMANAGER_COMMAND_TEXT "Command"
-#define WINDOWMANAGER_COMMAND_INPUT_TEXT "________________"
-
+#define WINDOWMANAGER_COMMAND_TEXT u"Command"
 
 #ifdef __cplusplus
 }

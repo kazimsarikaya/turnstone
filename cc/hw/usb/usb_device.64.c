@@ -127,11 +127,11 @@ boolean_t usb_device_request(usb_device_t*           usb_device,
 
     usb_device_request_t usb_request = {0};
 
-    usb_request.type = request_type | request_recipient | request_direction;
+    usb_request.type    = request_type | request_recipient | request_direction;
     usb_request.request = request;
-    usb_request.value  = value;
-    usb_request.index = index;
-    usb_request.length = length;
+    usb_request.value   = value;
+    usb_request.index   = index;
+    usb_request.length  = length;
 
     usb_transfer_t usb_transfer = {0};
 
@@ -151,13 +151,13 @@ boolean_t usb_device_request(usb_device_t*           usb_device,
 
     usb_driver_t dummy_driver = {0};
     dummy_driver.usb_device = usb_device;
-    dummy_driver.interface = interface;
+    dummy_driver.interface  = interface;
 
-    usb_transfer.driver = &dummy_driver;
+    usb_transfer.driver   = &dummy_driver;
     usb_transfer.endpoint = ep;
-    usb_transfer.request = &usb_request;
-    usb_transfer.data = data;
-    usb_transfer.length = length;
+    usb_transfer.request  = &usb_request;
+    usb_transfer.data     = data;
+    usb_transfer.length   = length;
 
     if(usb_device->controller->control_transfer(usb_device->controller, &usb_transfer) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot send request");
@@ -281,27 +281,27 @@ static int8_t usb_device_get_descriptor_strings(usb_device_t* usb_device) {
     }
 
     char16_t product[128] = {0};
-    char16_t vendor[128] = {0};
-    char16_t serial[128] = {0};
+    char16_t vendor[128]  = {0};
+    char16_t serial[128]  = {0};
 
     if(!usb_device_get_string(usb_device, lang_ids[0], usb_device->desc->product_string, product)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get product string");
     } else {
-        char_t* product_str = char16_to_char(product);
+        char_t* product_str = wstr_to_str(product);
         usb_device->product = product_str;
     }
 
     if(!usb_device_get_string(usb_device, lang_ids[0], usb_device->desc->vendor_string, vendor)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get vendor string");
     } else {
-        char_t* vendor_str = char16_to_char(vendor);
+        char_t* vendor_str = wstr_to_str(vendor);
         usb_device->vendor = vendor_str;
     }
 
     if(!usb_device_get_string(usb_device, lang_ids[0], usb_device->desc->serial_number_string, serial)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get serial string");
     } else {
-        char_t* serial_str = char16_to_char(serial);
+        char_t* serial_str = wstr_to_str(serial);
         usb_device->serial = serial_str;
     }
 
@@ -361,13 +361,13 @@ static int8_t usb_device_get_config(usb_device_t* usb_device, usb_config_t* conf
 }
 
 static uint32_t usb_device_parse_cs_interfaces_of_interface(usb_config_t* config, usb_interface_t* interface, uint32_t idx) {
-    uint32_t cs_interface_count = 0;
+    uint32_t cs_interface_count    = 0;
     usb_config_desc_t* config_desc = (usb_config_desc_t*)config->config_buffer;
 
     uint32_t temp_idx = idx;
     while(temp_idx < config_desc->total_length) {
         uint8_t length = config->config_buffer[temp_idx];
-        uint8_t type = config->config_buffer[temp_idx + 1];
+        uint8_t type   = config->config_buffer[temp_idx + 1];
 
         if(length < 2) {
             PRINTLOG(USB, LOG_ERROR, "invalid descriptor length 0x%x for interface number 0x%x", length, interface->desc->interface_number);
@@ -398,7 +398,7 @@ static uint32_t usb_device_parse_cs_interfaces_of_interface(usb_config_t* config
 
         for(uint32_t k = 0; k < cs_interface_count; k++) {
             interface->cs_interfaces[k] = (usb_cs_interface_desc_t*)&config->config_buffer[idx];
-            idx += interface->cs_interfaces[k]->length;
+            idx                        += interface->cs_interfaces[k]->length;
             PRINTLOG(USB, LOG_TRACE, "cs interface type 0x%x length 0x%x", interface->cs_interfaces[k]->type, interface->cs_interfaces[k]->length);
         }
 
@@ -414,7 +414,7 @@ static uint32_t usb_device_parse_other_descs_of_interface(usb_config_t* config, 
 
     while(idx < config_desc->total_length) {
         uint8_t length = config->config_buffer[idx];
-        uint8_t type = config->config_buffer[idx + 1];
+        uint8_t type   = config->config_buffer[idx + 1];
 
         if(length < 2) {
             PRINTLOG(USB, LOG_ERROR, "invalid descriptor length 0x%x for interface number 0x%x", length, interface->desc->interface_number);
@@ -498,7 +498,7 @@ static uint32_t usb_device_parse_endpoints_of_interface(usb_config_t* config, us
         usb_endpoint_t* endpoint = interface->endpoints[k];
 
         endpoint->desc = endpoint_desc;
-        endpoint->in = endpoint_desc->endpoint_address >> 7;
+        endpoint->in   = endpoint_desc->endpoint_address >> 7;
 
         idx += length;
 
@@ -517,7 +517,7 @@ static uint32_t usb_device_parse_endpoints_of_interface(usb_config_t* config, us
         }
 
         uint8_t tmp_length = config->config_buffer[idx];
-        uint8_t tmp_type = config->config_buffer[idx + 1];
+        uint8_t tmp_type   = config->config_buffer[idx + 1];
 
         if(tmp_length < 2) {
             PRINTLOG(USB, LOG_ERROR, "invalid descriptor length 0x%x for endpoint address 0x%x",
@@ -531,14 +531,14 @@ static uint32_t usb_device_parse_endpoints_of_interface(usb_config_t* config, us
             PRINTLOG(USB, LOG_DEBUG, "endpoint companion descriptor for endpoint address 0x%x",
                      endpoint->desc->endpoint_address);
             endpoint->endpoint_companion = (usb_endpoint_companion_desc_t*)(config->config_buffer + idx);
-            idx += tmp_length;
+            idx                         += tmp_length;
         }
 
         uint32_t tmp_idx = idx;
         endpoint->num_cs_interfaces = 0;
         while(tmp_idx < config_desc->total_length) {
             tmp_length = config->config_buffer[tmp_idx];
-            tmp_type = config->config_buffer[tmp_idx + 1];
+            tmp_type   = config->config_buffer[tmp_idx + 1];
 
             if(tmp_length < 2) {
                 PRINTLOG(USB, LOG_ERROR, "invalid descriptor length 0x%x for endpoint address 0x%x",
@@ -573,7 +573,7 @@ static uint32_t usb_device_parse_endpoints_of_interface(usb_config_t* config, us
 
             for(uint32_t l = 0; l < endpoint->num_cs_interfaces; l++) {
                 endpoint->cs_interfaces[l] = (usb_cs_interface_desc_t*)(config->config_buffer + idx);
-                idx += endpoint->cs_interfaces[l]->length;
+                idx                       += endpoint->cs_interfaces[l]->length;
             }
         }
 
@@ -585,14 +585,14 @@ static uint32_t usb_device_parse_endpoints_of_interface(usb_config_t* config, us
 }
 
 static uint32_t usb_device_count_real_interfaces(usb_config_t* config) {
-    uint32_t interface_count = 0;
+    uint32_t interface_count       = 0;
     usb_config_desc_t* config_desc = (usb_config_desc_t*)config->config_buffer;
 
     uint32_t idx = config_desc->length;
 
     while(idx < config_desc->total_length) {
         uint8_t length = config->config_buffer[idx];
-        uint8_t type = config->config_buffer[idx + 1];
+        uint8_t type   = config->config_buffer[idx + 1];
 
         if(length < 2) {
             PRINTLOG(USB, LOG_ERROR, "invalid descriptor length 0x%x for interface count", length);
@@ -662,16 +662,16 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
         return -1;
     }
 
-    usb_device->parent = parent;
+    usb_device->parent     = parent;
     usb_device->controller = controller;
-    usb_device->port = port;
-    usb_device->speed = speed;
+    usb_device->port       = port;
+    usb_device->speed      = speed;
 
     uint64_t parent_device_id = 0;
-    uint64_t parent_port = 0;
+    uint64_t parent_port      = 0;
     if(parent) {
         parent_device_id = parent->device_id;
-        parent_port = parent->port;
+        parent_port      = parent->port;
     }
 
     uint64_t controller_id = controller->controller_id;
@@ -762,14 +762,14 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
         return -1;
     }
 
-    usb_device->vendor_id = usb_device->desc->vendor_id;
-    usb_device->product_id = usb_device->desc->product_id;
+    usb_device->vendor_id      = usb_device->desc->vendor_id;
+    usb_device->product_id     = usb_device->desc->product_id;
     usb_device->device_version = usb_device->desc->device_version;
 
     usb_device_print_desc(usb_device);
 
     usb_device->num_configurations = usb_device->desc->num_configurations;
-    usb_device->configurations = memory_malloc(sizeof(usb_config_desc_t*) * usb_device->num_configurations);
+    usb_device->configurations     = memory_malloc(sizeof(usb_config_desc_t*) * usb_device->num_configurations);
 
     if(!usb_device->configurations) {
         PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for configurations");
@@ -837,7 +837,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                 return -1;
             }
             uint8_t length = config->config_buffer[idx];
-            uint8_t type = config->config_buffer[idx + 1];
+            uint8_t type   = config->config_buffer[idx + 1];
 
             if(length < 2) {
                 PRINTLOG(USB, LOG_ERROR, "invalid descriptor length 0x%x for interface index 0x%x", length, j);
@@ -865,7 +865,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
             usb_interface_t* interface = config->interfaces[j];
 
-            interface->desc = (usb_interface_desc_t*)&config->config_buffer[idx];
+            interface->desc          = (usb_interface_desc_t*)&config->config_buffer[idx];
             interface->num_endpoints = interface->desc->num_endpoints;
 
             PRINTLOG(USB, LOG_DEBUG, "interface number: 0x%x alt setting: 0x%x num endpoints: 0x%x",
@@ -977,7 +977,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                 return -1;
             }
 
-            if(interface->num_endpoints){
+            if(interface->num_endpoints) {
                 idx = usb_device_parse_endpoints_of_interface(config, interface, idx);
 
                 if(idx == (uint32_t)-1) {
@@ -1000,7 +1000,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
             while(idx < config_desc->total_length) {
                 uint8_t length = config->config_buffer[idx];
-                uint8_t type = config->config_buffer[idx + 1];
+                uint8_t type   = config->config_buffer[idx + 1];
 
                 if(length < 2) {
                     PRINTLOG(USB, LOG_ERROR, "invalid descriptor length 0x%x for config number 0x%x", length, i);
@@ -1065,11 +1065,11 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
         interface->interface_id = i;
 
-        int32_t interface_number = interface->desc->interface_number;
-        int32_t interface_class = interface->desc->interface_class;
+        int32_t interface_number   = interface->desc->interface_number;
+        int32_t interface_class    = interface->desc->interface_class;
         int32_t interface_subclass = interface->desc->interface_subclass;
         int32_t interface_protocol = interface->desc->interface_protocol;
-        uint32_t num_endpoints = interface->num_endpoints;
+        uint32_t num_endpoints     = interface->num_endpoints;
 
 
         PRINTLOG(USB, LOG_DEBUG, "interface 0%x (0x%x) class: 0x%x subclass: 0x%x protocol: 0x%x endpoint count 0x%x",
@@ -1083,7 +1083,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
         usb_endpoint_t** endpoints = interface->endpoints;
 
         for(uint32_t j = 0; j < num_endpoints; j++) {
-            uint32_t ep_address = endpoints[j]->desc->endpoint_address;
+            uint32_t ep_address         = endpoints[j]->desc->endpoint_address;
             uint32_t ep_max_packet_size = endpoints[j]->desc->max_packet_size;
             PRINTLOG(USB, LOG_DEBUG, "endpoint address: 0x%x 0x%x",
                      ep_address, ep_max_packet_size);

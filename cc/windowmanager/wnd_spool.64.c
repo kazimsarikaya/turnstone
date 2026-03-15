@@ -48,26 +48,27 @@ static int8_t wndmgr_spool_item_on_enter(const window_event_t* event) {
             continue;
         }
 
-        if(strcmp(input->id, "buffer") == 0) {
+        if(wstrcmp(input->id, u"buffer") == 0) {
             const buffer_t* buffer = (const buffer_t*)input->extra_data;
 
             if(!buffer) {
                 continue;
             }
 
-            char_t* buffer_text = input->value;
+            char16_t* buffer_text = input->value;
 
             if(!buffer_text) {
                 continue;
             }
 
-            if(strlen(buffer_text) == 0) {
+            if(wstrlen(buffer_text) == 0) {
                 continue;
             }
 
-            if(strcmp(buffer_text, "s") == 0) {
-                const char_t* buffer_data = (const char_t*)buffer_get_view_at_position(buffer, 0, buffer_get_length(buffer));
-                windowmanager_create_and_show_editor_window("Spool Data", buffer_data, true);
+            if(wstrcmp(buffer_text, u"s") == 0) {
+                const char_t* c8_buffer_data = (const char_t*)(void*)buffer_get_view_at_position(buffer, 0, buffer_get_length(buffer));
+                char16_t* buffer_data        = str_to_wstr(c8_buffer_data);
+                windowmanager_create_and_show_editor_window(u"Spool Data", buffer_data, false, true);
                 break;
             }
         }
@@ -117,9 +118,9 @@ static int8_t wndmgr_spool_item_on_predraw(const window_event_t* event) {
         return -1;
     }
 
-    char_t* spool_text = strprintf("% 12i% 15lli",
-                                   sied->buffer_id,
-                                   buffer_get_length(sied->buffer));
+    char16_t* spool_text = wstrprintf("%12lli%15lli",
+                                      sied->buffer_id,
+                                      buffer_get_length(sied->buffer));
 
     memory_free(sheet->text);
 
@@ -131,7 +132,7 @@ static int8_t wndmgr_spool_item_on_predraw(const window_event_t* event) {
 static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spool_item){
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    char_t* title_str = strprintf("tOS Spool Item %s Details", spool_get_name(spool_item));
+    char16_t* title_str = wstrprintf("tOS Spool Item %s Details", spool_get_name(spool_item));
 
     window_top_window_t top_window = windowmanager_create_top_window(title_str, true);
 
@@ -147,8 +148,8 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
     uint32_t screen_width = wndmgr->screen_width;
 
 
-    char_t* header_text = strprintf("%- 5s% 12s% 15s",
-                                    "Cmd", "Buffer Id", "Buffer Size");
+    char16_t* header_text = wstrprintf("%-5s%12s%15s",
+                                       "Cmd", "Buffer Id", "Buffer Size");
 
     window_t* wnd_header_text = windowmanager_create_window(window,
                                                             (rect_t){font_width, 0, screen_width - font_width, font_height},
@@ -172,7 +173,8 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
         window_t* wnd_spool_input = windowmanager_create_window(window,
                                                                 (rect_t){font_width*2, top, font_width, font_height},
                                                                 (color_t){.color = 0xFFF00000},
-                                                                .text = "_");
+                                                                .text        = u" ",
+                                                                .is_writable = true);
 
         if(!wnd_spool_input) {
             windowmanager_destroy_window(top_window.main_window);
@@ -180,13 +182,12 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
         }
 
         wnd_spool_input->input_length = 1;
-        wnd_spool_input->input_id     = "buffer";
+        wnd_spool_input->input_id     = u"buffer";
         wnd_spool_input->extra_data   = (void*)buffer;
-        wndmgr_set_window_writable(wnd_spool_input, true);
 
-        char_t* spool_text = strprintf("% 12i% 15lli",
-                                       i,
-                                       buffer_get_length(buffer));
+        char16_t* spool_text = wstrprintf("%12lli%15lli",
+                                          i,
+                                          buffer_get_length(buffer));
 
         window_t* wnd_spool = windowmanager_create_window(window,
                                                           (rect_t){left, top, screen_width - left, font_height},
@@ -253,24 +254,24 @@ static int8_t wndmgr_spool_browser_on_enter(const window_event_t* event) {
             continue;
         }
 
-        if(strcmp(input->id, "spool") == 0) {
+        if(wstrcmp(input->id, u"spool") == 0) {
             const spool_item_t* spool = (const spool_item_t*)input->extra_data;
 
             if(!spool) {
                 continue;
             }
 
-            char_t* buffer = input->value;
+            char16_t* buffer = input->value;
 
             if(!buffer) {
                 continue;
             }
 
-            if(strlen(buffer) == 0) {
+            if(wstrlen(buffer) == 0) {
                 continue;
             }
 
-            if(strcmp(buffer, "s") == 0) {
+            if(wstrcmp(buffer, u"s") == 0) {
                 spool_item_t* si = input->extra_data;
                 windowmanager_create_and_show_spool_item_window(si);
                 break;
@@ -319,10 +320,10 @@ static int8_t wndmgr_spool_browser_wnd_spool_on_predraw(const window_event_t* ev
         return -1;
     }
 
-    char_t* spool_text = strprintf("%- 60s% 15lli% 20lli",
-                                   spool_get_name(spool),
-                                   spool_get_buffer_count(spool),
-                                   spool_get_total_buffer_size(spool));
+    char16_t* spool_text = wstrprintf("%-60s%15lli%20lli",
+                                      spool_get_name(spool),
+                                      spool_get_buffer_count(spool),
+                                      spool_get_total_buffer_size(spool));
 
     memory_free(sheet->text);
 
@@ -334,7 +335,7 @@ static int8_t wndmgr_spool_browser_wnd_spool_on_predraw(const window_event_t* ev
 int8_t windowmanager_create_and_show_spool_browser_window(void) {
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    window_top_window_t top_window = windowmanager_create_top_window("tOS Spool Browser", true);
+    window_top_window_t top_window = windowmanager_create_top_window(u"tOS Spool Browser", true);
 
     if(!top_window.main_window || !top_window.inside_window) {
         return -1;
@@ -346,12 +347,12 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
     window_t* window = top_window.inside_window;
 
-    char_t* header_text = strprintf("%- 5s%- 60s% 15s% 20s",
-                                    "Cmd", "Name", "Buffer Count", "Total Buffer Size");
+    char16_t* header_text = wstrprintf("%-5s%-60s%15s%20s",
+                                       "Cmd", "Name", "Buffer Count", "Total Buffer Size");
 
     window_t* wnd_header_text = windowmanager_create_window(window,
                                                             (rect_t){font_width, 0, screen_width - font_width, font_height},
-                                                            (color_t){.color = 0xFFee9900},
+                                                            (color_t){.color = 0XFFEE9900},
                                                             .text = header_text);
 
     memory_free(header_text);
@@ -372,7 +373,8 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
         window_t* wnd_spool_input = windowmanager_create_window(window,
                                                                 (rect_t){font_width*2, top, font_width, font_height},
                                                                 (color_t){.color = 0xFFF00000},
-                                                                .text = "_");
+                                                                .text        = u" ",
+                                                                .is_writable = true);
 
         if(!wnd_spool_input) {
             windowmanager_destroy_window(top_window.main_window);
@@ -380,14 +382,13 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
         }
 
         wnd_spool_input->input_length = 1;
-        wnd_spool_input->input_id     = "spool";
+        wnd_spool_input->input_id     = u"spool";
         wnd_spool_input->extra_data   = (void*)spool;
-        wndmgr_set_window_writable(wnd_spool_input, true);
 
-        char_t* spool_text = strprintf("%- 60s% 15lli% 20lli",
-                                       spool_get_name(spool),
-                                       spool_get_buffer_count(spool),
-                                       spool_get_total_buffer_size(spool));
+        char16_t* spool_text = wstrprintf("%-60s%15lli%20lli",
+                                          spool_get_name(spool),
+                                          spool_get_buffer_count(spool),
+                                          spool_get_total_buffer_size(spool));
 
         window_t* wnd_spool = windowmanager_create_window(window,
                                                           (rect_t){left, top, screen_width - left, font_height},

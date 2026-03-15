@@ -705,7 +705,7 @@ efi_status_t efi_print_variable_names(void) {
             goto catch_efi_error;
         }
 
-        char_t* var_name = char16_to_char(buffer);
+        char_t* var_name = wstr_to_str(buffer);
         PRINTLOG(EFI, LOG_DEBUG, "variable size %lli name: %s", var_size, var_name);
         memory_free(var_name);
     }
@@ -723,7 +723,7 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
         goto catch_efi_error;
     }
 
-    char16_t* var_name_boot_current = char_to_wchar("BootCurrent");
+    char16_t* var_name_boot_current = str_to_wstr("BootCurrent");
     efi_guid_t var_global           = EFI_GLOBAL_VARIABLE;
     uint32_t var_attrs              = 0;
     uint64_t buffer_size            = sizeof(uint16_t);
@@ -754,7 +754,7 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 
     PRINTLOG(EFI, LOG_DEBUG, "current boot order: %i %s", boot_order_idx, boot_value);
 
-    char16_t* var_val_boot_current = char_to_wchar(boot_value);
+    char16_t* var_val_boot_current = str_to_wstr(boot_value);
 
     memory_free(boot_value);
 
@@ -780,11 +780,11 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 
     uint16_t lo_len   = *((uint16_t*)(void*)(var_val_boot + sizeof(uint32_t)));
     char16_t* lo_desc = (char16_t*)(void*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t));
-    char_t* boot_desc = char16_to_char(lo_desc);
+    char_t* boot_desc = wstr_to_str(lo_desc);
 
-    PRINTLOG(EFI, LOG_DEBUG, "boot len %i desc: %s dl %lli", lo_len, boot_desc, wchar_size(lo_desc));
+    PRINTLOG(EFI, LOG_DEBUG, "boot len %i desc: %s dl %lli", lo_len, boot_desc, wstrlen(lo_desc));
 
-    efi_device_path_t* lo_fp = (efi_device_path_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t) + wchar_size(lo_desc) * sizeof(char16_t) + sizeof(char16_t));
+    efi_device_path_t* lo_fp = (efi_device_path_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t) + wstrlen(lo_desc) * sizeof(char16_t) + sizeof(char16_t));
 
     while(lo_len > 0) {
         PRINTLOG(EFI, LOG_DEBUG, "boot fp type %i subtype %i len %i", lo_fp->type, lo_fp->sub_type, lo_fp->length);

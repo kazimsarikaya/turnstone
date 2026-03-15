@@ -65,15 +65,15 @@ static int8_t wnd_task_list_on_predraw(const window_event_t* event) {
     for(int64_t i = 0; i < task_list_item_count; i++) {
         task_list_item_t* item = &task_list_items[i];
 
-        char_t* task_str = strprintf("      % 15llx% 15lli% 20llx% 10d% 10lli% 20lli %s %s",
-                                     item->task_id,
-                                     item->cpu_id,
-                                     item->task_switch_count,
-                                     item->state,
-                                     item->message_queues,
-                                     item->messages,
-                                     item->has_virtual_machine ? "  Y  " : "  N  ",
-                                     item->task_name);
+        char16_t* task_str = wstrprintf("      %15llx%15lli%20llx%10lld%10lli%20lli %s %s",
+                                        item->task_id,
+                                        item->cpu_id,
+                                        item->task_switch_count,
+                                        item->state,
+                                        item->message_queues,
+                                        item->messages,
+                                        item->has_virtual_machine ? "  Y  " : "  N  ",
+                                        item->task_name);
 
         if(i % 2) {
             bg_color.color = 0xFF181818;
@@ -109,7 +109,7 @@ static int8_t wnd_task_list_on_scroll(const window_event_t* event) {
 
 
 int8_t windowmanager_create_and_show_task_vm_list_window(void) {
-    window_top_window_t top_window = windowmanager_create_top_window("Task List", true);
+    window_top_window_t top_window = windowmanager_create_top_window(u"Task List", true);
 
     if(!top_window.main_window || !top_window.inside_window) {
         return -1;
@@ -135,13 +135,13 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
         return -1;
     }
 
-    char_t* header_text = strprintf(" %- 5s% 15s% 15s% 20s% 10s% 10s% 20s %s %s",
-                                    "Cmd", "Task ID", "Cpu ID", "Switch Count",
-                                    "State", "MQ Count", "Message Count", "Is VM", "Name");
+    char16_t* header_text = wstrprintf(" %-5s%15s%15s%20s%10s%10s%20s %s %s",
+                                       "Cmd", "Task ID", "Cpu ID", "Switch Count",
+                                       "State", "MQ Count", "Message Count", "Is VM", "Name");
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
                                                             (rect_t){0, 0, screen_width - font_width, font_height},
-                                                            (color_t){.color = 0xFFee9900},
+                                                            (color_t){.color = 0XFFEE9900},
                                                             (color_t){.color = 0xFF181818},
                                                             .text = header_text);
 
@@ -213,20 +213,23 @@ static int8_t wndmgr_create_vm_on_enter(const window_event_t* event) {
             continue;
         }
 
-        if(strlen(input->value) == 0) {
+        if(wstrlen(input->value) == 0) {
             memory_free(input->value);
             memory_free(input);
             continue;
         }
 
-        if(strcmp(input->id, "entry_point") == 0) {
-            entry_point = strdup(input->value);
-        } else if(strcmp(input->id, "heap_size") == 0) {
-            heap_size = atou(input->value);
-        } else if(strcmp(input->id, "stack_size") == 0) {
-            stack_size = atou(input->value);
+        char_t* c8_iv = wstr_to_str(input->value);
+
+        if(wstrcmp(input->id, u"entry_point") == 0) {
+            entry_point = strdup(c8_iv);
+        } else if(wstrcmp(input->id, u"heap_size") == 0) {
+            heap_size = atou(c8_iv);
+        } else if(wstrcmp(input->id, u"stack_size") == 0) {
+            stack_size = atou(c8_iv);
         }
 
+        memory_free(c8_iv);
         memory_free(input->value);
         memory_free(input);
 
@@ -249,17 +252,17 @@ static int8_t wndmgr_create_vm_on_enter(const window_event_t* event) {
 
     if(ret != 0) {
         windowmanager_create_and_show_alert_window(WINDOWMANAGER_ALERT_WINDOW_TYPE_ERROR,
-                                                   "Failed to create VM. Please check the parameters.");
+                                                   u"Failed to create VM. Please check the parameters.");
     } else {
         windowmanager_create_and_show_alert_window(WINDOWMANAGER_ALERT_WINDOW_TYPE_INFO,
-                                                   "VM created successfully.");
+                                                   u"VM created successfully.");
     }
 
     return 0;
 }
 
 int8_t windowmanager_create_and_show_task_vm_create_window(void) {
-    window_top_window_t top_window = windowmanager_create_top_window("Create Task or VM", true);
+    window_top_window_t top_window = windowmanager_create_top_window(u"Create Task or VM", true);
 
     if(!top_window.main_window || !top_window.inside_window) {
         return -1;
@@ -282,10 +285,11 @@ int8_t windowmanager_create_and_show_task_vm_create_window(void) {
     };
 
     window_t* wnd_entry_point = windowmanager_command_input_window(window, wnd_entry_point_rect,
-                                                                   "Entry Point",
-                                                                   WINDOWMANAGER_COMMAND_INPUT_TEXT,
-                                                                   "entry_point",
-                                                                   "Entry Point function name of VM");
+                                                                   u"Entry Point",
+                                                                   32,
+                                                                   NULL,
+                                                                   u"entry_point",
+                                                                   u"Entry Point function name of VM");
 
     if(!wnd_entry_point) {
         windowmanager_destroy_window(window);
@@ -300,10 +304,11 @@ int8_t windowmanager_create_and_show_task_vm_create_window(void) {
     };
 
     window_t* wnd_heap_size = windowmanager_command_input_window(window, wnd_heap_size_rect,
-                                                                 "Heap Size",
-                                                                 "0x0000000001000000", // 16MiB
-                                                                 "heap_size",
-                                                                 "Heap size of VM");
+                                                                 u"Heap Size",
+                                                                 18,
+                                                                 u"0x0000000001000000", // 16MiB
+                                                                 u"heap_size",
+                                                                 u"Heap size of VM");
 
     if(!wnd_heap_size) {
         windowmanager_destroy_window(top_window.main_window);
@@ -318,10 +323,11 @@ int8_t windowmanager_create_and_show_task_vm_create_window(void) {
     };
 
     window_t* wnd_stack_size = windowmanager_command_input_window(window, wnd_stack_size_rect,
-                                                                  "Stack Size",
-                                                                  "0x0000000000200000", // 2MiB
-                                                                  "stack_size",
-                                                                  "Stack size of VM");
+                                                                  u"Stack Size",
+                                                                  18,
+                                                                  u"0x0000000000200000", // 2MiB
+                                                                  u"stack_size",
+                                                                  u"Stack size of VM");
 
     if(!wnd_stack_size) {
         windowmanager_destroy_window(top_window.main_window);

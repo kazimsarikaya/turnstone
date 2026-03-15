@@ -34,20 +34,20 @@ MODULE("turnstone.user.programs.shell");
 int32_t shell_main(int32_t argc, char* argv[]);
 int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffer);
 
-static int8_t shell_handle_module_command(char_t* arguments) {
+static int8_t shell_handle_module_command(char16_t* arguments) {
     argument_parser_t parser = {arguments, 0};
 
-    char_t* command = argument_parser_advance(&parser);
+    char16_t* command = argument_parser_advance(&parser);
 
-    if(strncmp("list", command, 6) == 0) {
+    if(wstrncmp(u"list", command, 6) == 0) {
         linker_print_modules_at_memory();
         return 0;
     }
 
-    uint64_t module_id = atoh(command);
+    uint64_t module_id = watoh(command);
 
     if(module_id == 0) {
-        printf("cannot parse module id: -%s-\n", command);
+        printf("cannot parse module id: -%hs-\n", command);
         printf("Usage: module <list>\n");
         printf("Usage: module id <info>\n");
         return -1;
@@ -55,33 +55,33 @@ static int8_t shell_handle_module_command(char_t* arguments) {
 
     command = argument_parser_advance(&parser);
 
-    if(strncmp(command, "info", 4) == 0) {
+    if(wstrncmp(command, u"info", 4) == 0) {
         linker_print_module_info_at_memory(module_id);
         return 0;
     }
 
-    printf("Unknown command: %s\n", command);
+    printf("Unknown command: %hs\n", command);
     printf("Usage: module <list>\n");
     printf("Usage: module id <info>\n");
 
     return -1;
 }
 
-static int8_t shell_handle_tosdb_command(char_t* arguments) {
+static int8_t shell_handle_tosdb_command(char16_t* arguments) {
     argument_parser_t parser = {arguments, 0};
 
-    char_t* command = argument_parser_advance(&parser);
+    char16_t* command = argument_parser_advance(&parser);
 
 
-    if(strncmp("close", command, 5) == 0) {
+    if(wstrncmp(u"close", command, 5) == 0) {
         return tosdb_manager_close();
-    } else if(strncmp("init", command, 4) == 0) {
+    } else if(wstrncmp(u"init", command, 4) == 0) {
         return tosdb_manager_init();
-    } else if(strncmp("clear", command, 5) == 0) {
+    } else if(wstrncmp(u"clear", command, 5) == 0) {
         // clear takes a force argument
-        char_t* force = argument_parser_advance(&parser);
+        char16_t* force = argument_parser_advance(&parser);
 
-        if(strncmp(force, "force", 5) == 0) {
+        if(wstrncmp(force, u"force", 5) == 0) {
             return tosdb_manager_clear();
         }
 
@@ -89,36 +89,38 @@ static int8_t shell_handle_tosdb_command(char_t* arguments) {
         return -1;
     }
 
-    printf("Unknown command: %s\n", command);
+    printf("Unknown command: %hs\n", command);
     printf("Usage: tosdb <close|init|build_program <entry_point>>\n");
 
     return -1;
 }
 
-static int8_t shell_handle_vm_command(char_t* arguments) {
+static int8_t shell_handle_vm_command(char16_t* arguments) {
     argument_parser_t parser = {arguments, 0};
 
-    char_t* command = argument_parser_advance(&parser);
+    char16_t* command = argument_parser_advance(&parser);
 
-    if(strncmp("create", command, 6) == 0) {
-        char_t* entrypoint = argument_parser_advance(&parser);
+    if(wstrncmp(u"create", command, 6) == 0) {
+        char16_t* entrypoint = argument_parser_advance(&parser);
 
         if(entrypoint == NULL) {
             printf("Usage: vm create <entrypoint_name>\n");
             return -1;
         }
 
-        printf("Creating VM with entrypoint: -%s-\n", entrypoint);
+        printf("Creating VM with entrypoint: -%hs-\n", entrypoint);
 
-        return hypervisor_vm_create(strdup(entrypoint),
+        char_t* c8_entrypoint = wstr_to_str(entrypoint);
+
+        return hypervisor_vm_create(c8_entrypoint,
                                     2 << 20,
                                     1 << 20);
     }
 
-    uint64_t vmid = atoh(command);
+    uint64_t vmid = watoh(command);
 
     if(vmid == 0) {
-        printf("cannot parse vmid: -%s-\n", command);
+        printf("cannot parse vmid: -%hs-\n", command);
         printf("Usage: vm <vmid> <command>\n");
         printf("Usage: vm create <entrypoint_name>\n");
         return -1;
@@ -126,7 +128,7 @@ static int8_t shell_handle_vm_command(char_t* arguments) {
 
     command = argument_parser_advance(&parser);
 
-    if(strncmp(command, "output", 6) == 0) {
+    if(wstrncmp(command, u"output", 6) == 0) {
 
         buffer_t* buffer = task_get_task_output_buffer(vmid);
 
@@ -145,7 +147,7 @@ static int8_t shell_handle_vm_command(char_t* arguments) {
         printf("VM 0x%llx output:\n", vmid);
         printf("%s", buffer_data);
         printf("\n");
-    } else if(strncmp(command, "dump", 4) == 0) {
+    } else if(wstrncmp(command, u"dump", 4) == 0) {
         list_t* vm_mq = task_get_message_queue(vmid, 0);
 
         if(!vm_mq) {
@@ -190,10 +192,10 @@ static int8_t shell_handle_vm_command(char_t* arguments) {
 
         memory_free(msg_data);
 
-    } else if(strncmp(command, "close", 5) == 0) {
+    } else if(wstrncmp(command, u"close", 5) == 0) {
         return hypervisor_ipc_send_close(vmid);
     } else {
-        printf("Unknown command: %llx -%s-\n", vmid, command);
+        printf("Unknown command: %llx -%hs-\n", vmid, command);
         printf("Usage: vm <vmid> <command>\n");
         printf("Usage: vm create <entrypoint_name>\n");
         printf("\toutput\t: prints the VM output\n");
@@ -208,32 +210,32 @@ static int8_t shell_handle_vm_command(char_t* arguments) {
 
 
 int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffer) {
-    char_t* command = (char_t*)buffer_get_all_bytes_and_reset(command_buffer, NULL);
+    char16_t* command = (char16_t*)(void*)buffer_get_all_bytes_and_reset(command_buffer, NULL);
 
     if(command == NULL) {
         return -1;
     }
 
-    if(strlen(command) == 0) {
+    if(wstrlen(command) == 0) {
         memory_free(command);
-        char_t* discard = (char_t*)buffer_get_all_bytes_and_reset(argument_buffer, NULL);
+        void* discard = buffer_get_all_bytes_and_reset(argument_buffer, NULL);
         memory_free(discard);
         return 0;
     }
 
-    char_t* orig_command = command;
+    char16_t* orig_command = command;
 
     while(*command == ' ') {
         command++;
     }
 
-    char_t* arguments = (char_t*)buffer_get_all_bytes_and_reset(argument_buffer, NULL);
+    char16_t* arguments = (char16_t*)(void*)buffer_get_all_bytes_and_reset(argument_buffer, NULL);
 
     argument_parser_t parser = {arguments, 0};
 
     int8_t res = -1;
 
-    if(strcmp(command, "help") == 0) {
+    if(wstrcmp(command, u"help") == 0) {
         printf("Commands:\n"
                "\thelp\t\t: prints this help\n"
                "\tclear\t\t: clears the screen\n"
@@ -253,89 +255,93 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
                "\tlog\t\t: configures the log level\n"
                );
         res = 0;
-    } else if(strcmp(command, "clear") == 0) {
+    } else if(wstrcmp(command, u"clear") == 0) {
         screen_clear();
         res = 0;
-    } else if(strcmp(command, "poweroff") == 0 || strcmp(command, "shutdown") == 0) {
+    } else if(wstrcmp(command, u"poweroff") == 0 || wstrcmp(command, u"shutdown") == 0) {
         acpi_poweroff();
-    } else if(strcmp(command, "reboot") == 0) {
+    } else if(wstrcmp(command, u"reboot") == 0) {
         acpi_reset();
-    } else if(strcmp(command, "color") == 0) {
-        char_t* foreground_str = argument_parser_advance(&parser);
-        char_t* background_str = argument_parser_advance(&parser);
+    } else if(wstrcmp(command, u"color") == 0) {
+        char16_t* foreground_str = argument_parser_advance(&parser);
+        char16_t* background_str = argument_parser_advance(&parser);
 
         if(foreground_str == NULL && background_str == NULL) {
             printf("Usage: color <foreground> [<background>]\n");
             res = -1;
         } else {
-            uint32_t foreground = atoh(foreground_str);
-            uint32_t background = atoh(background_str);
+            uint32_t foreground = watoh(foreground_str);
+            uint32_t background = watoh(background_str);
 
             screen_set_color((color_t){.color = foreground}, (color_t){.color = background});
             res = 0;
         }
-    } else if(strcmp(command, "ps") == 0) {
+    } else if(wstrcmp(command, u"ps") == 0) {
         buffer_t* buffer = buffer_new();
         task_print_all(buffer);
         char_t* buffer_data = (char_t*)buffer_get_all_bytes_and_destroy(buffer, NULL);
         printf("%s", buffer_data);
         memory_free(buffer_data);
         res = 0;
-    } else if(strcmp(command, "date") == 0 || strcmp(command, "time") == 0) {
+    } else if(wstrcmp(command, u"date") == 0 || wstrcmp(command, u"time") == 0) {
         timeparsed_t tp;
         timeparsed(&tp);
 
         printf("\t%04i-%02i-%02i %02i:%02i:%02i\n", tp.year, tp.month, tp.day, tp.hours, tp.minutes, tp.seconds);
 
         res = 0;
-    } else if(strcmp(command, "usbreset") == 0) {
+    } else if(wstrcmp(command, u"usbreset") == 0) {
         res = usb_reset_all_devices_all_ports();
-    } else if(strcmp(command, "free") == 0) {
+    } else if(wstrcmp(command, u"free") == 0) {
         printf("\tfree frames: 0x%llx\n\tallocated frames: 0x%llx\n\ttotal frames: 0x%llx\n",
                frame_get_allocator()->get_free_frame_count(frame_get_allocator()),
                frame_get_allocator()->get_allocated_frame_count(frame_get_allocator()),
                frame_get_allocator()->get_total_frame_count(frame_get_allocator()));
         res = 0;
-    } else if(strcmp(command, "wm") == 0) {
+    } else if(wstrcmp(command, u"wm") == 0) {
         res = windowmanager_init();
-    } else if(strcmp(command, "vm") == 0) {
+    } else if(wstrcmp(command, u"vm") == 0) {
         res = shell_handle_vm_command(arguments);
-    } else if(strcmp(command, "tosdb") == 0) {
+    } else if(wstrcmp(command, u"tosdb") == 0) {
         res = shell_handle_tosdb_command(arguments);
-    } else if(strcmp(command, "module") == 0) {
+    } else if(wstrcmp(command, u"module") == 0) {
         res = shell_handle_module_command(arguments);
-    } else if(strcmp(command, "rdtsc") == 0) {
+    } else if(wstrcmp(command, u"rdtsc") == 0) {
         printf("rdtsc: 0x%llx\n", rdtsc());
         res = 0;
-    } else if(strcmp(command, "kill") == 0) {
-        uint64_t pid      = atoh(argument_parser_advance(&parser));
-        char_t* force_str = argument_parser_advance(&parser);
-        boolean_t force   = false;
+    } else if(wstrcmp(command, u"kill") == 0) {
+        uint64_t pid        = watoh(argument_parser_advance(&parser));
+        char16_t* force_str = argument_parser_advance(&parser);
+        boolean_t force     = false;
 
-        if(strncmp(force_str, "force", 5) == 0) {
+        if(wstrncmp(force_str, u"force", 5) == 0) {
             force = true;
         }
 
         if(pid == 0) {
             printf("Usage: kill <pid>\n");
-            printf("\tgiven arguments: %s\n", arguments);
+            printf("\tgiven arguments: %hs\n", arguments);
             res = -1;
         } else {
             task_kill_task(pid, force);
             res = 0;
         }
-    } else if(strcmp(command, "log") == 0) {
-        char_t* log_module = argument_parser_advance(&parser);
-        char_t* log_level  = argument_parser_advance(&parser);
+    } else if(wstrcmp(command, u"log") == 0) {
+        char16_t* log_module = argument_parser_advance(&parser);
+        char16_t* log_level  = argument_parser_advance(&parser);
 
         if(!log_module || !log_level) {
             printf("Usage: log <module> <level>\n");
             res = -1;
         } else {
-            res = logging_set_level_by_string_values(log_module, log_level);
+            char_t* c8_log_module = wstr_to_str(log_module);
+            char_t* c8_log_level  = wstr_to_str(log_level);
+            res = logging_set_level_by_string_values(c8_log_module, c8_log_level);
+            memory_free(c8_log_module);
+            memory_free(c8_log_level);
         }
     } else {
-        printf("Unknown command: %s\n", command);
+        printf("Unknown command: %hs\n", command);
         res = -1;
     }
 
@@ -344,27 +350,6 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
     memory_free(arguments);
 
     return res;
-}
-
-static uint32_t shell_append_char16_to_buffer(char16_t src, char_t* dst, uint32_t dst_idx) {
-    if(dst == NULL) {
-        return NULL;
-    }
-
-    int64_t j = dst_idx;
-
-    if(src >= 0x800) {
-        dst[j++] = ((src >> 12) & 0xF) | 0xE0;
-        dst[j++] = ((src >> 6) & 0x3F) | 0x80;
-        dst[j++] = (src & 0x3F) | 0x80;
-    } else if(src >= 0x80) {
-        dst[j++] = ((src >> 6) & 0x1F) | 0xC0;
-        dst[j++] = (src & 0x3F) | 0x80;
-    } else {
-        dst[j++] = src & 0x7F;
-    }
-
-    return j;
 }
 
 void video_text_print(const char_t* string);
@@ -412,7 +397,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
             continue;
         }
 
-        char_t data[4096];
+        char16_t data[4096];
         uint32_t data_idx = 0;
         data[data_idx] = NULL;
 
@@ -421,7 +406,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
         for(uint32_t i = 0; i < kbd_ev_cnt; i++) {
             if(kbd_data[i].is_pressed) {
                 if(kbd_data[i].is_printable) {
-                    data_idx = shell_append_char16_to_buffer(kbd_data[i].key, data, data_idx);
+                    data[data_idx++] = kbd_data[i].key;
                 } else {
                     if(kbd_data[i].key == KBD_SCANCODE_BACKSPACE) {
                         data[data_idx++] = '\b';
@@ -436,16 +421,16 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
         memory_free(kbd_data);
 
-        char_t last_char = data[4095];
+        char16_t last_char = data[4095];
 
         if(last_char != NULL) {
             data[4095] = NULL;
         }
 
-        printf("%s", data);
+        printf("%hs", data);
 
         if(last_char != NULL) {
-            printf("%c", last_char);
+            printf("%hc", last_char);
         }
 
         data[4095] = last_char;
@@ -460,7 +445,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
         }
 
         while(data_idx > 0) {
-            char_t c = data[idx++];
+            char16_t c = data[idx++];
             data_idx--;
 
             if(c == '\n') {

@@ -409,7 +409,7 @@ disk_partition_context_t* gpt_create_partition_context(efi_guid_t* type, const c
     ic->starting_lba = start;
     ic->ending_lba   = end;
 
-    char16_t* pname = char_to_wchar(name);
+    char16_t* pname = str_to_wstr(name);
     memory_memcopy(pname, ic->partition_name, strlen(name) * sizeof(char16_t));
     memory_free(pname);
 

@@ -22,6 +22,7 @@ BASEFLAGS += -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDES
 	-Wwrite-strings -Wmissing-declarations \
     -Wredundant-decls -Winline -Wno-long-long \
 	-D___BITS=64 -m64 -march=native \
+	-Wno-error=format \
 	${CCXXEXTRAFLAGS}	
 
 PIFLAGS = -fPIC -fpic -fplt -mcmodel=large 

@@ -22,8 +22,8 @@ extern "C" {
  * This structure holds the state for parsing a string of arguments.
  */
 typedef struct argument_parser_t {
-    char_t*  arguments; /**< @brief Pointer to the string containing the arguments. */
-    uint32_t idx; /**< @brief Current index within the arguments string. */
+    char16_t* arguments; /**< @brief Pointer to the string containing the arguments. */
+    uint32_t  idx; /**< @brief Current index within the arguments string. */
 } argument_parser_t;
 
 /**
@@ -37,7 +37,7 @@ typedef struct argument_parser_t {
  *         or NULL if no more arguments are available. The returned string
  *         is part of the original `arguments` buffer and should not be freed.
  */
-char_t* argument_parser_advance(argument_parser_t* parser);
+char16_t* argument_parser_advance(argument_parser_t* parser);
 
 #ifdef __cplusplus
 }
