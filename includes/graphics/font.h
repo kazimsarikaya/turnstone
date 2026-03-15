@@ -77,6 +77,10 @@ font_table_t* font_atlas_get_font_table(void);
 char16_t font_get_wc(const char_t* string, int64_t* idx);
 char16_t font_atlas_get_wc(const char_t* string, int64_t * idx);
 
+char16_t font_lookup_unicode(char16_t wc);
+char16_t font_atlas_lookup_unicode(char16_t wc);
+
+
 int8_t font_init(void);
 
 void font_get_font_dimension(uint32_t* width, uint32_t* height);

@@ -39,19 +39,19 @@ static int8_t wndmgr_rainbow_on_draw(const window_event_t* event) {
 
     sgfx_clear(gfx_ctx, 0.10f, 0.10f, 0.10f, 1.0f);
 
-    sgfx_matrix_mode(gfx_ctx, SGFX_PROJECTION);
+    sgfx_matrix_mode(gfx_ctx, SGFX_MATRIX_MODE_PROJECTION);
     sgfx_load_identity(gfx_ctx);
     sgfx_ortho_f32(gfx_ctx,
                    -1.0f, 1.0f,
                    -1.0f, 1.0f,
                    -1.0f, 1.0f);
 
-    sgfx_matrix_mode(gfx_ctx, SGFX_MODELVIEW);
+    sgfx_matrix_mode(gfx_ctx, SGFX_MATRIX_MODE_MODELVIEW);
     sgfx_load_identity(gfx_ctx);
     sgfx_rotate_f32(gfx_ctx, angle, 0.0f, 0.0f, 1.0f);
     // sgfx_scale_f32(gfx_ctx, 0.5f, 0.5f, 1.0f);
 
-    sgfx_begin(gfx_ctx, SGFX_TRIANGLES);
+    sgfx_begin(gfx_ctx, SGFX_DRAW_MODE_TRIANGLES);
     sgfx_color4_f32(gfx_ctx, 1.0f, 0.0f, 0.0f, 1.0f);
     sgfx_vertex3_f32(gfx_ctx, 0.0f, 0.5f, 0.0f);
     sgfx_color4_f32(gfx_ctx, 0.0f, 1.0f, 0.0f, 1.0f);

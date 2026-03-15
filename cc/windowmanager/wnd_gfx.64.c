@@ -166,7 +166,7 @@ static void wndmgr_mouse_draw_cursor(windowmanager_t* wndmgr) {
     float32_t h = (float32_t)wndmgr->mouse_image_height;
 
     sgfx_bind_texture(gfx_ctx, wndmgr->mouse_texture);
-    sgfx_begin(gfx_ctx, SGFX_QUADS);
+    sgfx_begin(gfx_ctx, SGFX_DRAW_MODE_QUADS);
     sgfx_color4_f32(gfx_ctx, 1.0f, 1.0f, 1.0f, 1.0f);
 
     sgfx_texcoord2_f32(gfx_ctx, 0.0f, 0.0f);
@@ -203,7 +203,7 @@ static void wndmgr_draw_text_cursor(windowmanager_t* wndmgr) {
     sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
 
     // Draw filled quad at cursor position
-    sgfx_begin(gfx_ctx, SGFX_QUADS);
+    sgfx_begin(gfx_ctx, SGFX_DRAW_MODE_QUADS);
     sgfx_color4_f32(gfx_ctx, 1.0f, 1.0f, 1.0f, 0.5f); // White
 
     float32_t x0 = (float32_t)(cursor_x * wndmgr->font_width);
@@ -242,25 +242,11 @@ static void windowmanager_print_glyph(const windowmanager_t* wndmgr, uint32_t x,
 
 }
 
-static void windowmanager_print_text(const windowmanager_t* wndmgr, const window_t* window,
-                                     uint32_t x, uint32_t y, const char_t* text) {
-    if(window == NULL) {
+static void windowmanager_print_text(const windowmanager_t* wndmgr, const window_sheet_t* sheet,
+                                     uint32_t x, uint32_t y, const char16_t* text) {
+    if(!sheet || !text) {
         return;
     }
-
-    if(!window->sheets) {
-        return;
-    }
-
-    if(list_size(window->sheets) != 1) {
-        return;
-    }
-
-    if(text == NULL) {
-        return;
-    }
-
-    const window_sheet_t* sheet = list_get_data_at_position(window->sheets, 0);
 
     if(sheet->rect.x + (int64_t)x >= wndmgr->screen_width || sheet->rect.y + (int64_t)y >= wndmgr->screen_height) {
         return;
@@ -290,7 +276,7 @@ static void windowmanager_print_text(const windowmanager_t* wndmgr, const window
                     fg.blue / 255.0f,
                     fg.alpha / 255.0f);
 
-    sgfx_begin(gfx_ctx, SGFX_QUADS);
+    sgfx_begin(gfx_ctx, SGFX_DRAW_MODE_QUADS);
 
     int64_t i = 0;
 
@@ -298,9 +284,9 @@ static void windowmanager_print_text(const windowmanager_t* wndmgr, const window
         char16_t wc;
 
         if(wndmgr->font_is_sdf) {
-            wc = font_atlas_get_wc(text + i, &i);
+            wc = font_atlas_lookup_unicode(text[i]);
         } else {
-            wc = font_get_wc(text + i, &i);
+            wc = font_lookup_unicode(text[i]);
         }
 
         if(wc == '\n') {
@@ -369,7 +355,22 @@ static void windowmanager_draw_window_internal(windowmanager_t* wndmgr, window_t
 
                 sgfx_clear_color(gfx_ctx, sheet->background_color);
 
-                windowmanager_print_text(wndmgr, window, 0, 0, sheet->text);
+                windowmanager_print_text(wndmgr, sheet, 0, 0, sheet->text);
+
+                if(sheet->is_writable) {
+                    sgfx_color4_f32(gfx_ctx, sheet->foreground_color.red / 255.0f,
+                                    sheet->foreground_color.green / 255.0f,
+                                    sheet->foreground_color.blue / 255.0f,
+                                    sheet->foreground_color.alpha / 255.0f);
+                    sgfx_begin(gfx_ctx, SGFX_DRAW_MODE_LINES);
+
+                    // line at bottom of sheet
+                    sgfx_vertex3_f32(gfx_ctx, 0.0f, (float32_t)sheet->rect.height - 1.0f, 0.0f);
+                    sgfx_vertex3_f32(gfx_ctx, (float32_t)sheet->rect.width, (float32_t)sheet->rect.height - 1.0f, 0.0f);
+
+                    sgfx_end(gfx_ctx);
+                }
+
 
                 sgfx_destroy_sub_context(gfx_ctx);
             }

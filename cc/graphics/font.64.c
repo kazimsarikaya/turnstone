@@ -20,23 +20,23 @@ extern font_psf2_t font_psf2_data_end;
 extern uint8_t font_atlas_bitmap_data_start;
 extern uint8_t font_atlas_bitmap_data_end;
 
-static uint8_t* FONT_ADDRESS = NULL;
-static int32_t FONT_WIDTH = 0;
-static int32_t FONT_HEIGHT = 0;
+static uint8_t* FONT_ADDRESS        = NULL;
+static int32_t FONT_WIDTH           = 0;
+static int32_t FONT_HEIGHT          = 0;
 static int32_t FONT_BYTES_PER_GLYPH = 0;
-static uint32_t FONT_MASK = 0;
-static uint32_t FONT_BYTES_PERLINE = 0;
+static uint32_t FONT_MASK           = 0;
+static uint32_t FONT_BYTES_PERLINE  = 0;
 
 static const uint32_t FONT_TABLE_COLUMNS = 32;
-static uint32_t FONT_TABLE_GLYPH_COUNT = 0;
-static font_table_t* font_table = NULL;
-static font_table_t* font_atlas_table = NULL;
+static uint32_t FONT_TABLE_GLYPH_COUNT   = 0;
+static font_table_t* font_table          = NULL;
+static font_table_t* font_atlas_table    = NULL;
 
-static char16_t* font_unicode_table = NULL;
+static char16_t* font_unicode_table       = NULL;
 static char16_t* font_atlas_unicode_table = NULL;
-static float32_t* font_atlas_bitmap = NULL;
+static float32_t* font_atlas_bitmap       = NULL;
 
-static char16_t font_lookup_unicode(char16_t wc) {
+char16_t font_lookup_unicode(char16_t wc) {
     if(wc == 0) {
         return 0;
     }
@@ -52,7 +52,7 @@ static char16_t font_lookup_unicode(char16_t wc) {
     return font_unicode_table[wc];
 }
 
-static char16_t font_atlas_lookup_unicode(char16_t wc) {
+char16_t font_atlas_lookup_unicode(char16_t wc) {
     if(wc == 0) {
         return 0;
     }
@@ -88,7 +88,7 @@ static void font_print_glyph_with_stride_raw(char16_t wc,
         line = offs;
         mask = font_mask;
 
-        uint32_t tmp = byte_swap(*((uint64_t*)glyph), font_bytes_perline);
+        uint32_t tmp = byte_swap(*((uint64_t*)(void*)glyph), font_bytes_perline);
 
         for(lx = 0; lx < font_width; lx++) {
 
@@ -144,11 +144,11 @@ static void video_build_font_table(font_psf2_t* font) {
         return;
     }
 
-    font_table->font_width = FONT_WIDTH;
-    font_table->font_height = FONT_HEIGHT;
+    font_table->font_width   = FONT_WIDTH;
+    font_table->font_height  = FONT_HEIGHT;
     font_table->column_count = col_count;
-    font_table->row_count = row_count;
-    font_table->glyph_count = font->glyph_count;
+    font_table->row_count    = row_count;
+    font_table->glyph_count  = font->glyph_count;
 
     color_t foreground = { .color = 0xFFFFFFFF };
     color_t background = { .color = 0x00000000 };
@@ -187,13 +187,13 @@ static int8_t font_atlas_init(void) {
         }
     }
 
-    uint8_t* font_atlas_compressed = (uint8_t*)&font_atlas_bitmap_data_start;
+    uint8_t* font_atlas_compressed     = (uint8_t*)&font_atlas_bitmap_data_start;
     uint8_t* font_atlas_compressed_end = (uint8_t*)&font_atlas_bitmap_data_end;
 
-    size_t compressed_size = (uintptr_t)font_atlas_compressed_end - (uintptr_t)font_atlas_compressed;
+    size_t compressed_size   = (uintptr_t)font_atlas_compressed_end - (uintptr_t)font_atlas_compressed;
     size_t decompressed_size = FONT_ATLAS_WIDTH * FONT_ATLAS_HEIGHT * sizeof(float32_t);
 
-    buffer_t* in = buffer_encapsulate(font_atlas_compressed, compressed_size);
+    buffer_t* in  = buffer_encapsulate(font_atlas_compressed, compressed_size);
     buffer_t* out = buffer_new_with_capacity(NULL, decompressed_size);
 
     const compression_t* cmp = compression_get(COMPRESSION_TYPE_DEFLATE);
@@ -211,7 +211,7 @@ static int8_t font_atlas_init(void) {
     buffer_destroy(in);
 
     uint64_t out_length;
-    font_atlas_bitmap = (float32_t*)buffer_get_all_bytes_and_destroy(out, &out_length);
+    font_atlas_bitmap = (float32_t*)(void*)buffer_get_all_bytes_and_destroy(out, &out_length);
 
     if(out_length != decompressed_size) {
         memory_free(font_atlas_bitmap);
@@ -235,12 +235,12 @@ static int8_t font_atlas_init(void) {
         return -4;
     }
 
-    font_atlas_table->float_data = font_atlas_bitmap;
-    font_atlas_table->font_width = FONT_GLYPH_SIZE;
-    font_atlas_table->font_height = FONT_GLYPH_SIZE;
+    font_atlas_table->float_data   = font_atlas_bitmap;
+    font_atlas_table->font_width   = FONT_GLYPH_SIZE;
+    font_atlas_table->font_height  = FONT_GLYPH_SIZE;
     font_atlas_table->column_count = FONT_ATLAS_WIDTH / FONT_GLYPH_SIZE;
-    font_atlas_table->row_count = FONT_ATLAS_HEIGHT / FONT_GLYPH_SIZE;
-    font_atlas_table->glyph_count = FONT_GLYPH_COUNT;
+    font_atlas_table->row_count    = FONT_ATLAS_HEIGHT / FONT_GLYPH_SIZE;
+    font_atlas_table->glyph_count  = FONT_GLYPH_COUNT;
 
     return 0;
 }
@@ -250,9 +250,9 @@ int8_t font_init(void) {
 
     if(font2) {
         if(font2->magic == FONT_PSF2_MAGIC) {
-            FONT_ADDRESS = ((uint8_t*)&font_psf2_data_start) + font2->header_size;
-            FONT_WIDTH = font2->width;
-            FONT_HEIGHT = font2->height;
+            FONT_ADDRESS         = ((uint8_t*)&font_psf2_data_start) + font2->header_size;
+            FONT_WIDTH           = font2->width;
+            FONT_HEIGHT          = font2->height;
             FONT_BYTES_PER_GLYPH = font2->bytes_per_glyph;
 
             if(font2->flags) {
@@ -273,10 +273,10 @@ int8_t font_init(void) {
                             wc = ((font_loc[0] & 0x1F) << 6) + (font_loc[1] & 0x3F);
                             font_loc++;
                         } else if((wc & 16) == 0 ) {
-                            wc = ((((font_loc[0] & 0xF) << 6) + (font_loc[1] & 0x3F)) << 6) + (font_loc[2] & 0x3F);
+                            wc        = ((((font_loc[0] & 0xF) << 6) + (font_loc[1] & 0x3F)) << 6) + (font_loc[2] & 0x3F);
                             font_loc += 2;
                         } else if((wc & 8) == 0 ) {
-                            wc = ((((((font_loc[0] & 0x7) << 6) + (font_loc[1] & 0x3F)) << 6) + (font_loc[2] & 0x3F)) << 6) + (font_loc[3] & 0x3F);
+                            wc        = ((((((font_loc[0] & 0x7) << 6) + (font_loc[1] & 0x3F)) << 6) + (font_loc[2] & 0x3F)) << 6) + (font_loc[3] & 0x3F);
                             font_loc += 3;
                         } else {
                             wc = 0;
@@ -302,10 +302,10 @@ int8_t font_init(void) {
 
             if(font1->magic == FONT_PSF1_MAGIC) {
                 uint64_t addr = (uint64_t)&font_psf2_data_start;
-                addr += sizeof(video_psf1_font_t);
-                FONT_ADDRESS = (uint8_t*)addr;
-                FONT_WIDTH = 10;
-                FONT_HEIGHT = 20;
+                addr                += sizeof(video_psf1_font_t);
+                FONT_ADDRESS         = (uint8_t*)addr;
+                FONT_WIDTH           = 10;
+                FONT_HEIGHT          = 20;
                 FONT_BYTES_PER_GLYPH = font1->bytes_per_glyph;
 
                 if(font1->mode) {
@@ -326,10 +326,10 @@ int8_t font_init(void) {
                                 wc = ((font_loc[0] & 0x1F) << 6) + (font_loc[1] & 0x3F);
                                 font_loc++;
                             } else if((wc & 16) == 0 ) {
-                                wc = ((((font_loc[0] & 0xF) << 6) + (font_loc[1] & 0x3F)) << 6) + (font_loc[2] & 0x3F);
+                                wc        = ((((font_loc[0] & 0xF) << 6) + (font_loc[1] & 0x3F)) << 6) + (font_loc[2] & 0x3F);
                                 font_loc += 2;
                             } else if((wc & 8) == 0 ) {
-                                wc = ((((((font_loc[0] & 0x7) << 6) + (font_loc[1] & 0x3F)) << 6) + (font_loc[2] & 0x3F)) << 6) + (font_loc[3] & 0x3F);
+                                wc        = ((((((font_loc[0] & 0x7) << 6) + (font_loc[1] & 0x3F)) << 6) + (font_loc[2] & 0x3F)) << 6) + (font_loc[3] & 0x3F);
                                 font_loc += 3;
                             } else {
                                 wc = 0;
@@ -371,10 +371,10 @@ char16_t font_get_wc(const char_t* string, int64_t * idx) {
             wc = ((string[0] & 0x1F) << 6) + (string[1] & 0x3F);
             (*idx)++;
         } else if((wc & 16) == 0 ) {
-            wc = ((((string[0] & 0xF) << 6) + (string[1] & 0x3F)) << 6) + (string[2] & 0x3F);
+            wc      = ((((string[0] & 0xF) << 6) + (string[1] & 0x3F)) << 6) + (string[2] & 0x3F);
             (*idx) += 2;
         } else if((wc & 8) == 0 ) {
-            wc = ((((((string[0] & 0x7) << 6) + (string[1] & 0x3F)) << 6) + (string[2] & 0x3F)) << 6) + (string[3] & 0x3F);
+            wc      = ((((((string[0] & 0x7) << 6) + (string[1] & 0x3F)) << 6) + (string[2] & 0x3F)) << 6) + (string[3] & 0x3F);
             (*idx) += 3;
         } else {
             wc = 0;
@@ -396,10 +396,10 @@ char16_t font_atlas_get_wc(const char_t* string, int64_t * idx) {
             wc = ((string[0] & 0x1F) << 6) + (string[1] & 0x3F);
             (*idx)++;
         } else if((wc & 16) == 0 ) {
-            wc = ((((string[0] & 0xF) << 6) + (string[1] & 0x3F)) << 6) + (string[2] & 0x3F);
+            wc      = ((((string[0] & 0xF) << 6) + (string[1] & 0x3F)) << 6) + (string[2] & 0x3F);
             (*idx) += 2;
         } else if((wc & 8) == 0 ) {
-            wc = ((((((string[0] & 0x7) << 6) + (string[1] & 0x3F)) << 6) + (string[2] & 0x3F)) << 6) + (string[3] & 0x3F);
+            wc      = ((((((string[0] & 0x7) << 6) + (string[1] & 0x3F)) << 6) + (string[2] & 0x3F)) << 6) + (string[3] & 0x3F);
             (*idx) += 3;
         } else {
             wc = 0;

@@ -12,13 +12,16 @@
 #include <graphics/color.h>
 #include <utils.h>
 
-// Enums mimicking OpenGL
-#define SGFX_PROJECTION 0
-#define SGFX_MODELVIEW 1
+typedef enum sgfx_matrix_mode_t {
+    SGFX_MATRIX_MODE_PROJECTION,
+    SGFX_MATRIX_MODE_MODELVIEW,
+} sgfx_matrix_mode_t;
 
-#define SGFX_LINES 0
-#define SGFX_TRIANGLES 1
-#define SGFX_QUADS 2 // For rectangles
+typedef enum sgfx_draw_mode_t {
+    SGFX_DRAW_MODE_LINES,
+    SGFX_DRAW_MODE_TRIANGLES,
+    SGFX_DRAW_MODE_QUADS, // For rectangles
+} sgfx_draw_mode_t;
 
 #define SGFX_MAX_VERTICES 1200 // it should multiples of 2 (for lines), 3 (for triangles) and 4 (for quads)
 #define SGFX_MAX_TEXTURES 16
@@ -73,7 +76,7 @@ void sgfx_clear(sgfx_context_t* ctx, float32_t r, float32_t g, float32_t b, floa
 void sgfx_clear_color(sgfx_context_t* ctx, color_t color);
 void sgfx_swap_buffers(sgfx_context_t* ctx);
 
-void sgfx_matrix_mode(sgfx_context_t* ctx, int32_t mode);
+void sgfx_matrix_mode(sgfx_context_t* ctx, sgfx_matrix_mode_t mode);
 void sgfx_load_identity(sgfx_context_t* ctx);
 void sgfx_translate_f32(sgfx_context_t* ctx, float32_t x, float32_t y, float32_t z);
 void sgfx_rotate_f32(sgfx_context_t* ctx, float32_t angle, float32_t x, float32_t y, float32_t z);
@@ -87,7 +90,7 @@ boolean_t sgfx_is_enabled(sgfx_context_t* ctx, sgfx_cap_t cap);
 
 void sgfx_scissor(sgfx_context_t* ctx, int32_t x, int32_t y, int32_t w, int32_t h);
 
-void sgfx_begin(sgfx_context_t* ctx, int32_t mode);
+void sgfx_begin(sgfx_context_t* ctx, sgfx_draw_mode_t mode);
 void sgfx_vertex3_f32(sgfx_context_t* ctx, float32_t x, float32_t y, float32_t z);
 void sgfx_vertex2_f32(sgfx_context_t* ctx, float32_t x, float32_t y);
 void sgfx_texcoord2_f32(sgfx_context_t* ctx, float32_t u, float32_t v);
