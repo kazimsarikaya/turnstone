@@ -1926,6 +1926,7 @@ static int8_t usb_xhci_port_status_listener_task(int32_t argc, void** argv) {
     while(true) {
         if(list_size(event_queue) == 0) {
             task_yield_with_message_waiting();
+            continue;
         }
 
         uint64_t port = (uint64_t)list_queue_pop(event_queue);
