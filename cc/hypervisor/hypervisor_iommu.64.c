@@ -8,6 +8,7 @@
 
 #include <hypervisor/hypervisor_iommu.h>
 #include <hypervisor/hypervisor_utils.h>
+#include <stdbufs.h>
 #include <logging.h>
 #include <acpi.h>
 #include <pci.h>
@@ -52,7 +53,7 @@ int8_t hypervisor_iommu_init(void) {
         goto out;
     }
 
-    uint8_t* ivrs = (uint8_t*)ivrs_hdr;
+    uint8_t* ivrs     = (uint8_t*)ivrs_hdr;
     int64_t ivrs_size = ivrs_hdr->length;
 
     for(int64_t i = 0; i < ivrs_size; i += 8) {
@@ -73,7 +74,7 @@ int8_t hypervisor_iommu_init(void) {
              ivinfo->fields.efr_support, ivinfo->fields.dma_remap_support, ivinfo->fields.gva_size, ivinfo->fields.pa_size, ivinfo->fields.va_size, ivinfo->fields.ht_ats_reserved);
 
     // Skip IVINFO and 8 bytes reserved area
-    ivrs += sizeof(uint32_t) + sizeof(uint64_t);
+    ivrs      += sizeof(uint32_t) + sizeof(uint64_t);
     ivrs_size -= sizeof(uint32_t) + sizeof(uint64_t);
 
     ivrs_ivhd_type_11_t* ivhd_type_11 = NULL;
@@ -98,7 +99,7 @@ int8_t hypervisor_iommu_init(void) {
 
 
 
-        ivrs += ivhd->type_length.length;
+        ivrs      += ivhd->type_length.length;
         ivrs_size -= ivhd->type_length.length;
     }
 
@@ -132,7 +133,7 @@ int8_t hypervisor_iommu_init(void) {
                 max_did = device_info_4byte->bdf.bits;
             }
 
-            device_info += 4;
+            device_info        += 4;
             device_info_length -= 4;
         } else if(device_info_type < 128) {
             // 8 bytes
@@ -154,7 +155,7 @@ int8_t hypervisor_iommu_init(void) {
             }
 
 
-            device_info += 8;
+            device_info        += 8;
             device_info_length -= 8;
         } else {
             // variable length
@@ -170,7 +171,7 @@ int8_t hypervisor_iommu_init(void) {
                     max_did = device_info_f0->bdf.bits;
                 }
 
-                device_info += sizeof(ivrs_vbyte_device_info_f0_t) + device_info_f0->uid_length;
+                device_info        += sizeof(ivrs_vbyte_device_info_f0_t) + device_info_f0->uid_length;
                 device_info_length -= sizeof(ivrs_vbyte_device_info_f0_t) + device_info_f0->uid_length;
             } else {
                 PRINTLOG(HYPERVISOR_IOMMU, LOG_WARNING, "Unsupported device info type: 0x%02x", device_info_type);
@@ -186,7 +187,7 @@ int8_t hypervisor_iommu_init(void) {
     PRINTLOG(HYPERVISOR_IOMMU, LOG_TRACE, "Max did: 0x%x Device Table Size 0x%llx", max_did, device_table_size);
 
 
-    pci_context_t* pci_ctx = pci_get_context();
+    pci_context_t* pci_ctx         = pci_get_context();
     const pci_dev_t* pci_dev_found = NULL;
 
     for(size_t i = 0; i < list_size(pci_ctx->other_devices); i++) {
@@ -229,7 +230,7 @@ int8_t hypervisor_iommu_init(void) {
 
     frame_t amdvi_base_frame = {
         .frame_address = amdvi_base_fa,
-        .frame_count = AMDVI_REG_TOTAL_SIZE / FRAME_SIZE,
+        .frame_count   = AMDVI_REG_TOTAL_SIZE / FRAME_SIZE,
     };
 
     uint64_t amdvi_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(amdvi_base_fa);
@@ -253,7 +254,7 @@ int8_t hypervisor_iommu_init(void) {
     }
 
     amdvi_device_table_base_t dev_tlb_base = {0};
-    dev_tlb_base.fields.size = (device_table_size / FRAME_SIZE) - 1;
+    dev_tlb_base.fields.size         = (device_table_size / FRAME_SIZE) - 1;
     dev_tlb_base.fields.base_address = frm_device_table_base_address->frame_address >> 12;
 
     hypervisor_iommu_mmio_write_safe(amdvi_base_va, AMDVI_REG_DEVICE_TABLE_BASE_BASE_ADDRESS, dev_tlb_base.bits);
@@ -261,7 +262,7 @@ int8_t hypervisor_iommu_init(void) {
     amdvi_extended_feature_t ext_feat = {.bits = hypervisor_iommu_mmio_read_safe(amdvi_base_va, AMDVI_REG_EXTENDED_FEATURES)};
 
     amdvi_control_t control = {0};
-    control.fields.iommu_en = 1;
+    control.fields.iommu_en  = 1;
     control.fields.ht_tun_en = 1;
 
     if(ext_feat.fields.gt_sup) {
@@ -269,12 +270,12 @@ int8_t hypervisor_iommu_init(void) {
     }
 
     if(ext_feat.fields.ga_sup) {
-        control.fields.ga_en = 1;
+        control.fields.ga_en      = 1;
         control.fields.ga_mode_en = 1;
-        control.fields.ga_log_en = 1; // configure ga log base address 0x00e0, 0x2040, 0x2048
+        control.fields.ga_log_en  = 1; // configure ga log base address 0x00e0, 0x2040, 0x2048
 
         frame_t* frm_ga_log_base_address = NULL;
-        uint64_t ga_log_base_va = hypervisor_allocate_region(&frm_ga_log_base_address, 0x1000);
+        uint64_t ga_log_base_va          = hypervisor_allocate_region(&frm_ga_log_base_address, 0x1000);
 
         if(!ga_log_base_va) {
             PRINTLOG(HYPERVISOR_IOMMU, LOG_ERROR, "cannot allocate GA log base address");
@@ -285,7 +286,7 @@ int8_t hypervisor_iommu_init(void) {
 
         amdvi_ga_log_base_t ga_log_base = {0};
         ga_log_base.fields.base_address = frm_ga_log_base_address->frame_address >> 12;
-        ga_log_base.fields.size = 8;
+        ga_log_base.fields.size         = 8;
 
         hypervisor_iommu_mmio_write_safe(amdvi_base_va, AMDVI_REG_GUEST_VIRTUAL_APIC_LOG_BASE_ADDRESS, ga_log_base.bits);
 
@@ -307,7 +308,7 @@ int8_t hypervisor_iommu_init(void) {
 
     amdvi_event_log_base_t event_log_base = {0};
     event_log_base.fields.base_address = frm_event_log_base_address->frame_address >> 12;
-    event_log_base.fields.size = 8;
+    event_log_base.fields.size         = 8;
 
     hypervisor_iommu_mmio_write_safe(amdvi_base_va, AMDVI_REG_EVENT_LOG_BASE_ADDRESS, event_log_base.bits);
 
@@ -328,14 +329,14 @@ int8_t hypervisor_iommu_init(void) {
 
     amdvi_command_buffer_base_t cmd_buf_base = {0};
     cmd_buf_base.fields.base_address = frm_cmd_buf_base_address->frame_address >> 12;
-    cmd_buf_base.fields.size = 8;
+    cmd_buf_base.fields.size         = 8;
 
     hypervisor_iommu_mmio_write_safe(amdvi_base_va, AMDVI_REG_COMMAND_BUFFER_BASE_ADDRESS, cmd_buf_base.bits);
 
     PRINTLOG(HYPERVISOR_IOMMU, LOG_TRACE, "Command Buffer Base FA: 0x%llx VA: 0x%llx", frm_cmd_buf_base_address->frame_address, cmd_buf_base_va);
 
     control.fields.ppr_log_en = 1; // configure ppr log base address 0x0038, 0x2030, 0x2038
-    control.fields.ppr_en = 1; // configure ppr base address
+    control.fields.ppr_en     = 1; // configure ppr base address
 
     frame_t* frm_ppr_log_base_address = NULL;
 
@@ -350,7 +351,7 @@ int8_t hypervisor_iommu_init(void) {
 
     amdvi_ppr_log_base_t ppr_log_base = {0};
     ppr_log_base.fields.base_address = frm_ppr_log_base_address->frame_address >> 12;
-    ppr_log_base.fields.size = 8;
+    ppr_log_base.fields.size         = 8;
 
     hypervisor_iommu_mmio_write_safe(amdvi_base_va, AMDVI_REG_PPR_LOG_BASE_ADDRESS, ppr_log_base.bits);
 

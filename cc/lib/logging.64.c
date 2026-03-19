@@ -10,6 +10,7 @@
 #include <logging.h>
 #include <windowmanager.h>
 #include <strings.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.lib.logging");
 
@@ -119,7 +120,7 @@ void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, 
         return;
     }
 
-    buffer_t* buffer_error = buffer_get_io_buffer(BUFFER_IO_ERROR);
+    buffer_t* buffer_error            = buffer_get_io_buffer(BUFFER_IO_ERROR);
     boolean_t using_tmp_printf_buffer = false;
 
     if(!buffer_error) {

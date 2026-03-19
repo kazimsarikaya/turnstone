@@ -11,6 +11,7 @@
 #include <strings.h>
 #include <buffer.h>
 #include <utils.h>
+#include <stdbufs.h>
 #include <logging.h>
 #include <random.h>
 #include <int_limits.h>
@@ -45,9 +46,9 @@ bigint_t* bigint_create(void) {
         return NULL;
     }
 
-    bigint->limb_count = 1;
-    bigint->capacity = BIGINT_INITIAL_CAPACITY;
-    bigint->sign = 0;
+    bigint->limb_count      = 1;
+    bigint->capacity        = BIGINT_INITIAL_CAPACITY;
+    bigint->sign            = 0;
     bigint->neged_with_sign = false;
 
     return bigint;
@@ -114,9 +115,9 @@ __attribute__((nonnull(1))) static void bigint_destroy_limbs(bigint_t* bigint) {
         bigint->limbs[i] = 0;
     }
 
-    bigint->capacity = BIGINT_INITIAL_CAPACITY;
-    bigint->limb_count = 1;
-    bigint->sign = 0;
+    bigint->capacity        = BIGINT_INITIAL_CAPACITY;
+    bigint->limb_count      = 1;
+    bigint->sign            = 0;
     bigint->neged_with_sign = true;
 }
 
@@ -161,7 +162,7 @@ BIGINT_CHECK_RESULT static int8_t bigint_ensure_capacity(bigint_t* bigint, uint6
     memory_memcopy(bigint->limbs, new_limbs, sizeof(uint64_t) * bigint->limb_count);
     memory_free(bigint->limbs);
 
-    bigint->limbs = new_limbs;
+    bigint->limbs    = new_limbs;
     bigint->capacity = new_capacity;
     return 0;
 }
@@ -176,21 +177,21 @@ int8_t bigint_set_int64(bigint_t* bigint, int64_t value) {
     bigint_destroy_limbs(bigint);
 
     if(value == 0) {
-        bigint->sign = 0;
+        bigint->sign       = 0;
         bigint->limb_count = 1;
         return 0;
     }
 
     if (value < 0) {
-        bigint->sign = -1;
+        bigint->sign            = -1;
         bigint->neged_with_sign = true;
-        uvalue = -value;
+        uvalue                  = -value;
     } else {
         bigint->sign = 1;
-        uvalue = value;
+        uvalue       = value;
     }
 
-    bigint->limbs[0] = uvalue;
+    bigint->limbs[0]   = uvalue;
     bigint->limb_count = 1;
 
     return 0;
@@ -200,14 +201,14 @@ int8_t bigint_set_uint64(bigint_t* bigint, uint64_t value) {
     bigint_destroy_limbs(bigint);
 
     if (value == 0) {
-        bigint->sign = 0;
+        bigint->sign       = 0;
         bigint->limb_count = 1;
         return 0;
     }
 
     bigint->sign = 1;
 
-    bigint->limbs[0] = value;
+    bigint->limbs[0]   = value;
     bigint->limb_count = 1;
 
     return 0;
@@ -235,9 +236,9 @@ int8_t bigint_set_bigint(bigint_t* bigint, const bigint_t* src) {
 
     memory_memcopy(src->limbs, bigint->limbs, sizeof(uint64_t) * src->limb_count);
 
-    bigint->capacity = src->capacity;
-    bigint->limb_count = src->limb_count;
-    bigint->sign = src->sign;
+    bigint->capacity        = src->capacity;
+    bigint->limb_count      = src->limb_count;
+    bigint->sign            = src->sign;
     bigint->neged_with_sign = src->neged_with_sign;
 
     return 0;
@@ -257,7 +258,7 @@ __attribute__((nonnull(1))) static void bigint_normalize(bigint_t* bigint) {
 
         // If the resulting value is 0, fix the sign
         if (bigint->limb_count == 1 && bigint->limbs[0] == 0) {
-            bigint->sign = 0;
+            bigint->sign            = 0;
             bigint->neged_with_sign = true;
         }
         return;
@@ -276,7 +277,7 @@ __attribute__((nonnull(1))) static void bigint_normalize(bigint_t* bigint) {
 
         // Safety: If it stripped down to 0, it's actually zero.
         if (bigint->limb_count == 1 && bigint->limbs[0] == 0) {
-            bigint->sign = 0;
+            bigint->sign            = 0;
             bigint->neged_with_sign = true;
         }
     }
@@ -299,7 +300,7 @@ BIGINT_CHECK_RESULT static int8_t bigint_ensure_normal_form(bigint_t* a) {
     uint64_t carry = 1;
     for (uint64_t i = 0; i < a->limb_count && carry; i++) {
         uint64_t val = a->limbs[i] + carry;
-        carry = (val < a->limbs[i]) ? 1 : 0;
+        carry       = (val < a->limbs[i]) ? 1 : 0;
         a->limbs[i] = val;
     }
 
@@ -333,8 +334,8 @@ BIGINT_CHECK_RESULT static int8_t bigint_copy(bigint_t* dest, const bigint_t* sr
     }
 
     // 3. Match metadata
-    dest->limb_count = src->limb_count;
-    dest->sign = src->sign;
+    dest->limb_count      = src->limb_count;
+    dest->sign            = src->sign;
     dest->neged_with_sign = src->neged_with_sign;
 
     // 4. Ensure extra limbs in destination are zeroed out
@@ -370,7 +371,7 @@ BIGINT_CHECK_RESULT static int8_t bigint_abs_copy(bigint_t* dest, const bigint_t
     }
 
     // 4. Force the sign to positive
-    dest->sign = 1;
+    dest->sign            = 1;
     dest->neged_with_sign = true;
 
     return 0;
@@ -412,8 +413,8 @@ int8_t bigint_set_str(bigint_t* bigint, const char* str) {
 
     if (len == 0) {
         memory_memclean(bigint->limbs, bigint->capacity * sizeof(uint64_t));
-        bigint->sign = 0;
-        bigint->limb_count = 1;
+        bigint->sign            = 0;
+        bigint->limb_count      = 1;
         bigint->neged_with_sign = true;
         return 0;
     }
@@ -462,7 +463,7 @@ int8_t bigint_set_str(bigint_t* bigint, const char* str) {
 
     if (bigint->limb_count == 0) {
         bigint->limb_count = 1;
-        bigint->sign = 0;
+        bigint->sign       = 0;
     } else {
         bigint->sign = sign;
         if(sign < 0) {
@@ -484,7 +485,7 @@ static int8_t bigint_inc_with_overflow(bigint_t* bigint) {
     }
 
     uint64_t carry = 1;
-    size_t i = 0;
+    size_t i       = 0;
 
     // Process from LSB upward
     while (carry && i < bigint->limb_count)
@@ -497,7 +498,7 @@ static int8_t bigint_inc_with_overflow(bigint_t* bigint) {
         }
 
         bigint->limbs[i] = 0;
-        carry = 1;
+        carry            = 1;
         i++;
     }
 
@@ -757,10 +758,10 @@ int8_t bigint_and(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     // 4. Determine Result Metadata
     // Logic: negative & negative = negative
     if (a->sign < 0 && b->sign < 0) {
-        result->sign = -1;
+        result->sign            = -1;
         result->neged_with_sign = false; // Keep in Two's Complement
     } else {
-        result->sign = 1;
+        result->sign            = 1;
         result->neged_with_sign = false; // Result is a positive magnitude
     }
 
@@ -825,7 +826,7 @@ int8_t bigint_or(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         // If either was already in Two's Complement, keep result that way
         result->neged_with_sign = false;
     } else {
-        result->sign = 1;
+        result->sign            = 1;
         result->neged_with_sign = true;
     }
 
@@ -884,10 +885,10 @@ int8_t bigint_xor(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     // 4. Metadata
     // XOR logic: Result is negative only if signs are different
     if ((a->sign < 0) ^ (b->sign < 0)) {
-        result->sign = -1;
+        result->sign            = -1;
         result->neged_with_sign = false; // Result is in Two's Complement
     } else {
-        result->sign = (a->sign == 0 && b->sign == 0) ? 0 : 1;
+        result->sign            = (a->sign == 0 && b->sign == 0) ? 0 : 1;
         result->neged_with_sign = true; // Result is a magnitude
     }
 
@@ -925,7 +926,7 @@ int8_t bigint_not(bigint_t* result, const bigint_t* a) {
     memory_free(result->limbs);
 
     result->limb_count = a->limb_count;
-    result->capacity = a->capacity;
+    result->capacity   = a->capacity;
 
     result->limbs = (uint64_t*)memory_malloc(sizeof(uint64_t) * result->capacity);
 
@@ -953,7 +954,7 @@ int8_t bigint_shl_one(bigint_t* a) {
 
     // 1. Check if the current MSB will overflow
     // If the top bit of the top limb is 1, we definitely need a new limb.
-    uint64_t msb_val = a->limbs[a->limb_count - 1];
+    uint64_t msb_val     = a->limbs[a->limb_count - 1];
     int needs_extra_limb = (msb_val >> (BIGINT_LIMB_BITS - 1)) & 1;
 
     if (needs_extra_limb) {
@@ -1046,7 +1047,7 @@ int8_t bigint_shl(bigint_t* result, const bigint_t* a, int64_t shift) {
     }
 
     int64_t limb_shift = shift / BIGINT_LIMB_BITS;
-    int32_t bit_shift = (int32_t)(shift % BIGINT_LIMB_BITS);
+    int32_t bit_shift  = (int32_t)(shift % BIGINT_LIMB_BITS);
 
     // 1. Calculate new required size
     // We need current used limbs + limb_shift, plus potentially 1 extra if bit_shift causes an overflow
@@ -1061,11 +1062,11 @@ int8_t bigint_shl(bigint_t* result, const bigint_t* a, int64_t shift) {
     // We work backwards to handle the case where result == a
     uint64_t carry = 0;
     for (int64_t i = (int64_t)a->limb_count - 1; i >= 0; i--) {
-        uint64_t val = a->limbs[i];
+        uint64_t val        = a->limbs[i];
         uint64_t next_carry = (bit_shift == 0) ? 0 : (val >> (BIGINT_LIMB_BITS - bit_shift));
 
         result->limbs[i + limb_shift + 1] = 0; // Clear the potential carry slot
-        result->limbs[i + limb_shift] = (val << bit_shift) | carry;
+        result->limbs[i + limb_shift]     = (val << bit_shift) | carry;
 
         carry = next_carry;
     }
@@ -1073,7 +1074,7 @@ int8_t bigint_shl(bigint_t* result, const bigint_t* a, int64_t shift) {
     // Place the final carry if it exists
     if (carry) {
         result->limbs[a->limb_count + limb_shift] = carry;
-        result->limb_count = a->limb_count + limb_shift + 1;
+        result->limb_count                        = a->limb_count + limb_shift + 1;
     } else {
         result->limb_count = a->limb_count + limb_shift;
     }
@@ -1084,7 +1085,7 @@ int8_t bigint_shl(bigint_t* result, const bigint_t* a, int64_t shift) {
     }
 
     // 5. Handle sign and "neged_with_sign" (Two's Complement logic)
-    result->sign = a->sign;
+    result->sign            = a->sign;
     result->neged_with_sign = a->neged_with_sign;
 
     if (result->sign < 0 && !result->neged_with_sign) {
@@ -1132,7 +1133,7 @@ int8_t bigint_shr(bigint_t* result, const bigint_t* a, int64_t shift) {
     }
 
     int64_t limb_shift = shift / BIGINT_LIMB_BITS;
-    int32_t bit_shift = (int32_t)(shift % BIGINT_LIMB_BITS);
+    int32_t bit_shift  = (int32_t)(shift % BIGINT_LIMB_BITS);
 
     // 1. Ensure result has enough space (no growth needed usually, but result might be a different object)
     if (bigint_ensure_capacity(result, a->limb_count) == -1) {
@@ -1145,7 +1146,7 @@ int8_t bigint_shr(bigint_t* result, const bigint_t* a, int64_t shift) {
     // We work forward (from LSB to MSB) to safely handle result == a
     for (uint64_t i = 0; i < new_limb_count; i++) {
         uint64_t current_limb = a->limbs[i + limb_shift];
-        uint64_t next_limb = (i + limb_shift + 1 < a->limb_count) ? a->limbs[i + limb_shift + 1] : 0;
+        uint64_t next_limb    = (i + limb_shift + 1 < a->limb_count) ? a->limbs[i + limb_shift + 1] : 0;
 
         uint64_t val = current_limb >> bit_shift;
         if (bit_shift > 0 && (i + limb_shift + 1 < a->limb_count)) {
@@ -1156,8 +1157,8 @@ int8_t bigint_shr(bigint_t* result, const bigint_t* a, int64_t shift) {
         result->limbs[i] = val;
     }
 
-    result->limb_count = new_limb_count;
-    result->sign = a->sign;
+    result->limb_count      = new_limb_count;
+    result->sign            = a->sign;
     result->neged_with_sign = a->neged_with_sign;
 
     // 3. Handle Sign Extension for Two's Complement
@@ -1186,8 +1187,8 @@ int8_t bigint_set_bit(bigint_t* bigint, uint64_t bit, boolean_t value) {
         return -1;
     }
 
-    const uint64_t limb_index = bit / BIGINT_LIMB_BITS;
-    const uint64_t bit_in_limb = bit % BIGINT_LIMB_BITS;
+    const uint64_t limb_index   = bit / BIGINT_LIMB_BITS;
+    const uint64_t bit_in_limb  = bit % BIGINT_LIMB_BITS;
     const uint64_t needed_limbs = limb_index + 1;
 
     // 1 & 2. Ensure Capacity and Adjust limb_count
@@ -1208,7 +1209,7 @@ int8_t bigint_set_bit(bigint_t* bigint, uint64_t bit, boolean_t value) {
         bigint->limbs[limb_index] |= (1ULL << bit_in_limb);
         // If the number was zero, it is now positive
         if (bigint->sign == 0) {
-            bigint->sign = 1;
+            bigint->sign            = 1;
             bigint->neged_with_sign = true;
         }
     } else {
@@ -1230,7 +1231,7 @@ int8_t bigint_get_bit(const bigint_t* bigint, uint64_t bit, boolean_t* value) {
         return 0;
     }
 
-    const uint64_t limb_index = bit / BIGINT_LIMB_BITS;
+    const uint64_t limb_index  = bit / BIGINT_LIMB_BITS;
     const uint64_t bit_in_limb = bit % BIGINT_LIMB_BITS;
 
     // Handle bits within the existing allocated limbs
@@ -1266,17 +1267,17 @@ int8_t bigint_flip_bit(bigint_t* bigint, uint64_t bit) {
             if (!new_limbs) {
                 return -1;
             }
-            bigint->limbs = new_limbs;
+            bigint->limbs    = new_limbs;
             bigint->capacity = BIGINT_INITIAL_CAPACITY;
         }
-        bigint->limbs[0] = 1;
-        bigint->limb_count = 1;
-        bigint->sign = 1;
+        bigint->limbs[0]        = 1;
+        bigint->limb_count      = 1;
+        bigint->sign            = 1;
         bigint->neged_with_sign = false;
         return 0;
     }
 
-    const uint64_t limb_index = bit / BIGINT_LIMB_BITS;
+    const uint64_t limb_index  = bit / BIGINT_LIMB_BITS;
     const uint64_t bit_in_limb = bit % BIGINT_LIMB_BITS;
 
     uint64_t needed = limb_index + 1;
@@ -1310,7 +1311,7 @@ int8_t bigint_clear_bit(bigint_t* bigint, uint64_t bit) {
         return 0;
     }
 
-    const uint64_t limb_index = bit / BIGINT_LIMB_BITS;
+    const uint64_t limb_index  = bit / BIGINT_LIMB_BITS;
     const uint64_t bit_in_limb = bit % BIGINT_LIMB_BITS;
 
     if (limb_index >= bigint->limb_count) {
@@ -1444,7 +1445,7 @@ static int8_t bigint_add_magnitudes(bigint_t* result, const bigint_t* a, const b
 
         // sum = val_a + val_b + carry
         // We use two steps to safely detect overflow for the carry
-        uint64_t sum = val_a + val_b;
+        uint64_t sum        = val_a + val_b;
         uint64_t next_carry = (sum < val_a) ? 1 : 0;
 
         sum += carry;
@@ -1453,12 +1454,12 @@ static int8_t bigint_add_magnitudes(bigint_t* result, const bigint_t* a, const b
         }
 
         result->limbs[i] = sum;
-        carry = next_carry;
+        carry            = next_carry;
     }
 
     if (carry) {
         result->limbs[max_limbs] = carry;
-        result->limb_count = max_limbs + 1;
+        result->limb_count       = max_limbs + 1;
     } else {
         result->limb_count = max_limbs;
     }
@@ -1475,8 +1476,8 @@ int8_t bigint_sub(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     // 1. Normalize inputs if they are in two's complement
     const bigint_t * op_a = a;
     const bigint_t * op_b = b;
-    bigint_t * tmp_a = NULL;
-    bigint_t * tmp_b = NULL;
+    bigint_t * tmp_a      = NULL;
+    bigint_t * tmp_b      = NULL;
 
     if (!a->neged_with_sign && a->sign < 0) {
         tmp_a = bigint_create();
@@ -1579,8 +1580,8 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     // to a temporary bigint to normalize.
     const bigint_t * op_a = a;
     const bigint_t * op_b = b;
-    bigint_t * tmp_a = NULL;
-    bigint_t * tmp_b = NULL;
+    bigint_t * tmp_a      = NULL;
+    bigint_t * tmp_b      = NULL;
 
     if (!a->neged_with_sign && a->sign < 0) {
         tmp_a = bigint_create(); // Use your library's creator
@@ -1701,8 +1702,8 @@ int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     // Multiplication MUST be done on magnitudes.
     const bigint_t * op_a = a;
     const bigint_t * op_b = b;
-    bigint_t * tmp_a = NULL;
-    bigint_t * tmp_b = NULL;
+    bigint_t * tmp_a      = NULL;
+    bigint_t * tmp_b      = NULL;
 
     if (!a->neged_with_sign && a->sign < 0) {
         tmp_a = bigint_create();
@@ -1764,7 +1765,7 @@ int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b) {
             product += carry;
 
             res_limbs[i + j] = (uint64_t)product; // Lower 64 bits
-            carry = (uint64_t)(product >> 64); // Upper 64 bits
+            carry            = (uint64_t)(product >> 64); // Upper 64 bits
         }
         res_limbs[i + op_b->limb_count] = carry;
     }
@@ -1772,12 +1773,12 @@ int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     // 5. Finalize Result
     if (use_temp_res) {
         memory_free(result->limbs);
-        result->limbs = res_limbs;
+        result->limbs    = res_limbs;
         result->capacity = total_limbs;
     }
 
-    result->limb_count = total_limbs;
-    result->sign = a->sign * b->sign;
+    result->limb_count      = total_limbs;
+    result->sign            = a->sign * b->sign;
     result->neged_with_sign = true;
 
     // Cleanup inputs
@@ -1815,8 +1816,8 @@ int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
     // 3. Normalize inputs (ensure magnitudes are accessible)
     bigint_t* base = bigint_create();
-    bigint_t* exp = bigint_create();
-    bigint_t* res = bigint_create();
+    bigint_t* exp  = bigint_create();
+    bigint_t* res  = bigint_create();
 
     if(bigint_copy(base, a) != 0) {
         goto cleanup;
@@ -1963,7 +1964,7 @@ int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
         return -1;
     }
 
-    bigint_t* orig_result = result;
+    bigint_t* orig_result      = result;
     boolean_t orig_result_is_a = false;
 
     if (result == a) {
@@ -2146,8 +2147,8 @@ int8_t bigint_div_with_remainder(bigint_t* result, bigint_t* remainder, const bi
 
     bigint_t* op_a = NULL;
     bigint_t* op_b = NULL;
-    bigint_t* q = NULL;
-    bigint_t* r = NULL;
+    bigint_t* q    = NULL;
+    bigint_t* r    = NULL;
 
     // Normalizing inputs
     op_a = bigint_create();
@@ -2185,7 +2186,7 @@ int8_t bigint_div_with_remainder(bigint_t* result, bigint_t* remainder, const bi
         if(bigint_copy(result, q) == -1) {
             goto cleanup;
         }
-        result->sign = a->sign * b->sign;
+        result->sign            = a->sign * b->sign;
         result->neged_with_sign = true;
     }
 
@@ -2194,7 +2195,7 @@ int8_t bigint_div_with_remainder(bigint_t* result, bigint_t* remainder, const bi
         if(bigint_copy(remainder, r) == -1) {
             goto cleanup;
         }
-        remainder->sign = a->sign;
+        remainder->sign            = a->sign;
         remainder->neged_with_sign = true;
     }
 
@@ -2216,7 +2217,7 @@ int8_t bigint_div_unsigned(bigint_t* quotient, bigint_t* remainder, const bigint
 
     // 1. Handle NULL remainder by creating a local temporary one
     bigint_t* internal_rem = remainder;
-    boolean_t destroy_rem = false;
+    boolean_t destroy_rem  = false;
 
     if (remainder == NULL) {
         internal_rem = bigint_create();
@@ -2228,7 +2229,7 @@ int8_t bigint_div_unsigned(bigint_t* quotient, bigint_t* remainder, const bigint
     }
 
     bigint_t* internal_quotient = quotient;
-    boolean_t destroy_quotient = false;
+    boolean_t destroy_quotient  = false;
 
     if (quotient == NULL) {
         internal_quotient = bigint_create();
@@ -2409,7 +2410,7 @@ int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     // We use magnitudes because GCD is always positive.
     bigint_t* tmp_a = bigint_clone(a);
     bigint_t* tmp_b = bigint_clone(b);
-    bigint_t* rem = bigint_create();
+    bigint_t* rem   = bigint_create();
 
     if (!tmp_a || !tmp_b || !rem) {
         goto cleanup;
@@ -2447,7 +2448,7 @@ int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     if(bigint_copy(result, tmp_b) == -1) {
         goto cleanup;
     }
-    result->sign = 1;
+    result->sign            = 1;
     result->neged_with_sign = true;
 
     err = 0;
@@ -2473,8 +2474,8 @@ int8_t bigint_isqrt(bigint_t* result, const bigint_t* a) {
     int8_t err = -1;
 
     // Initial Guess: 2^(bit_length / 2)
-    bigint_t* x = bigint_create();
-    bigint_t* y = bigint_create();
+    bigint_t* x   = bigint_create();
+    bigint_t* y   = bigint_create();
     bigint_t* tmp = bigint_create();
     if (!x || !y || !tmp) {
         goto cleanup;
@@ -2557,12 +2558,12 @@ int8_t bigint_mod_inv(bigint_t* result, const bigint_t* a, const bigint_t* n) {
 
     int8_t err = -1;
 
-    bigint_t * t = bigint_create(); // Coefficient t
+    bigint_t * t    = bigint_create(); // Coefficient t
     bigint_t * newt = bigint_create();
-    bigint_t * r = bigint_clone(n); // Remainder r
+    bigint_t * r    = bigint_clone(n); // Remainder r
     bigint_t * newr = bigint_clone(a);
-    bigint_t * q = bigint_create();
-    bigint_t * tmp = bigint_create();
+    bigint_t * q    = bigint_create();
+    bigint_t * tmp  = bigint_create();
     bigint_t * prod = bigint_create();
 
     if (!t || !newt || !r || !newr || !q || !tmp || !prod) {
@@ -2663,18 +2664,18 @@ int8_t bigint_mod_sqrt(bigint_t* result, const bigint_t* a, const bigint_t* p) {
 
     int8_t err = -1;
 
-    bigint_t* exp = NULL;
-    bigint_t* check = NULL;
-    bigint_t* Q = NULL;
-    bigint_t* z = NULL;
+    bigint_t* exp         = NULL;
+    bigint_t* check       = NULL;
+    bigint_t* Q           = NULL;
+    bigint_t* z           = NULL;
     bigint_t* p_minus_one = NULL;
-    bigint_t* M = NULL;
-    bigint_t* c = NULL;
-    bigint_t* t = NULL;
-    bigint_t* R = NULL;
+    bigint_t* M           = NULL;
+    bigint_t* c           = NULL;
+    bigint_t* t           = NULL;
+    bigint_t* R           = NULL;
 
     // Legendre symbol check: a^((p-1)/2) % p must be 1
-    exp = bigint_create();
+    exp   = bigint_create();
     check = bigint_create();
 
     if (!exp || !check) {
@@ -2788,7 +2789,7 @@ int8_t bigint_mod_sqrt(bigint_t* result, const bigint_t* a, const bigint_t* p) {
 
     // 4. Loop
     while (!bigint_is_uint64(t, 1)) {
-        uint64_t i = 0;
+        uint64_t i        = 0;
         bigint_t * temp_t = bigint_clone(t);
 
         uint64_t uint64_M = 0;
@@ -2903,7 +2904,7 @@ int8_t bigint_add_uint64(bigint_t* a, uint64_t b) {
     for (uint64_t i = 0; i < a->limb_count && carry > 0; i++) {
         uint64_t old = a->limbs[i];
         a->limbs[i] += carry;
-        carry = (a->limbs[i] < old) ? 1 : 0;
+        carry        = (a->limbs[i] < old) ? 1 : 0;
     }
 
     if (carry) {
@@ -2940,7 +2941,7 @@ int8_t bigint_sub_uint64(bigint_t* a, uint64_t b) {
     // If a < b, result will be negative
     if (a->limb_count == 1 && a->limbs[0] < b) {
         a->limbs[0] = b - a->limbs[0];
-        a->sign = -1;
+        a->sign     = -1;
         return 0;
     }
 
@@ -2948,7 +2949,7 @@ int8_t bigint_sub_uint64(bigint_t* a, uint64_t b) {
     for (uint64_t i = 0; i < a->limb_count && borrow > 0; i++) {
         uint64_t old = a->limbs[i];
         a->limbs[i] -= borrow;
-        borrow = (old < a->limbs[i]) ? 1 : 0;
+        borrow       = (old < a->limbs[i]) ? 1 : 0;
     }
 
     bigint_normalize(a);
@@ -2975,7 +2976,7 @@ int8_t bigint_mul_uint64(bigint_t* a, uint64_t b) {
     for (uint64_t i = 0; i < a->limb_count; i++) {
         uint128_t res = (uint128_t)a->limbs[i] * b + carry;
         a->limbs[i] = (uint64_t)res;
-        carry = (uint64_t)(res >> 64);
+        carry       = (uint64_t)(res >> 64);
     }
 
     if (carry) {
@@ -3039,8 +3040,8 @@ BIGINT_CHECK_RESULT static bigint_t* bigint_random_internal(uint64_t bits, boole
         return NULL;
     }
 
-    result->sign = 1;
-    result->limb_count = item_count;
+    result->sign            = 1;
+    result->limb_count      = item_count;
     result->neged_with_sign = true;
 
     // Fill all limbs with random data
@@ -3151,12 +3152,12 @@ BIGINT_CHECK_RESULT static boolean_t bigint_is_prime_miller_rabin(const bigint_t
 
     boolean_t is_prime = false;
 
-    bigint_t* one = bigint_one();
-    bigint_t* two = bigint_two();
+    bigint_t* one       = bigint_one();
+    bigint_t* two       = bigint_two();
     bigint_t* n_minus_1 = NULL;
-    bigint_t* d = NULL;
-    bigint_t* r = NULL;
-    bigint_t* x = NULL;
+    bigint_t* d         = NULL;
+    bigint_t* r         = NULL;
+    bigint_t* x         = NULL;
     bigint_t* a_minus_2 = NULL;
 
     if(!one || !two) {
@@ -3365,7 +3366,7 @@ int8_t bigint_to_bytes(const bigint_t* a, uint8_t* buf, uint64_t len) {
 
     // Fill buffer from limbs (buffer is big-endian)
     for(uint64_t i = 0; i < required_bytes; i++) {
-        uint64_t limb_index = i / BIGINT_LIMB_BYTES;
+        uint64_t limb_index  = i / BIGINT_LIMB_BYTES;
         uint64_t byte_offset = i % BIGINT_LIMB_BYTES;
         buf[len - 1 - i] = (a->limbs[limb_index] >> (8 * byte_offset)) & 0xFF;
     }
@@ -3394,14 +3395,14 @@ int8_t bigint_from_bytes(bigint_t* a, const uint8_t* buf, uint64_t len) {
 
     // Fill limbs from the byte buffer (buffer is big-endian)
     for(uint64_t i = 0; i < len; i++) {
-        uint64_t byte = buf[len - 1 - i];
-        uint64_t limb_index = i / BIGINT_LIMB_BYTES;
+        uint64_t byte        = buf[len - 1 - i];
+        uint64_t limb_index  = i / BIGINT_LIMB_BYTES;
         uint64_t byte_offset = i % BIGINT_LIMB_BYTES;
         a->limbs[limb_index] |= (byte << (8 * byte_offset));
     }
 
-    a->limb_count = required_limbs;
-    a->sign = 1;
+    a->limb_count      = required_limbs;
+    a->sign            = 1;
     a->neged_with_sign = true;
 
     bigint_normalize(a);
@@ -3429,7 +3430,7 @@ int8_t bigint_to_bytes_le(const bigint_t* a, uint8_t* buf, uint64_t len) {
 
     // Fill buffer from limbs (buffer is little-endian)
     for(uint64_t i = 0; i < required_bytes; i++) {
-        uint64_t limb_index = i / BIGINT_LIMB_BYTES;
+        uint64_t limb_index  = i / BIGINT_LIMB_BYTES;
         uint64_t byte_offset = i % BIGINT_LIMB_BYTES;
         buf[i] = (a->limbs[limb_index] >> (8 * byte_offset)) & 0xFF;
     }
@@ -3458,14 +3459,14 @@ int8_t bigint_from_bytes_le(bigint_t* a, const uint8_t* buf, uint64_t len) {
 
     // Fill limbs from the byte buffer (buffer is little-endian)
     for(uint64_t i = 0; i < len; i++) {
-        uint64_t byte = buf[i];
-        uint64_t limb_index = i / BIGINT_LIMB_BYTES;
+        uint64_t byte        = buf[i];
+        uint64_t limb_index  = i / BIGINT_LIMB_BYTES;
         uint64_t byte_offset = i % BIGINT_LIMB_BYTES;
         a->limbs[limb_index] |= (byte << (8 * byte_offset));
     }
 
-    a->limb_count = required_limbs;
-    a->sign = 1;
+    a->limb_count      = required_limbs;
+    a->sign            = 1;
     a->neged_with_sign = true;
 
     bigint_normalize(a);
@@ -3495,7 +3496,7 @@ int8_t bigint_cswap(bigint_t* a, bigint_t* b, uint8_t swap) {
     swap = (swap != 0);
 
     uint64_t mask64 = -(uint64_t)swap;
-    uint8_t mask8  = -(uint8_t)swap;
+    uint8_t mask8   = -(uint8_t)swap;
 
     // 1. Swap Limbs
     // Note: We use the actual limb_count used by the bigints
@@ -3518,14 +3519,14 @@ int8_t bigint_cswap(bigint_t* a, bigint_t* b, uint8_t swap) {
     // 3. Swap Sign (Treat as raw bytes to avoid signed overflow/bit issues)
     uint8_t* a_sign = (uint8_t*)&a->sign;
     uint8_t* b_sign = (uint8_t*)&b->sign;
-    uint8_t tmp_s = (*a_sign ^ *b_sign) & mask8;
+    uint8_t tmp_s   = (*a_sign ^ *b_sign) & mask8;
     *a_sign ^= tmp_s;
     *b_sign ^= tmp_s;
 
     // 4. Swap neged_with_sign (Treat as raw bytes)
     uint8_t* a_neg = (uint8_t*)&a->neged_with_sign;
     uint8_t* b_neg = (uint8_t*)&b->neged_with_sign;
-    uint8_t tmp_n = (*a_neg ^ *b_neg) & mask8;
+    uint8_t tmp_n  = (*a_neg ^ *b_neg) & mask8;
     *a_neg ^= tmp_n;
     *b_neg ^= tmp_n;
 

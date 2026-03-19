@@ -11,6 +11,7 @@
 
 #include <types.h>
 #include <strings.h>
+#include <stdbufs.h>
 #include <logging.h>
 #include <memory.h>
 #include "os_io.h"
@@ -171,10 +172,10 @@ void remove_ram2(void) {
     }
 }
 
-extern stdbufs_video_printer stdbufs_video_print;
+extern stdbufs_video_printer_f stdbufs_video_print;
 
 void __attribute__((constructor)) start_ram(void) {
-    stdbufs_video_print = video_print;
+    stdbufs_set_video_printer(video_print);
 
     int8_t res = setup_ram2();
 

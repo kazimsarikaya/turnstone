@@ -8,6 +8,7 @@
 
 #include <shell.h>
 #include <cpu/task.h>
+#include <stdbufs.h>
 #include <logging.h>
 #include <strings.h>
 #include <acpi.h>

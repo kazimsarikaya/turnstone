@@ -9,6 +9,7 @@
 #define ___HTTP_IMPLEMENTATION
 
 #include <network/http.h>
+#include <stdbufs.h>
 #include <logging.h>
 #include <strings.h>
 #include <utils.h>
@@ -16,14 +17,14 @@
 MODULE("turnstone.lib.network.http");
 
 const char_t*const http2_frame_type_str[] = {
-    [HTTP2_FRAME_TYPE_DATA] = "DATA",
-    [HTTP2_FRAME_TYPE_HEADERS]  = "HEADERS",
-    [HTTP2_FRAME_TYPE_PRIORITY] = "PRIORITY",
-    [HTTP2_FRAME_TYPE_RST_STREAM] = "RST_STREAM",
-    [HTTP2_FRAME_TYPE_SETTINGS] = "SETTINGS",
-    [HTTP2_FRAME_TYPE_PUSH_PROMISE] = "PUSH_PROMISE",
-    [HTTP2_FRAME_TYPE_PING] = "PING",
-    [HTTP2_FRAME_TYPE_GOAWAY] = "GOAWAY",
+    [HTTP2_FRAME_TYPE_DATA]          = "DATA",
+    [HTTP2_FRAME_TYPE_HEADERS]       = "HEADERS",
+    [HTTP2_FRAME_TYPE_PRIORITY]      = "PRIORITY",
+    [HTTP2_FRAME_TYPE_RST_STREAM]    = "RST_STREAM",
+    [HTTP2_FRAME_TYPE_SETTINGS]      = "SETTINGS",
+    [HTTP2_FRAME_TYPE_PUSH_PROMISE]  = "PUSH_PROMISE",
+    [HTTP2_FRAME_TYPE_PING]          = "PING",
+    [HTTP2_FRAME_TYPE_GOAWAY]        = "GOAWAY",
     [HTTP2_FRAME_TYPE_WINDOW_UPDATE] = "WINDOW_UPDATE",
     [HTTP2_FRAME_TYPE_CONTINUATION]  = "CONTINUATION",
 };
@@ -143,8 +144,8 @@ static int8_t http2_parse_settings(http2_context_t* ctx, http2_frame_t* frame) {
 
     for(uint32_t i = 0; i < frame->length; i += 6) {
         uint16_t setting_id = (frame->payload[i] << 8) | frame->payload[i + 1];
-        uint32_t value = (frame->payload[i + 2] << 24) | (frame->payload[i + 3] << 16) |
-                         (frame->payload[i + 4] << 8) | frame->payload[i + 5];
+        uint32_t value      = (frame->payload[i + 2] << 24) | (frame->payload[i + 3] << 16) |
+                              (frame->payload[i + 4] << 8) | frame->payload[i + 5];
 
         switch(setting_id) {
         case HTTP2_SETTING_HEADER_TABLE_SIZE:
@@ -235,7 +236,7 @@ static int8_t http2_send_settings(http_session_t* http_session, http2_context_t*
         settings_payload[offset++] = settings->max_header_list_size & 0xFF;
     }
 
-    uint32_t frame_length = offset;
+    uint32_t frame_length   = offset;
     uint8_t frame_header[9] = {
         (frame_length >> 16) & 0xFF,
         (frame_length >> 8) & 0xFF,
@@ -319,7 +320,7 @@ int8_t http2_hpack_encode_literal(http2_context_t* ctx, buffer_t* buffer, const 
 static int8_t http2_send_response(http_session_t* http_session,
                                   http2_context_t* http2_ctx, http2_stream_t* stream) {
     http_response_t* res = stream->response;
-    uint32_t stream_id = stream->stream_id;
+    uint32_t stream_id   = stream->stream_id;
 
     // --- 1. ENCODE HEADERS (HPACK) ---
     // We'll use a temporary buffer to build the HPACK payload.
@@ -420,7 +421,7 @@ static int8_t http2_send_response(http_session_t* http_session,
 
         // Scientific Rule: Subtract from windows after sending
         http2_ctx->streams[0].remote_window_size -= body_len;
-        stream->remote_window_size -= body_len;
+        stream->remote_window_size               -= body_len;
     }
 
     PRINTLOG(HTTP, LOG_DEBUG, "Response sent on stream %u", stream_id);
@@ -455,9 +456,9 @@ static int8_t http2_parse_headers(http_session_t* http_session,
         printf("\n");
     }
 
-    uint8_t is_end_headers = (frame->flags & HTTP2_FLAG_END_HEADERS) == HTTP2_FLAG_END_HEADERS;
-    uint8_t* payload = frame->payload;
-    size_t payload_len = frame->length;
+    uint8_t is_end_headers           = (frame->flags & HTTP2_FLAG_END_HEADERS) == HTTP2_FLAG_END_HEADERS;
+    uint8_t* payload                 = frame->payload;
+    size_t payload_len               = frame->length;
     boolean_t is_payload_from_buffer = false;
 
     // 1. Get or create the stream object
@@ -491,7 +492,7 @@ static int8_t http2_parse_headers(http_session_t* http_session,
             }
 
             // Adjust length to exclude padding
-            payload += 1; // Move past Pad Length byte
+            payload     += 1; // Move past Pad Length byte
             payload_len -= (1 + pad_length); // Subtract Pad Length byte and padding
         }
 
@@ -502,7 +503,7 @@ static int8_t http2_parse_headers(http_session_t* http_session,
                 return -1;
             }
             // Skip 5 bytes of priority fields
-            payload += 5;
+            payload     += 5;
             payload_len -= 5;
         }
 
@@ -565,9 +566,9 @@ static int8_t http2_parse_headers(http_session_t* http_session,
             return 0; // Wait for more CONTINUATION frames
         }
 
-        payload = buffer_get_all_bytes_and_destroy(stream->header_block_buffer, &payload_len);
+        payload                     = buffer_get_all_bytes_and_destroy(stream->header_block_buffer, &payload_len);
         stream->header_block_buffer = NULL;
-        is_payload_from_buffer = true;
+        is_payload_from_buffer      = true;
 
         PRINTLOG(HTTP, LOG_DEBUG, "Finished receiving fragmented HEADERS for stream %u", frame->stream_id);
 
@@ -618,14 +619,14 @@ static int8_t http2_parse_headers(http_session_t* http_session,
         return -1;
     }
 
-    stream->error_code = HTTP2_ERROR_NO_ERROR;
-    stream->stream_id  = frame->stream_id;
+    stream->error_code         = HTTP2_ERROR_NO_ERROR;
+    stream->stream_id          = frame->stream_id;
     stream->local_window_size  = http2_ctx->local_settings.initial_window_size;
     stream->remote_window_size = http2_ctx->remote_settings.initial_window_size;
 
-    uint8_t* data = payload;
-    size_t data_len = payload_len;
-    size_t offset = 0;
+    uint8_t* data         = payload;
+    size_t data_len       = payload_len;
+    size_t offset         = 0;
     size_t consumed_bytes = 0;
 
     PRINTLOG(HTTP, LOG_DEBUG, "Starting HPACK decoding for stream %u req 0x%p with payload length %llu",
@@ -673,7 +674,7 @@ static int8_t http2_parse_headers(http_session_t* http_session,
                 return -1;
             }
             http2_ctx->local_settings.header_table_size = new_size;
-            offset += consumed;
+            offset                                     += consumed;
         } else {
             PRINTLOG(HTTP, LOG_ERROR, "Unknown HPACK header representation in HEADERS frame. First byte: 0x%02x", first_byte);
             http2_send_reset_stream(http_session, frame->stream_id, HTTP2_ERROR_COMPRESSION_ERROR);
@@ -713,7 +714,7 @@ static int8_t http2_parse_headers(http_session_t* http_session,
         stream->request = NULL;
         http_free_response(stream->response);
         stream->response = NULL;
-        stream->active = false;
+        stream->active   = false;
     } else {
         PRINTLOG(HTTP, LOG_DEBUG, "Received complete headers for stream %u, waiting for DATA frames", frame->stream_id);
     }
@@ -768,7 +769,7 @@ static int8_t http2_parse_data_frame(http_session_t* http_session,
 
     // Update flow control windows
     http2_ctx->streams[0].local_window_size -= frame->length;
-    stream->local_window_size -= frame->length;
+    stream->local_window_size               -= frame->length;
 
     if(stream->local_window_size < (http2_ctx->local_settings.initial_window_size / 2)) {
         uint32_t increment = http2_ctx->local_settings.initial_window_size - stream->local_window_size;
@@ -804,7 +805,7 @@ static int8_t http2_parse_data_frame(http_session_t* http_session,
         stream->request = NULL;
         http_free_response(stream->response);
         stream->response = NULL;
-        stream->active = false;
+        stream->active   = false;
     }
     return 0;
 }
@@ -983,12 +984,12 @@ int8_t http2_handle_connection(http_session_t* http_session) {
         return -1;
     }
 
-    http2_ctx.local_settings.header_table_size = 4096;
-    http2_ctx.local_settings.enable_push = 0;
+    http2_ctx.local_settings.header_table_size      = 4096;
+    http2_ctx.local_settings.enable_push            = 0;
     http2_ctx.local_settings.max_concurrent_streams = 100;
-    http2_ctx.local_settings.initial_window_size = 65535;
-    http2_ctx.local_settings.max_frame_size = 16384;
-    http2_ctx.local_settings.max_header_list_size = 65536;
+    http2_ctx.local_settings.initial_window_size    = 65535;
+    http2_ctx.local_settings.max_frame_size         = 16384;
+    http2_ctx.local_settings.max_header_list_size   = 65536;
 
     if(http2_send_settings(http_session, &http2_ctx) != 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to send SETTINGS frame");
@@ -1009,7 +1010,7 @@ int8_t http2_handle_connection(http_session_t* http_session) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to create HTTP/2 headers table");
         return -1;
     }
-    http2_ctx.headers_table_size = 0;
+    http2_ctx.headers_table_size   = 0;
     http2_ctx.remote_headers_table = list_create_list();
     if(!http2_ctx.remote_headers_table) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to create HTTP/2 remote headers table");
@@ -1037,10 +1038,10 @@ int8_t http2_handle_connection(http_session_t* http_session) {
             break;
         }
 
-        uint32_t length = (header[0] << 16) | (header[1] << 8) | header[2];
+        uint32_t length         = (header[0] << 16) | (header[1] << 8) | header[2];
         http2_frame_type_t type = (http2_frame_type_t)header[3];
-        uint8_t flags = header[4];
-        uint32_t stream_id = ((header[5] & 0x7F) << 24) | (header[6] << 16) | (header[7] << 8) | header[8];
+        uint8_t flags           = header[4];
+        uint32_t stream_id      = ((header[5] & 0x7F) << 24) | (header[6] << 16) | (header[7] << 8) | header[8];
 
         if(stream_id > 0 && stream_id % 2 == 0) {
             PRINTLOG(HTTP, LOG_ERROR, "Received frame with invalid stream ID %u (must be odd for client-initiated frames)", stream_id);
@@ -1050,9 +1051,9 @@ int8_t http2_handle_connection(http_session_t* http_session) {
         }
 
         http2_frame_t frame = {
-            .length = length,
-            .type  = type,
-            .flags = flags,
+            .length    = length,
+            .type      = type,
+            .flags     = flags,
             .stream_id = stream_id,
         };
 

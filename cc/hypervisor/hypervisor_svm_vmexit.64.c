@@ -16,6 +16,7 @@
 #include <cpu/task.h>
 #include <apic.h>
 #include <cpu/crx.h>
+#include <stdbufs.h>
 #include <logging.h>
 #include <apic.h>
 #include <ports.h>

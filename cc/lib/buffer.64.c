@@ -15,7 +15,8 @@ MODULE("turnstone.lib.buffer");
 
 #define BUFFER_PRINTF_BUFFER_SIZE 2048
 
-uint8_t buffer_tmp_buffer_area_for_printf[BUFFER_PRINTF_BUFFER_SIZE];
+__attribute__((aligned(64)))
+static uint8_t buffer_tmp_buffer_area_for_printf[BUFFER_PRINTF_BUFFER_SIZE] = {0};
 
 typedef struct buffer_t {
     memory_heap_t* heap;
@@ -28,14 +29,16 @@ typedef struct buffer_t {
     uint8_t*       data;
 }buffer_t;
 
-buffer_t buffer_tmp_buffer_for_printf = {
-    .heap     = NULL,
-    .lock     = NULL,
-    .capacity = BUFFER_PRINTF_BUFFER_SIZE,
-    .length   = 0,
-    .position = 0,
-    .readonly = false,
-    .data     = buffer_tmp_buffer_area_for_printf
+__attribute__((aligned(64)))
+static buffer_t buffer_tmp_buffer_for_printf = {
+    .heap          = NULL,
+    .lock          = NULL,
+    .capacity      = BUFFER_PRINTF_BUFFER_SIZE,
+    .length        = 0,
+    .position      = 0,
+    .readonly      = false,
+    .mark_position = 0,
+    .data          = buffer_tmp_buffer_area_for_printf
 };
 
 buffer_t* buffer_get_tmp_buffer_for_printf(void) {
@@ -43,8 +46,9 @@ buffer_t* buffer_get_tmp_buffer_for_printf(void) {
 }
 
 void buffer_reset_tmp_buffer_for_printf(void) {
-    buffer_tmp_buffer_for_printf.length   = 0;
-    buffer_tmp_buffer_for_printf.position = 0;
+    buffer_tmp_buffer_for_printf.length        = 0;
+    buffer_tmp_buffer_for_printf.position      = 0;
+    buffer_tmp_buffer_for_printf.mark_position = 0;
     memory_memclean(buffer_tmp_buffer_for_printf.data, buffer_tmp_buffer_for_printf.capacity);
 }
 

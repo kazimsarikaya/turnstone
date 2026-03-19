@@ -17,19 +17,30 @@
 MODULE("turnstone.lib.stdbufs");
 
 
-buffer_t* stdbufs_default_input_buffer = NULL;
+buffer_t* stdbufs_default_input_buffer  = NULL;
 buffer_t* stdbufs_default_output_buffer = NULL;
-buffer_t* stdbufs_default_error_buffer = NULL;
+buffer_t* stdbufs_default_error_buffer  = NULL;
 
 static void stdbufs_video_null_printer(const char_t* text) {
     // do nothing
     UNUSED(text);
 }
 
-stdbufs_video_printer stdbufs_video_print = stdbufs_video_null_printer;
+stdbufs_video_printer_f stdbufs_video_print = stdbufs_video_null_printer;
 
-int8_t stdbufs_init_buffers(stdbufs_video_printer video_printer) {
-    stdbufs_video_print = video_printer;
+int8_t stdbufs_set_video_printer(stdbufs_video_printer_f video_printer) {
+    if(video_printer) {
+        stdbufs_video_print = video_printer;
+        return 0;
+    }
+
+    return -1;
+}
+
+int8_t stdbufs_init_buffers(stdbufs_video_printer_f video_printer) {
+    if(stdbufs_set_video_printer(video_printer) != 0) {
+        return -1;
+    }
 
     memory_heap_t* heap = NULL;
 
@@ -74,9 +85,9 @@ int8_t stdbufs_init_buffers(stdbufs_video_printer video_printer) {
 #include <windowmanager.h>
 
 typedef buffer_t * (*stdbuf_task_buffer_getter_f)(void);
-stdbuf_task_buffer_getter_f stdbufs_task_get_input_buffer = NULL;
+stdbuf_task_buffer_getter_f stdbufs_task_get_input_buffer  = NULL;
 stdbuf_task_buffer_getter_f stdbufs_task_get_output_buffer = NULL;
-stdbuf_task_buffer_getter_f stdbufs_task_get_error_buffer = NULL;
+stdbuf_task_buffer_getter_f stdbufs_task_get_error_buffer  = NULL;
 
 
 static buffer_t* stdbufs_get_task_get_input_buffer(void) {
@@ -170,7 +181,7 @@ int64_t stdbufs_flush_buffer(buffer_t* buffer) {
         return 0;
     }
 
-    char_t* buffer_data = (char_t*)buffer_get_view_at_position(buffer, old_position, new_position - old_position);
+    char_t* buffer_data = (char_t*)buffer_get_view_at_position(buffer, old_position, length);
 
     if (buffer_data == NULL) {
         return -1;

@@ -13,6 +13,7 @@
 #include <memory/frame.h>
 #include <memory/paging.h>
 #include <systeminfo.h>
+#include <stdbufs.h>
 #include <logging.h>
 #include <strings.h>
 #include <efi.h>

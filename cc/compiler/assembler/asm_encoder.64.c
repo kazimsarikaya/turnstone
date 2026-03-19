@@ -8,6 +8,7 @@
 #include <compiler/asm_instructions.h>
 #include <strings.h>
 #include <int_limits.h>
+#include <stdbufs.h>
 #include <logging.h>
 
 MODULE("turnstone.compiler.assembler");

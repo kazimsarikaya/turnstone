@@ -8,6 +8,7 @@
 
 
 #include <assert.h>
+#include <stdbufs.h>
 #include <logging.h>
 #include <cpu.h>
 

@@ -16,6 +16,7 @@
 #include <cpu.h>
 #include <cpu/task.h>
 #include <memory.h>
+#include <stdbufs.h>
 #include <logging.h>
 #include <time.h>
 

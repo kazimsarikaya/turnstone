@@ -25,7 +25,21 @@ extern "C" {
  *
  * @param string The null-terminated string to be printed.
  */
-typedef void (*stdbufs_video_printer)(const char_t* string);
+typedef void (*stdbufs_video_printer_f)(const char_t* string);
+
+/**
+ * @brief Sets the video printer function for standard I/O buffers.
+ *
+ * This function allows the caller to specify a custom video printer function
+ * that will be used to output data from the standard output buffer. The provided
+ * function should match the `stdbufs_video_printer` signature.
+ *
+ * @param video_printer A function pointer to the video printing routine.
+ *                      This function will be called by `stdbufs_flush_buffer`
+ *                      to display buffered output.
+ * @return 0 on success, or a non-zero error code on failure.
+ */
+int8_t stdbufs_set_video_printer(stdbufs_video_printer_f video_printer);
 
 /**
  * @brief Initializes the standard input/output buffers.
@@ -39,7 +53,7 @@ typedef void (*stdbufs_video_printer)(const char_t* string);
  *                      to display buffered output.
  * @return 0 on successful initialization, or a non-zero error code on failure.
  */
-int8_t stdbufs_init_buffers(stdbufs_video_printer video_printer);
+int8_t stdbufs_init_buffers(stdbufs_video_printer_f video_printer);
 
 /**
  * @brief Prints formatted output to the standard output buffer.

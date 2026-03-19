@@ -18,6 +18,7 @@
 #include <cpu/crx.h>
 #include <cpu/interrupt.h>
 #include <cpu/task.h>
+#include <stdbufs.h>
 #include <logging.h>
 #include <list.h>
 #include <apic.h>

@@ -5,6 +5,7 @@
 
 #include <compiler/asm_parser.h>
 #include <strings.h>
+#include <stdbufs.h>
 #include <logging.h>
 
 MODULE("turnstone.compiler.assembler");

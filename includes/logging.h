@@ -13,7 +13,6 @@
 
 #include <types.h>
 #include <buffer.h>
-#include <stdbufs.h>
 
 #ifdef __cplusplus
 extern "C" {
