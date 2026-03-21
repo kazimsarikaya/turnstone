@@ -50,6 +50,7 @@ void linker_build_modules_at_memory(void) {
     uint64_t metadata_end = program_header->metadata_virtual_address + program_header->metadata_size;
 
     while (module_or_section->module.id != 0 && (uint64_t)module_or_section < metadata_end) {
+        PRINTLOG(LINKER, LOG_TRACE, "Adding module 0x%llx to linker modules at memory", module_or_section->module.id);
         hashmap_put(linker_modules_at_memory, (void*)module_or_section->module.id, module_or_section);
         module_or_section++;
 

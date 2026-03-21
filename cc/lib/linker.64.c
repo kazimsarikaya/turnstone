@@ -2211,18 +2211,28 @@ error_destroy_buffer:
     return NULL;
 }
 
+_Static_assert(offsetof_field(system_info_t, program_header_physical_start) == 0x50,
+               "program_header_physical_start offset should be 0x48");
+_Static_assert(offsetof_field(program_header_t, program_stack_size) == 0x40,
+               "program_stack_size offset should be 0x40");
+_Static_assert(offsetof_field(program_header_t, program_stack_virtual_address) == 0x48,
+               "program_stack_virtual_address offset should be 0x48");
+_Static_assert(offsetof_field(program_header_t, page_table_context_address) == 0xf0,
+               "page_table_context_address offset should be 0xf0");
+_Static_assert(offsetof_field(program_header_t, program_entry) == 0x38,
+               "program_entry offset should be 0x38");
 
 static const uint8_t linker_program_header_trampoline_code[] = {
-    0x48, 0x8b, 0x57, 0x48, // mov 0x48(%rdi),%rdx
-    0x48, 0x8b, 0x42, 0x40, // mov 0x40(%rdx),%rax
-    0x48, 0x03, 0x42, 0x48, // add 0x48(%rdx),%rax
+    0x48, 0x8b, 0x57, 0x50, // mov 0x50(%rdi),%rdx (system_info.program_header_physical_start)
+    0x48, 0x8b, 0x42, 0x40, // mov 0x40(%rdx),%rax (program_header.program_stack_size)
+    0x48, 0x03, 0x42, 0x48, // add 0x48(%rdx),%rax (program_header.program_stack_virtual_address + program_header.program_stack_size)
     0x48, 0x83, 0xe8, 0x10, // sub $0x10,%rax
     0x48, 0x89, 0xc4, // mov %rax,%rsp
     0x48, 0x31, 0xed, // xor %rbp,%rbp
-    0x48, 0x8b, 0x82, 0xf0, 0x00, 0x00, 0x00, // mov 0xf0(%rdx),%rax
+    0x48, 0x8b, 0x82, 0xf0, 0x00, 0x00, 0x00, // mov 0xf0(%rdx),%rax (program_header.page_table_context_address)
     0x48, 0x8b, 0x00, // mov (%rax),%rax
     0x0f, 0x22, 0xd8, // mov %rax,%cr3
-    0x48, 0x8b, 0x42, 0x38, // mov 0x38(%rdx),%rax
+    0x48, 0x8b, 0x42, 0x38, // mov 0x38(%rdx),%rax (program_header.program_entry)
     0xff, 0xd0, // call *%rax
 };
 

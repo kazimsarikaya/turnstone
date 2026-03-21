@@ -39,7 +39,8 @@ typedef struct system_info_t {
     uint64_t              boot_type; ///< boot type @sa system_info_boot_type_t
     video_frame_buffer_t* frame_buffer; ///< video frame buffer address, delivered from uefi
     uint64_t              acpi_version; ///< acpi table version
-    void*                 acpi_table; ///< acpi table address
+    void*                 acpi_rsdp; ///< acpi rsdp address
+    void*                 acpi_xrsdp; ///< acpi xrsdp address
     uint64_t              program_header_virtual_start; ///< program virtual start address
     uint64_t              program_header_physical_start; ///< program physical start address
     efi_system_table_t*   efi_system_table; ///< accessing efi tables from kernel
@@ -52,7 +53,9 @@ typedef struct system_info_t {
     uint64_t              spool_physical_start; ///< spool physical start
     uint64_t              spool_virtual_start; ///< spool virtual start
     uint64_t              interrupt_handlers_module_id; ///< the module id of interrupt handlers, used for task switching for userspace processes
-} system_info_t; ///< struct short hand for system_info_s
+} system_info_t; ///< struct short hand for system_info_t
+
+_Static_assert(sizeof(system_info_t) == 168, "system_info_t size should be 168 bytes");
 
 /*! static location of system information */
 extern system_info_t* SYSTEM_INFO;
