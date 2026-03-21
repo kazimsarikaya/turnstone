@@ -6,8 +6,9 @@
  * Please read and understand latest version of Licence.
  */
 
- #include <acpi/aml_internal.h>
- #include <logging.h>
+#define ___ACPI_AML_IMPLEMENTATION 0
+#include <acpi/aml_internal.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.hw.acpi");
 
@@ -15,50 +16,50 @@ MODULE("turnstone.kernel.hw.acpi");
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed, acpi_aml_object_t* preop){
-    uint64_t r_consumed = 0;
-    uint8_t idx = 0;
-    int8_t res = -1;
-    acpi_aml_opcode_t* opcode = NULL;
-    acpi_aml_object_t* return_obj = NULL;
+    uint64_t r_consumed                      = 0;
+    uint8_t idx                              = 0;
+    int8_t res                               = -1;
+    acpi_aml_opcode_t* opcode                = NULL;
+    acpi_aml_object_t* return_obj            = NULL;
     acpi_aml_object_t* delete_for_return_obj = NULL;
-    acpi_aml_object_t* ops_for_delete[8] = {0};
+    acpi_aml_object_t* ops_for_delete[8]     = {0};
 
 
     if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_REVISION)) {
         return_obj = acpi_aml_symbol_lookup_at_table(ctx, ctx->symbols, "\\", "_REV");
-        res = 0;
+        res        = 0;
 
     } else if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_DEBUG)) {
         return_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
         if(return_obj != NULL) {
             return_obj->type = ACPI_AML_OT_DEBUG;
-            res = 0;
+            res              = 0;
         }
 
     } else if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_TIMER)) {
         return_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
         if(return_obj != NULL) {
-            return_obj->type = ACPI_AML_OT_TIMER;
+            return_obj->type        = ACPI_AML_OT_TIMER;
             return_obj->timer_value = ctx->timer;
-            res = 0;
+            res                     = 0;
         }
 
     } else if(oc >= ACPI_AML_LOCAL0 && oc <= ACPI_AML_ARG6) {
         return_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
         if(return_obj != NULL) {
-            return_obj->type = ACPI_AML_OT_LOCAL_OR_ARG;
+            return_obj->type                          = ACPI_AML_OT_LOCAL_OR_ARG;
             return_obj->local_or_arg.idx_local_or_arg = oc - 0x60;
-            res = 0;
+            res                                       = 0;
         }
 
     } else if(oc == ACPI_AML_CONTINUE) {
-        ctx->flags.while_cont = 1;
+        ctx->flags.while_cont = true;
 
     } else if(oc == ACPI_AML_BREAK) {
-        ctx->flags.while_break = 1;
+        ctx->flags.while_break = true;
 
     } else if(oc == ACPI_AML_NOOP || oc == ACPI_AML_BREAKPOINT) {
         res = 0;
@@ -75,8 +76,9 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 
         if(preop != NULL) {
             opcode->operand_count = 1 + opcnt;
-            opcode->operands[0] = preop;
-            ops_for_delete[idx] = preop;
+            opcode->operands[0]   = preop;
+            ops_for_delete[idx]   = preop;
+            ops_for_delete[0]->ref_count++;
             idx = 1;
         } else {
             opcode->operand_count = opcnt;
@@ -85,13 +87,13 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
         PRINTLOG(ACPIAML, LOG_TRACE, "scope %s opcode 0x%04x", ctx->scope_prefix, opcode->opcode);
 
         if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_CONDREF)) {
-            ctx->flags.dismiss_execute_method = 1;
+            ctx->flags.dismiss_execute_method = true;
         }
 
         for(; idx < opcode->operand_count; idx++) {
             PRINTLOG(ACPIAML, LOG_TRACE, "scope %s try to parse param %i", ctx->scope_prefix, idx);
 
-            uint64_t t_consumed = 0;
+            uint64_t t_consumed   = 0;
             acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
             if(op == NULL) {
@@ -101,7 +103,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
             }
 
             if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
-                PRINTLOG(ACPIAML, LOG_ERROR, "Cannot parse the op %i for opcode", idx);
+                PRINTLOG(ACPIAML, LOG_ERROR, "Cannot parse the op at idx %i for opcode 0x%04x", idx, opcode->opcode);
                 res = -1;
                 goto cleanup;
             }
@@ -122,10 +124,13 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 
             if(oc == ACPI_AML_METHODCALL) {
                 ops_for_delete[idx] = op;
-                op = acpi_aml_get_if_arg_local_obj(ctx, op, 0, 0);
+                op->ref_count++;
+                op = acpi_aml_get_if_arg_local_obj(ctx, op, false, false);
             } else {
                 ops_for_delete[idx] = op;
             }
+
+            ops_for_delete[idx]->ref_count++;
 
             op = acpi_aml_get_real_object(ctx, op);
 
@@ -137,28 +142,31 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
                 PRINTLOG(ACPIAML, LOG_TRACE, "scope %s param %i name %s type %i %i 0x%p", ctx->scope_prefix, idx, op->name, op->type, op->type == ACPI_AML_OT_LOCAL_OR_ARG?op->local_or_arg.idx_local_or_arg:-1, op);
             }
 
+            op->ref_count++;
+
             opcode->operands[idx] = op;
-            r_consumed += t_consumed;
+            r_consumed           += t_consumed;
         }
 
 
         if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_CONDREF)) {
-            ctx->flags.dismiss_execute_method = 0;
+            ctx->flags.dismiss_execute_method = false;
         }
 
         if(acpi_aml_executor_opcode(ctx, opcode) != 0) {
-            PRINTLOG(ACPIAML, LOG_ERROR, "Cannot execute opcode");
+            PRINTLOG(ACPIAML, LOG_ERROR, "Cannot execute opcode 0x%04x", opcode->opcode);
             res = -1;
             goto cleanup;
         }
 
-        return_obj = opcode->return_obj;
+        return_obj            = opcode->return_obj;
         delete_for_return_obj = return_obj;
-        return_obj = acpi_aml_get_if_arg_local_obj(ctx, return_obj, 0, 0);
+        return_obj            = acpi_aml_get_if_arg_local_obj(ctx, return_obj, false, false);
 
         if(delete_for_return_obj == return_obj) {
             delete_for_return_obj = NULL;
-        } else if(delete_for_return_obj->type == ACPI_AML_OT_LOCAL_OR_ARG) {
+        } else if(delete_for_return_obj->type == ACPI_AML_OT_LOCAL_OR_ARG && !ctx->flags.inside_method) {
+            PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free return obj type %i 0x%p", ctx->scope_prefix, delete_for_return_obj->type, delete_for_return_obj);
             acpi_aml_destroy_object(ctx, delete_for_return_obj);
             delete_for_return_obj = NULL;
         }
@@ -166,7 +174,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
         if(return_obj) {
             PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return name %s type %i 0x%p", ctx->scope_prefix, return_obj->name, return_obj->type, return_obj);
         } else {
-            PRINTLOG(ACPIAML, LOG_TRACE, "scope %s nulll return", ctx->scope_prefix);
+            PRINTLOG(ACPIAML, LOG_TRACE, "scope %s null return", ctx->scope_prefix);
         }
 
         res = 0;
@@ -174,41 +182,41 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 
     if(res == 0 && data != NULL) {
         acpi_aml_object_t* resobj = (acpi_aml_object_t*)*data;
-        resobj->type =  ACPI_AML_OT_OPCODE_EXEC_RETURN;
+        resobj->type               = ACPI_AML_OT_OPCODE_EXEC_RETURN;
         resobj->opcode_exec_return = return_obj;
-    }  else {
+    }  else{
         if(return_obj && return_obj->name == NULL) {
-            // FIXME: when tgt and return_obj same never destroy obj
-            boolean_t found = 0;
+            boolean_t found = false;
 
             if(return_obj->type != ACPI_AML_OT_DEBUG) {
 
-                if(found == 0) {
+                if(!found) {
                     for(int16_t i = idx; i >= 0; i--) {
                         if(return_obj == opcode->operands[i] || return_obj == ops_for_delete[1]) {
                             PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return obj is one of target", ctx->scope_prefix);
-                            found = 1;
+                            found = true;
                             break;
                         }
                     }
                 }
 
 
-                if(found == 0) {
+                if(!found) {
                     acpi_aml_method_context_t* mthctx = (acpi_aml_method_context_t*)ctx->method_context;
 
                     for(int16_t i = 0; i < 16; i++) {
                         if(return_obj == mthctx->mthobjs[i]) {
                             PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return obj is one of mthctx obj %i", ctx->scope_prefix, i);
-                            found = 1;
+                            found = true;
                             break;
                         }
                     }
                 }
             }
 
-            if(found == 0) {
-                PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free return obj type %i 0x%p ", ctx->scope_prefix, return_obj->type, return_obj);
+            if(!found) {
+                PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free return obj type %i 0x%p refcnt %i",
+                         ctx->scope_prefix, return_obj->type, return_obj, return_obj->ref_count);
                 acpi_aml_destroy_object(ctx, return_obj);
             }
         }
@@ -229,17 +237,21 @@ cleanup:
 
     for(uint8_t i = 0; i < idx; i++) {
         if(ops_for_delete[i] != NULL && ops_for_delete[i]->name == NULL) {
+            ops_for_delete[i]->ref_count--;
+
             if(ops_for_delete[i]->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
                 acpi_aml_object_t* tmp = ops_for_delete[i]->opcode_exec_return;
 
                 if(tmp && tmp->name == NULL && return_obj != tmp) {
-                    PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free return object at %i 0x%p", ctx->scope_prefix, i, ops_for_delete[i]);
+                    PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free op %i type %i 0x%p refcnt %i",
+                             ctx->scope_prefix, i, ops_for_delete[i]->type, ops_for_delete[i], ops_for_delete[i]->ref_count);
                     acpi_aml_destroy_object(ctx, tmp);
                 }
             }
 
             if(return_obj != ops_for_delete[i]) {
-                PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free op %i 0x%p", ctx->scope_prefix, i, ops_for_delete[i]);
+                PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free op %i type %i 0x%p refcnt %i",
+                         ctx->scope_prefix, i, ops_for_delete[i]->type, ops_for_delete[i], ops_for_delete[i]->ref_count);
                 acpi_aml_destroy_object(ctx, ops_for_delete[i]);
             }
 
@@ -254,7 +266,7 @@ cleanup:
 #define OPCODEPARSER(num) \
         int8_t acpi_aml_parse_opcnt_ ## num(acpi_aml_parser_context_t * ctx, void** data, uint64_t * consumed){ \
             uint64_t t_consumed = 1; \
-            uint8_t oc = *ctx->data; \
+            uint8_t oc          = *ctx->data; \
             ctx->data++; \
             ctx->remaining--; \
      \
@@ -278,8 +290,8 @@ OPCODEPARSER(4);
 #define EXTOPCODEPARSER(num) \
         int8_t acpi_aml_parse_extopcnt_ ## num(acpi_aml_parser_context_t * ctx, void** data, uint64_t * consumed){ \
             uint64_t t_consumed = 1; \
-            uint16_t oc = 0x5b00; \
-            uint8_t t_oc = *ctx->data; \
+            uint16_t oc         = 0x5b00; \
+            uint8_t t_oc        = *ctx->data; \
             oc |= t_oc; \
             ctx->data++; \
             ctx->remaining--; \
@@ -303,7 +315,7 @@ EXTOPCODEPARSER(6);
 int8_t acpi_aml_parse_logic_ext(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
     UNUSED(data);
     uint64_t t_consumed = 0;
-    uint16_t oc = 0;
+    uint16_t oc         = 0;
 
     uint8_t oc_t = *ctx->data;
     ctx->data++;
@@ -315,7 +327,7 @@ int8_t acpi_aml_parse_logic_ext(acpi_aml_parser_context_t* ctx, void** data, uin
         ctx->data++;
         ctx->remaining--;
         t_consumed = 2;
-        oc |= ((uint16_t)oc_t) << 8;
+        oc        |= ((uint16_t)oc_t) << 8;
         if(acpi_aml_parse_op_code_with_cnt(oc, 2, ctx, data, &t_consumed, NULL) != 0) {
             return -1;
         }
@@ -343,7 +355,7 @@ int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_
     ctx->remaining--;
 
     r_consumed += ctx->remaining;
-    plen = acpi_aml_parse_package_length(ctx);
+    plen        = acpi_aml_parse_package_length(ctx);
     r_consumed -= ctx->remaining;
     r_consumed += plen;
 
@@ -383,21 +395,21 @@ int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_
 
     if(res != 0) {
 
-        uint64_t old_length = ctx->length;
+        uint64_t old_length    = ctx->length;
         uint64_t old_remaining = ctx->remaining;
 
-        ctx->length = plen;
+        ctx->length    = plen;
         ctx->remaining = plen;
 
         if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
             return -1;
         }
 
-        ctx->length = old_length;
+        ctx->length    = old_length;
         ctx->remaining = old_remaining - plen;
 
     } else { // discard if part
-        ctx->data += plen;
+        ctx->data      += plen;
         ctx->remaining -= plen;
     }
 
@@ -409,12 +421,12 @@ int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_
             r_consumed++;
 
             r_consumed += ctx->remaining;
-            plen = acpi_aml_parse_package_length(ctx);
+            plen        = acpi_aml_parse_package_length(ctx);
             r_consumed -= ctx->remaining;
             r_consumed += plen;
 
             // discard else part
-            ctx->data += plen;
+            ctx->data      += plen;
             ctx->remaining -= plen;
         } else { // parse else part
             t_consumed = 0;
@@ -441,23 +453,23 @@ int8_t acpi_aml_parse_op_else(acpi_aml_parser_context_t* ctx, void** data, uint6
     ctx->remaining--;
 
     r_consumed += ctx->remaining;
-    plen = acpi_aml_parse_package_length(ctx);
+    plen        = acpi_aml_parse_package_length(ctx);
     r_consumed -= ctx->remaining;
     r_consumed += plen;
 
 
 
-    uint64_t old_length = ctx->length;
+    uint64_t old_length    = ctx->length;
     uint64_t old_remaining = ctx->remaining;
 
-    ctx->length = plen;
+    ctx->length    = plen;
     ctx->remaining = plen;
 
     if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
         return -1;
     }
 
-    ctx->length = old_length;
+    ctx->length    = old_length;
     ctx->remaining = old_remaining - plen;
 
 
@@ -481,9 +493,9 @@ int8_t acpi_aml_parse_fatal(acpi_aml_parser_context_t* ctx, void** data, uint64_
     ctx->remaining--;
 
     // get fatal code 4 byte
-    ctx->fatal_error.type = *((uint32_t*)(ctx->data));
-    ctx->data += 4;
-    ctx->remaining -= 4;
+    ctx->fatal_error.type = *((uint32_t*)(void*)(ctx->data));
+    ctx->data            += 4;
+    ctx->remaining       -= 4;
 
     acpi_aml_object_t* arg = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
@@ -504,7 +516,7 @@ int8_t acpi_aml_parse_fatal(acpi_aml_parser_context_t* ctx, void** data, uint64_
 
     ctx->fatal_error.arg = fatal_ival;
 
-    ctx->flags.fatal = 1;
+    ctx->flags.fatal = true;
 
     return -1; // fatal always -1 because it is fatal :)
 }
@@ -512,7 +524,7 @@ int8_t acpi_aml_parse_fatal(acpi_aml_parser_context_t* ctx, void** data, uint64_
 int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
     uint64_t r_consumed = 1;
     uint64_t t_consumed = 0;
-    int8_t res = -1;
+    int8_t res          = -1;
 
 
     acpi_aml_opcode_t* opcode = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_opcode_t), 0x0);
@@ -521,7 +533,7 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
         return -1;
     }
 
-    opcode->opcode = *ctx->data;
+    opcode->opcode        = *ctx->data;
     opcode->operand_count = 6;
 
     ctx->data++;
@@ -543,7 +555,7 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
             }
             goto cleanup;
         }
-        r_consumed += t_consumed;
+        r_consumed             += t_consumed;
         opcode->operands[idx++] = op;
 
         acpi_aml_object_t* moc = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
@@ -557,7 +569,7 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
             memory_free_ext(ctx->heap, moc);
             goto cleanup;
         }
-        r_consumed += t_consumed;
+        r_consumed             += t_consumed;
         opcode->operands[idx++] = moc;
     }
 
@@ -575,7 +587,7 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
             }
             goto cleanup;
         }
-        r_consumed += t_consumed;
+        r_consumed             += t_consumed;
         opcode->operands[idx++] = op;
     }
 
@@ -586,7 +598,7 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
 
     if(data != NULL) {
         acpi_aml_object_t* resobj = (acpi_aml_object_t*)*data;
-        resobj->type = ACPI_AML_OT_OPCODE_EXEC_RETURN;
+        resobj->type               = ACPI_AML_OT_OPCODE_EXEC_RETURN;
         resobj->opcode_exec_return = opcode->return_obj;
     }
 
@@ -618,23 +630,23 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
     ctx->remaining--;
 
     r_consumed += ctx->remaining;
-    plen = acpi_aml_parse_package_length(ctx);
+    plen        = acpi_aml_parse_package_length(ctx);
     r_consumed -= ctx->remaining;
     r_consumed += plen;
 
 
-    uint64_t old_length = ctx->length;
+    uint64_t old_length     = ctx->length;
     uint64_t next_remaining = ctx->remaining - plen;
 
-    uint8_t* old_data = ctx->data;
+    uint8_t* old_data  = ctx->data;
     uint8_t* next_data = old_data + plen;
 
     acpi_aml_object_t* predic = NULL;
 
     while(1) {
-        ctx->length = plen;
+        ctx->length    = plen;
         ctx->remaining = plen;
-        ctx->data = old_data;
+        ctx->data      = old_data;
 
         predic = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
@@ -673,12 +685,12 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
         int8_t res = acpi_aml_parse_all_items(ctx, NULL, NULL);
 
         if(res == -1) {
-            if(ctx->flags.while_break == 1) {
-                ctx->flags.while_break = 0;
+            if(ctx->flags.while_break) {
+                ctx->flags.while_break = false;
                 break; // while loop ended
             }
-            if(ctx->flags.while_cont == 1) {
-                ctx->flags.while_cont = 0;
+            if(ctx->flags.while_cont) {
+                ctx->flags.while_cont = false;
                 continue; // while loop restarted
             }
             return -1; // error at parsing
@@ -689,9 +701,9 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
         }
     }
 
-    ctx->length = old_length;
+    ctx->length    = old_length;
     ctx->remaining = next_remaining;
-    ctx->data = next_data;
+    ctx->data      = next_data;
 
 
     if(consumed != NULL) {
@@ -699,4 +711,156 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
     }
 
     return 0;
+}
+
+int8_t acpi_aml_parse_acquire(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+    PRINTLOG(ACPIAML, LOG_TRACE, "scope %s parse acquire", ctx->scope_prefix);
+    int8_t res = -1;
+
+    uint64_t t_consumed                      = 0;
+    uint64_t r_consumed                      = 1;
+    acpi_aml_object_t* mutex                 = NULL;
+    acpi_aml_object_t* timeout               = NULL;
+    acpi_aml_object_t* return_obj            = NULL;
+    acpi_aml_object_t* delete_for_return_obj = NULL;
+    acpi_aml_object_t* ops_for_delete[8]     = {0};
+
+    ctx->data++;
+    ctx->remaining--;
+
+    acpi_aml_opcode_t* opcode = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_opcode_t), 0x0);
+
+    if(!opcode) {
+        return -1;
+    }
+
+    opcode->opcode = (ACPI_AML_EXTOP_PREFIX << 8) | ACPI_AML_ACQUIRE;
+
+    mutex = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+    if(mutex == NULL) {
+        goto cleanup;
+    }
+
+    if(acpi_aml_parse_one_item(ctx, (void**)&mutex, &t_consumed) != 0) {
+        memory_free_ext(ctx->heap, mutex);
+        goto cleanup;
+    }
+
+    ops_for_delete[0]   = mutex;
+    opcode->operands[0] = mutex;
+    r_consumed         += t_consumed;
+
+    timeout = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+    if(!timeout) {
+        goto cleanup;
+    }
+
+    timeout->type           = ACPI_AML_OT_NUMBER;
+    timeout->number.value   = ctx->data[0] << 8 | ctx->data[1];
+    timeout->number.bytecnt = 2;
+
+    ctx->data      += 2;
+    ctx->remaining -= 2;
+    r_consumed     += 2;
+
+    ops_for_delete[1]   = timeout;
+    opcode->operands[1] = timeout;
+
+    if(acpi_aml_executor_opcode(ctx, opcode) != 0) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "Cannot execute opcode 0x%04x", opcode->opcode);
+        goto cleanup;
+    }
+
+    return_obj            = opcode->return_obj;
+    delete_for_return_obj = return_obj;
+    return_obj            = acpi_aml_get_if_arg_local_obj(ctx, return_obj, false, false);
+
+    if(delete_for_return_obj == return_obj) {
+        delete_for_return_obj = NULL;
+    } else if(delete_for_return_obj->type == ACPI_AML_OT_LOCAL_OR_ARG) {
+        acpi_aml_destroy_object(ctx, delete_for_return_obj);
+        delete_for_return_obj = NULL;
+    }
+
+    if(res == 0 && data != NULL) {
+        acpi_aml_object_t* resobj = (acpi_aml_object_t*)*data;
+        resobj->type               =  ACPI_AML_OT_OPCODE_EXEC_RETURN;
+        resobj->opcode_exec_return = return_obj;
+    }  else{
+        if(return_obj && return_obj->name == NULL) {
+            // FIXME: when tgt and return_obj same never destroy obj
+            boolean_t found = false;
+
+            if(return_obj->type != ACPI_AML_OT_DEBUG) {
+
+                if(!found) {
+                    for(int16_t i = 2; i >= 0; i--) {
+                        if(return_obj == opcode->operands[i] || return_obj == ops_for_delete[1]) {
+                            PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return obj is one of target", ctx->scope_prefix);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+
+
+                if(!found) {
+                    acpi_aml_method_context_t* mthctx = (acpi_aml_method_context_t*)ctx->method_context;
+
+                    for(int16_t i = 0; i < 16; i++) {
+                        if(return_obj == mthctx->mthobjs[i]) {
+                            PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return obj is one of mthctx obj %i", ctx->scope_prefix, i);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if(!found) {
+                PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free return obj type %i 0x%p ", ctx->scope_prefix, return_obj->type, return_obj);
+                acpi_aml_destroy_object(ctx, return_obj);
+            }
+        }
+    }
+
+    if(consumed != NULL) {
+        *consumed += r_consumed;
+    }
+
+    res = 0;
+
+cleanup:
+    if(opcode == NULL) {
+        return res;
+    }
+
+    if(res != 0) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "Cannot parse opcode");
+    }
+
+    for(uint8_t i = 0; i < 2; i++) {
+        if(ops_for_delete[i] != NULL && ops_for_delete[i]->name == NULL) {
+            if(ops_for_delete[i]->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+                acpi_aml_object_t* tmp = ops_for_delete[i]->opcode_exec_return;
+
+                if(tmp && tmp->name == NULL && return_obj != tmp) {
+                    PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free return object at %i 0x%p", ctx->scope_prefix, i, ops_for_delete[i]);
+                    acpi_aml_destroy_object(ctx, tmp);
+                }
+            }
+
+            if(return_obj != ops_for_delete[i]) {
+                PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free op %i 0x%p", ctx->scope_prefix, i, ops_for_delete[i]);
+                acpi_aml_destroy_object(ctx, ops_for_delete[i]);
+            }
+
+        }
+    }
+    memory_free_ext(ctx->heap, opcode);
+    PRINTLOG(ACPIAML, LOG_TRACE, "scope %s parsed acquire opcode", ctx->scope_prefix);
+
+    return res;
 }

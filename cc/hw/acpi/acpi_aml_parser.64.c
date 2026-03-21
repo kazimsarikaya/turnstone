@@ -6,6 +6,7 @@
  * Please read and understand latest version of Licence.
  */
 
+#define ___ACPI_AML_IMPLEMENTATION 0
 #include <acpi/aml_internal.h>
 #include <logging.h>
 #include <strings.h>
@@ -132,18 +133,20 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     NULL, // 0xE0
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xE8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, // 0xF0
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xE8*/ NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xF8*/ NULL, NULL, NULL, NULL, NULL, NULL,
     PARSER_F_NAME(const_data)
 };
 
 int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-    while(ctx->remaining > 0 && ctx->flags.method_return != 1 && ctx->flags.fatal != 1) {
+    while(ctx->remaining > 0 && !ctx->flags.method_return && !ctx->flags.fatal) {
         if(acpi_aml_parse_one_item(ctx, data, consumed) != 0) {
+            PRINTLOG(ACPIAML, LOG_ERROR, "failed to parse item in scope -%s-", ctx->scope_prefix);
             return -1;
         }
     }
 
-    if(ctx->flags.fatal == 1) {
+    if(ctx->flags.fatal) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "fatal error in scope -%s-", ctx->scope_prefix);
         return -1;
     }
 
@@ -153,7 +156,7 @@ int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t* ctx, void** data, uin
 int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
     if(ctx->remaining == 0) { // realy we need this?
         PRINTLOG(ACPIAML, LOG_ERROR, "premature end");
-        ctx->flags.fatal = 1;
+        ctx->flags.fatal = true;
         return -1;
     }
 
@@ -173,8 +176,8 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
         }
     }
 
-    if(res == -1 && ctx->flags.fatal == 1) {
-        PRINTLOG(ACPIAML, LOG_ERROR, "scope: -%s- one_item data: 0x%02x length: %lli remaining: %lli", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
+    if(res == -1 && ctx->flags.fatal) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "scope: -%s- data: 0x%02x length: %lli remaining: %lli", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
         return -1;
     }
 
@@ -227,7 +230,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 
     memory_free_ext(ctx->heap, name);
 
-    if(tmp_obj->type == ACPI_AML_OT_METHOD && ctx->flags.dismiss_execute_method == 0) { // TODO: external if it is method
+    if(tmp_obj->type == ACPI_AML_OT_METHOD && !ctx->flags.dismiss_execute_method) { // TODO: external if it is method
         t_consumed = 0;
 
         if(acpi_aml_parse_op_code_with_cnt(ACPI_AML_METHODCALL, tmp_obj->method.arg_count, ctx, data, &t_consumed, tmp_obj) != 0) {
@@ -265,7 +268,7 @@ const acpi_aml_parse_f acpi_aml_parse_ext_fs[] = {
     PARSER_F_NAME(extopcnt_2),
     PARSER_F_NAME(extopcnt_1),
     PARSER_F_NAME(extopcnt_1),
-    PARSER_F_NAME(extopcnt_2),
+    PARSER_F_NAME(acquire),
     PARSER_F_NAME(extopcnt_1),
     PARSER_F_NAME(extopcnt_2),
     PARSER_F_NAME(extopcnt_1),
@@ -326,18 +329,23 @@ uint8_t acpi_aml_parser_defaults[] =
     0x08, 0x5F, 0x52, 0x45, 0x56, 0x0A, 0x00 // _REV
 };
 
-int8_t acpi_aml_object_name_comparator(const void* data1, const void* data2) {
+static int8_t acpi_aml_object_name_comparator(const void* data1, const void* data2) {
     char_t* name1 = (char_t*)data1;
     char_t* name2 = (char_t*)data2;
 
     return strcmp(name1, name2);
 }
 
-int8_t acpi_aml_device_name_comparator(const void* data1, const void* data2) {
-    acpi_aml_device_t* obj1 = (acpi_aml_device_t*)data1;
-    acpi_aml_device_t* obj2 = (acpi_aml_device_t*)data2;
+index_t* acpi_aml_create_symbol_table(acpi_aml_parser_context_t* ctx, uint8_t level) {
+    UNUSED(level);
 
-    return strcmp(obj1->name, obj2->name);
+    index_t* table = bplustree_create_index_with_heap_and_unique(ctx->heap, 32, acpi_aml_object_name_comparator, true);
+
+    if(table == NULL) {
+        return NULL;
+    }
+
+    return table;
 }
 
 acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t* heap, uint8_t revision) {
@@ -354,7 +362,7 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
     ctx->length       = sizeof(acpi_aml_parser_defaults);
     ctx->remaining    = sizeof(acpi_aml_parser_defaults);
     ctx->scope_prefix = (char_t*)"\\";
-    ctx->symbols      = bplustree_create_index_with_heap_and_unique(heap, 32, acpi_aml_object_name_comparator, true);
+    ctx->symbols      = acpi_aml_create_symbol_table(ctx, 0);
     ctx->revision     = revision;
 
     if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {

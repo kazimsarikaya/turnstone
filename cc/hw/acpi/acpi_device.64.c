@@ -5,6 +5,8 @@
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
+
+#define ___ACPI_AML_IMPLEMENTATION 0
 #include <acpi/aml_internal.h>
 #include <acpi/aml_resource.h>
 #include <strings.h>
@@ -17,10 +19,14 @@
 
 MODULE("turnstone.kernel.hw.acpi");
 
-int8_t acpi_aml_intmap_addr_sorter(const void* data1, const void* data2);
-int8_t acpi_aml_intmap_eq(const void* data1, const void* data2);
+static int8_t acpi_aml_device_name_comparator(const void* data1, const void* data2) {
+    acpi_aml_device_t* obj1 = (acpi_aml_device_t*)data1;
+    acpi_aml_device_t* obj2 = (acpi_aml_device_t*)data2;
 
-int8_t acpi_aml_intmap_addr_sorter(const void* data1, const void* data2){
+    return strcmp(obj1->name, obj2->name);
+}
+
+static int8_t acpi_aml_intmap_addr_sorter(const void* data1, const void* data2){
     acpi_aml_interrupt_map_item_t* item1 = (acpi_aml_interrupt_map_item_t*)data1;
     acpi_aml_interrupt_map_item_t* item2 = (acpi_aml_interrupt_map_item_t*)data2;
 
@@ -35,7 +41,7 @@ int8_t acpi_aml_intmap_addr_sorter(const void* data1, const void* data2){
     return 0;
 }
 
-int8_t acpi_aml_intmap_eq(const void* data1, const void* data2){
+static int8_t acpi_aml_intmap_eq(const void* data1, const void* data2){
     acpi_aml_interrupt_map_item_t* item1 = (acpi_aml_interrupt_map_item_t*)data1;
     acpi_aml_interrupt_map_item_t* item2 = (acpi_aml_interrupt_map_item_t*)data2;
 
@@ -286,8 +292,23 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
                                     err_cnt   += -1;
                                     int_no_val = 0;
                                 }
+                            } else if(int_dev_ref->type == ACPI_AML_OT_DEVICE) {
+                                PRINTLOG(ACPI, LOG_TRACE, "int device %s", int_dev_ref->name);
+
+                                const acpi_aml_device_t* int_dev = acpi_device_lookup_by_name(ctx, int_dev_ref->name);
+
+                                if(int_dev && int_dev->interrupts) {
+                                    const acpi_aml_device_interrupt_t* int_obj = list_get_data_at_position(int_dev->interrupts, 0);
+
+                                    int_no_val = int_obj->interrupt_no;
+                                } else {
+                                    PRINTLOG(ACPI, LOG_ERROR, "apic int dev not found");
+                                    err_cnt   += -1;
+                                    int_no_val = 0;
+                                }
+
                             } else {
-                                PRINTLOG(ACPI, LOG_ERROR, "malformed prt package");
+                                PRINTLOG(ACPI, LOG_ERROR, "malformed prt package type: %d", int_dev_ref->type);
                                 err_cnt   += -1;
                                 int_no_val = 0;
                             }
@@ -360,11 +381,13 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
             return -1;
         }
 
+        PRINTLOG(ACPI, LOG_TRACE, "checking symbol %s type %i", sym->name, sym->type);
+
         if(strends(sym->name, "_PIC") == 0) {
             ctx->pic = sym;
         }
 
-        if(sym->type == ACPI_AML_OT_OPREGION && sym->opregion.region_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
+        if(sym->type == ACPI_AML_OT_OPREGION && sym->opregion.region_space == ACPI_AML_OPREGT_SYSMEM) {
             // TODO: add reserved frames
 
             frame_t f    = {sym->opregion.region_offset, (sym->opregion.region_len + FRAME_SIZE - 1) / FRAME_SIZE, FRAME_TYPE_RESERVED, 0};
@@ -375,9 +398,11 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
                 PRINTLOG(ACPI, LOG_FATAL, "cannot allocate pages for system memory opregion");
                 return -1;
             }
+        }
 
-
-        } else if(sym->type == ACPI_AML_OT_DEVICE || strcmp(sym->name, "\\_SB_") == 0) {
+        if(sym->type == ACPI_AML_OT_DEVICE ||
+           sym->type == ACPI_AML_OT_PROCESSOR ||
+           strcmp(sym->name, "\\_SB_") == 0) {
             acpi_aml_device_t* new_device = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_t), 0);
 
             if(new_device == NULL) {
@@ -385,6 +410,7 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
             }
 
             new_device->name = sym->name;
+            new_device->self = sym;
             list_sortedlist_insert(ctx->devices, new_device);
 
             if(curr_device != NULL) {
@@ -408,9 +434,9 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
             curr_device = new_device;
             item_count++;
         } else {
-            if(curr_device != NULL) {
+            if(curr_device) {
                 int64_t len_diff     = strlen(sym->name) - strlen(curr_device->name);
-                boolean_t need_check = 0;
+                boolean_t need_check = false;
 
                 if(len_diff < 0) {
                     len_diff = ABS(len_diff) / 4;
@@ -419,8 +445,8 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
                         curr_device = curr_device->parent;
                     }
 
-                    if(curr_device != NULL) {
-                        need_check = 1;
+                    if(curr_device) {
+                        need_check = true;
                     }
 
                 } else if(len_diff == 4) {
@@ -428,52 +454,63 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
                 } else if(len_diff == 0) {
                     curr_device = curr_device->parent;
 
-                    if(curr_device != NULL && strlen(sym->name) - strlen(curr_device->name) == 4) {
-                        need_check = 1;
+                    if(curr_device && strlen(sym->name) - strlen(curr_device->name) == 4) {
+                        need_check = true;
                     }
                 }
 
                 if(need_check && strstarts(sym->name, curr_device->name) == 0) {
                     if(strends(sym->name, "_ADR") == 0) {
                         curr_device->adr = sym;
-                    }
-
-                    if(strends(sym->name, "_CRS") == 0) {
+                    } else if(strends(sym->name, "_CRS") == 0) {
                         curr_device->crs = sym;
-                    }
-
-                    if(strends(sym->name, "_DIS") == 0) {
+                    } else if(strends(sym->name, "_DIS") == 0) {
                         curr_device->dis = sym;
-                    }
-
-                    if(strends(sym->name, "_HID") == 0) {
+                    } else if(strends(sym->name, "_HID") == 0) {
                         curr_device->hid = sym;
-                    }
-
-                    if(strends(sym->name, "_INI") == 0) {
+                    } else if(strends(sym->name, "_INI") == 0) {
                         curr_device->ini = sym;
-                    }
-
-                    if(strends(sym->name, "_PRS") == 0) {
+                    } else if(strends(sym->name, "_PRS") == 0) {
                         curr_device->prs = sym;
-                    }
-
-                    if(strends(sym->name, "_PRT") == 0) {
+                    } else if(strends(sym->name, "_PRT") == 0) {
                         curr_device->prt = sym;
-                    }
-
-                    if(strends(sym->name, "_SRS") == 0) {
+                    } else if(strends(sym->name, "_SRS") == 0) {
                         curr_device->srs = sym;
-                    }
-
-                    if(strends(sym->name, "_STA") == 0) {
+                    } else if(strends(sym->name, "_STA") == 0) {
                         curr_device->sta = sym;
-                    }
-
-                    if(strends(sym->name, "_UID") == 0) {
+                    } else if(strends(sym->name, "_UID") == 0) {
                         curr_device->uid = sym;
+                    } else if(strends(sym->name, "_PXM") == 0) {
+                        curr_device->pxm = sym;
+                    } else if(strends(sym->name, "_BBN") == 0) {
+                        curr_device->bbn = sym;
+                    } else if(strends(sym->name, "_CID") == 0) {
+                        curr_device->cid = sym;
+                    } else if(strends(sym->name, "_OSC") == 0) {
+                        curr_device->osc = sym;
+                    } else {
+                        if(!curr_device->properties) {
+                            curr_device->properties = hashmap_string_with_heap(ctx->heap, 16);
+
+                            if(!curr_device->properties) {
+                                PRINTLOG(ACPI, LOG_ERROR, "cannot create properties hashmap for device %s", curr_device->name);
+                                iter->destroy(iter);
+                                return -1;
+                            }
+                        }
+
+                        PRINTLOG(ACPI, LOG_TRACE, "put property %s (%s) for device %s",
+                                 sym->name + strlen(curr_device->name),
+                                 sym->name,
+                                 curr_device->name);
+                        hashmap_put(curr_device->properties, sym->name + strlen(curr_device->name), sym);
                     }
+                } else {
+                    PRINTLOG(ACPI, LOG_WARNING, "symbol %s is not related to current device %s",
+                             sym->name, curr_device?curr_device->name:"(null)");
                 }
+            } else {
+                PRINTLOG(ACPI, LOG_WARNING, "symbol %s is not related to any device", sym->name);
             }
         }
 
@@ -481,6 +518,8 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
     }
 
     iter->destroy(iter);
+
+    PRINTLOG(ACPI, LOG_INFO, "device builded with %lli items", item_count);
 
     return 0;
 }
@@ -581,7 +620,7 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 
         PRINTLOG(ACPI, LOG_DEBUG, "device %s controlling for init and crs", d->name);
 
-        boolean_t need_ini = 1;
+        boolean_t need_ini = true;
         int64_t sta_value  = 0;
 
         if(d->sta) {
@@ -595,7 +634,7 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
             }
 
             if((sta_value & 1) != 1) {
-                need_ini = 0;
+                need_ini = false;
             }
         }
 
@@ -630,6 +669,22 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
                         acpi_aml_destroy_object(ctx, crs_res);
                         crs_res = tmp;
                     }
+
+                    if(crs_res->type != ACPI_AML_OT_BUFFER) {
+                        PRINTLOG(ACPI, LOG_ERROR, "device %s crs method return object is not buffer type", d->name);
+                        acpi_aml_destroy_object(ctx, crs_res);
+                        err_cnt += -1;
+                        continue;
+                    }
+
+                    printf("device %s crs method return buffer len %lli, enumarating...\n", d->name, crs_res->buffer.buflen);
+                    for(int64_t i = 0; i < crs_res->buffer.buflen; i++) {
+                        printf("%02x ", crs_res->buffer.buf[i]);
+                        if((i + 1) % 16 == 0) {
+                            printf("\n");
+                        }
+                    }
+                    printf("\n");
 
                     err_cnt += acpi_aml_resource_parse(ctx, (acpi_aml_device_t*)d, crs_res);
 
@@ -690,6 +745,10 @@ void acpi_device_print(acpi_aml_parser_context_t* ctx, const acpi_aml_device_t* 
 
     printf("\n");
 
+    if(d->self) {
+        acpi_aml_print_object(ctx, d->self);
+    }
+
     if(d->adr) {
         acpi_aml_print_object(ctx, d->adr);
     }
@@ -729,5 +788,45 @@ void acpi_device_print(acpi_aml_parser_context_t* ctx, const acpi_aml_device_t* 
     if(d->uid) {
         acpi_aml_print_object(ctx, d->uid);
     }
+
+    if(d->pxm) {
+        acpi_aml_print_object(ctx, d->pxm);
+    }
+
+    if(d->bbn) {
+        acpi_aml_print_object(ctx, d->bbn);
+    }
+
+    if(d->cid) {
+        acpi_aml_print_object(ctx, d->cid);
+    }
+
+    if(d->osc) {
+        acpi_aml_print_object(ctx, d->osc);
+    }
+
+    acpi_aml_resource_print(ctx, d);
+
+    if(!d->properties) {
+        printf("  no properties\n");
+        printf("\n\n");
+        return;
+    }
+
+    iterator_t* prop_iter = hashmap_iterator_create(d->properties);
+
+    while(!prop_iter->end_of_iterator(prop_iter)) {
+        const char_t* prop_name           = prop_iter->get_extra_data(prop_iter);
+        const acpi_aml_object_t* prop_val = prop_iter->get_item(prop_iter);
+
+        printf("  property %s: ", prop_name);
+        acpi_aml_print_object(ctx, prop_val);
+
+        prop_iter = prop_iter->next(prop_iter);
+    }
+
+    prop_iter->destroy(prop_iter);
+
+    printf("\n\n");
 
 }

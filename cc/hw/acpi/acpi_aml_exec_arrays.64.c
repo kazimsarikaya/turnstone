@@ -6,6 +6,7 @@
  * Please read and understand latest version of Licence.
  */
 
+#define ___ACPI_AML_IMPLEMENTATION 0
 #include <acpi/aml_internal.h>
 #include <logging.h>
 #include <strings.h>
@@ -13,15 +14,15 @@
 MODULE("turnstone.kernel.hw.acpi");
 
 int8_t acpi_aml_exec_op_sizeof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode) {
-    acpi_aml_object_t* obj = acpi_aml_get_if_arg_local_obj(ctx, opcode->operands[0], 0, 0);
+    acpi_aml_object_t* obj = acpi_aml_get_if_arg_local_obj(ctx, opcode->operands[0], false, false);
 
     if(obj == NULL) {
-        ctx->flags.fatal = 1;
+        ctx->flags.fatal = true;
         return -1;
     }
 
     int64_t len = 0;
-    int8_t res = -1;
+    int8_t res  = -1;
 
     switch (obj->type) {
     case ACPI_AML_OT_STRING:
@@ -46,8 +47,8 @@ int8_t acpi_aml_exec_op_sizeof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
             return -1;
         }
 
-        len_obj->type = ACPI_AML_OT_NUMBER;
-        len_obj->number.value = len;
+        len_obj->type           = ACPI_AML_OT_NUMBER;
+        len_obj->number.value   = len;
         len_obj->number.bytecnt = ctx->revision == 2 ? 8 : 4;
 
         opcode->return_obj = len_obj;
@@ -69,7 +70,7 @@ int8_t acpi_aml_exec_findsetbit(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
     }
 
     uint8_t loc = 0;
-    int8_t idx = 0;
+    int8_t idx  = 0;
 
     if(right) {
         while(item > 0) {
@@ -92,7 +93,7 @@ int8_t acpi_aml_exec_findsetbit(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
         }
     }
 
-    if(acpi_aml_is_null_target(dst) != 0) {
+    if(!acpi_aml_is_null_target(dst)) {
         if(acpi_aml_write_as_integer(ctx, loc, dst) != 0) {
             return -1;
         }
@@ -105,8 +106,8 @@ int8_t acpi_aml_exec_findsetbit(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
         return -1;
     }
 
-    res->type = ACPI_AML_OT_NUMBER;
-    res->number.value = loc;
+    res->type           = ACPI_AML_OT_NUMBER;
+    res->number.value   = loc;
     res->number.bytecnt = ctx->revision == 2 ? 8 : 4;
 
     opcode->return_obj = res;
@@ -119,10 +120,10 @@ int8_t acpi_aml_exec_findsetbit(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
     acpi_aml_object_t* src1 = opcode->operands[0];
     acpi_aml_object_t* src2 = opcode->operands[1];
-    acpi_aml_object_t* dst = opcode->operands[2];
+    acpi_aml_object_t* dst  = opcode->operands[2];
 
-    src1 = acpi_aml_get_if_arg_local_obj(ctx, src1, 0, 0);
-    src2 = acpi_aml_get_if_arg_local_obj(ctx, src2, 0, 0);
+    src1 = acpi_aml_get_if_arg_local_obj(ctx, src1, false, false);
+    src2 = acpi_aml_get_if_arg_local_obj(ctx, src2, false, false);
 
     if(src1->type != ACPI_AML_OT_BUFFER && src2->type == ACPI_AML_OT_BUFFER) {
         PRINTLOG(ACPIAML, LOG_ERROR, "mismatch src type %i %i", src1->type, src2->type);
@@ -136,7 +137,7 @@ int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
         return -1;
     }
 
-    int64_t new_buflen = src1->buffer.buflen;
+    int64_t new_buflen    = src1->buffer.buflen;
     int64_t src1_copy_len = 0;
     int64_t src2_copy_len = 0;
 
@@ -147,7 +148,7 @@ int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
     src1_copy_len = new_buflen;
 
     if(src2->buffer.buflen) {
-        new_buflen += src2->buffer.buflen - 2;
+        new_buflen   += src2->buffer.buflen - 2;
         src2_copy_len = src2->buffer.buflen - 2;
     }
 
@@ -161,7 +162,7 @@ int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
         return -1;
     }
 
-    res->type = ACPI_AML_OT_BUFFER;
+    res->type          = ACPI_AML_OT_BUFFER;
     res->buffer.buflen = new_buflen;
 
     uint8_t* new_buf = memory_malloc_ext(ctx->heap, new_buflen, 0);
@@ -180,8 +181,8 @@ int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 
     res->buffer.buf = new_buf;
 
-    if(acpi_aml_is_null_target(dst) != 0) {
-        dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
+    if(!acpi_aml_is_null_target(dst)) {
+        dst = acpi_aml_get_if_arg_local_obj(ctx, dst, true, false);
 
         if(acpi_aml_write_as_buffer(ctx, res, dst) != 0) {
             PRINTLOG(ACPIAML, LOG_ERROR, "cannot write buffer to destination");
@@ -201,8 +202,8 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
     acpi_aml_object_t* idx = opcode->operands[1];
     acpi_aml_object_t* dst = opcode->operands[2];
 
-    src = acpi_aml_get_if_arg_local_obj(ctx, src, 0, 0);
-    idx = acpi_aml_get_if_arg_local_obj(ctx, idx, 0, 0);
+    src = acpi_aml_get_if_arg_local_obj(ctx, src, false, false);
+    idx = acpi_aml_get_if_arg_local_obj(ctx, idx, false, false);
 
     if(!(src->type == ACPI_AML_OT_STRING || src->type == ACPI_AML_OT_BUFFER || src->type == ACPI_AML_OT_PACKAGE)) {
         PRINTLOG(ACPIAML, LOG_ERROR, "mismatch src type for index %i 0x%p", src->type, src);
@@ -231,23 +232,23 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
     }
 
     if(src->type == ACPI_AML_OT_STRING || src->type == ACPI_AML_OT_BUFFER) {
-        res->type = ACPI_AML_OT_BUFFERFIELD;
+        res->type                 = ACPI_AML_OT_BUFFERFIELD;
         res->field.related_object = src;
-        res->field.access_type = ACPI_AML_FIELD_BYTE_ACCESS;
-        res->field.access_attrib = ACPI_AML_FACCATTRB_BYTE;
-        res->field.lock_rule = ACPI_AML_FIELD_NOLOCK;
-        res->field.update_rule = ACPI_AML_FIELD_PRESERVE;
-        res->field.sizeasbit = 8;
-        res->field.offset = 8 * idx_val;
+        res->field.access_type    = ACPI_AML_FIELD_ACCESS_BYTE;
+        res->field.access_attrib  = ACPI_AML_FIELD_ACCESS_ATTRIBUTE_BYTE;
+        res->field.lock_rule      = ACPI_AML_FIELD_LOCK_NOLOCK;
+        res->field.update_rule    = ACPI_AML_FIELD_UPDATE_PRESERVE;
+        res->field.sizeasbit      = 8;
+        res->field.offset         = 8 * idx_val;
 
     } else {
         acpi_aml_object_t* tmp = (acpi_aml_object_t*)list_get_data_at_position(src->package.elements, idx_val);
-        res->type = ACPI_AML_OT_REFOF;
+        res->type         = ACPI_AML_OT_REFOF;
         res->refof_target = tmp;
     }
 
-    if(acpi_aml_is_null_target(dst) != 0) {
-        dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
+    if(!acpi_aml_is_null_target(dst)) {
+        dst = acpi_aml_get_if_arg_local_obj(ctx, dst, true, false);
         PRINTLOG(ACPIAML, LOG_ERROR, "storing to dest not implemented for index op");
         memory_free_ext(ctx->heap, res);
 

@@ -6,6 +6,7 @@
  * Please read and understand latest version of Licence.
  */
 
+#define ___ACPI_AML_IMPLEMENTATION 0
 #include <acpi/aml_internal.h>
 #include <logging.h>
 
@@ -79,8 +80,8 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
         return -1;
     }
 
-    res->type = ACPI_AML_OT_NUMBER;
-    res->number.value = ires;
+    res->type           = ACPI_AML_OT_NUMBER;
+    res->number.value   = ires;
     res->number.bytecnt = 1;
 
     opcode->return_obj = res;
@@ -90,7 +91,7 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 
 
 int8_t acpi_aml_exec_op1_tgt0_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
-    int64_t op1 = 0;
+    int64_t op1              = 0;
     acpi_aml_object_t* op1op = opcode->operands[0];
 
     if(acpi_aml_read_as_integer(ctx, op1op, &op1) != 0) {
@@ -132,7 +133,7 @@ int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 
     int64_t ires = ~op1;
 
-    if(acpi_aml_is_null_target(dst) != 0) {
+    if(!acpi_aml_is_null_target(dst)) {
         if(acpi_aml_write_as_integer(ctx, ires, dst) != 0) {
             return -1;
         }
@@ -144,8 +145,8 @@ int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
         return -1;
     }
 
-    res->type = ACPI_AML_OT_NUMBER;
-    res->number.value = ires;
+    res->type           = ACPI_AML_OT_NUMBER;
+    res->number.value   = ires;
     res->number.bytecnt = 1; // i don't known one or 8?
 
     opcode->return_obj = res;
@@ -154,8 +155,8 @@ int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 }
 
 int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
-    acpi_aml_object_t* op1op = opcode->operands[0];
-    acpi_aml_object_t* op2op = opcode->operands[1];
+    acpi_aml_object_t* op1op  = opcode->operands[0];
+    acpi_aml_object_t* op2op  = opcode->operands[1];
     acpi_aml_object_t* target = opcode->operands[2];
 
     if(op1op == NULL || op2op == NULL) {
@@ -220,7 +221,7 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
         return -1;
     }
 
-    if(acpi_aml_is_null_target(target) != 0) {
+    if(!acpi_aml_is_null_target(target)) {
         if(acpi_aml_write_as_integer(ctx, ires, target) != 0) {
             return -1;
         }
@@ -232,8 +233,8 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
         return -1;
     }
 
-    res->type = ACPI_AML_OT_NUMBER;
-    res->number.value = ires;
+    res->type           = ACPI_AML_OT_NUMBER;
+    res->number.value   = ires;
     res->number.bytecnt = 8; // i don't known one or 8?
 
     opcode->return_obj = res;
@@ -242,13 +243,13 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 }
 
 int8_t acpi_aml_exec_op2_tgt2_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
-    acpi_aml_object_t* dividendop = opcode->operands[0];
-    acpi_aml_object_t* divisorop = opcode->operands[1];
+    acpi_aml_object_t* dividendop  = opcode->operands[0];
+    acpi_aml_object_t* divisorop   = opcode->operands[1];
     acpi_aml_object_t* remainderop = opcode->operands[2];
-    acpi_aml_object_t* resultop = opcode->operands[3];
+    acpi_aml_object_t* resultop    = opcode->operands[3];
 
     int64_t dividend = 0;
-    int64_t divisor = 0;
+    int64_t divisor  = 0;
 
     if(acpi_aml_read_as_integer(ctx, dividendop, &dividend) != 0) {
         return -1;
@@ -259,20 +260,20 @@ int8_t acpi_aml_exec_op2_tgt2_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
     }
 
     if(divisor == 0) {
-        ctx->flags.fatal = 1;
+        ctx->flags.fatal = true;
         return -1;
     }
 
     int64_t irem = dividend % divisor;
     int64_t ires = dividend / divisor;
 
-    if(acpi_aml_is_null_target(remainderop) != 0) {
+    if(!acpi_aml_is_null_target(remainderop)) {
         if(acpi_aml_write_as_integer(ctx, irem, remainderop) != 0) {
             return -1;
         }
     }
 
-    if(acpi_aml_is_null_target(resultop) != 0) {
+    if(!acpi_aml_is_null_target(resultop)) {
         if(acpi_aml_write_as_integer(ctx, ires, resultop) != 0) {
             return -1;
         }
@@ -284,8 +285,8 @@ int8_t acpi_aml_exec_op2_tgt2_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
         return -1;
     }
 
-    res->type = ACPI_AML_OT_NUMBER;
-    res->number.value = ires;
+    res->type           = ACPI_AML_OT_NUMBER;
+    res->number.value   = ires;
     res->number.bytecnt = 1; // i don't known one or 8?
 
     opcode->return_obj = res;

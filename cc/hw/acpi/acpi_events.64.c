@@ -6,6 +6,7 @@
  * Please read and understand latest version of Licence.
  */
 
+#define ___ACPI_AML_IMPLEMENTATION 0
 #include <acpi.h>
 #include <acpi/aml_resource.h>
 #include <apic.h>

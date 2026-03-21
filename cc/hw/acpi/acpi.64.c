@@ -5,11 +5,14 @@
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
+
+#define ___ACPI_AML_IMPLEMENTATION 0
 #include <acpi.h>
+#include <acpi/aml.h>
+#include <acpi/aml_internal.h>
 #include <memory.h>
 #include <logging.h>
 #include <ports.h>
-#include <acpi/aml.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <systeminfo.h>
@@ -317,14 +320,14 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
         return -1;
     }
 
-    LOGBLOCK(ACPI, LOG_TRACE){
-        acpi_device_print_all(pctx);
-        acpi_aml_print_symbol_table(pctx);
-    }
-
     if(acpi_device_init(pctx) != 0) {
         PRINTLOG(ACPI, LOG_ERROR, "devices cannot be initialized");
         return -1;
+    }
+
+    LOGBLOCK(ACPI, LOG_INFO){
+        acpi_device_print_all(pctx);
+        acpi_aml_print_symbol_table(pctx);
     }
 
     PRINTLOG(ACPI, LOG_INFO, "Devices initialized");

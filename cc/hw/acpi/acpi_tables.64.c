@@ -106,10 +106,10 @@ static int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc)
 acpi_xrsdp_descriptor_t* acpi_find_xrsdp(void){
     PRINTLOG(ACPI, LOG_DEBUG, "searching for rsdp");
 
-    frame_t* acpi_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), SYSTEM_INFO->acpi_table);
+    frame_t* acpi_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), SYSTEM_INFO->acpi_xrsdp);
 
     if(acpi_frames == NULL) {
-        PRINTLOG(ACPI, LOG_ERROR, "cannot find acpi frames of table 0x%p", SYSTEM_INFO->acpi_table);
+        PRINTLOG(ACPI, LOG_ERROR, "cannot find acpi frames of table 0x%p", SYSTEM_INFO->acpi_xrsdp);
         return NULL;
     }
 
@@ -124,7 +124,7 @@ acpi_xrsdp_descriptor_t* acpi_find_xrsdp(void){
         return NULL;
     }
 
-    acpi_xrsdp_descriptor_t* desc = (acpi_xrsdp_descriptor_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(SYSTEM_INFO->acpi_table);
+    acpi_xrsdp_descriptor_t* desc = (acpi_xrsdp_descriptor_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(SYSTEM_INFO->acpi_xrsdp);
     PRINTLOG(ACPI, LOG_DEBUG, "acpi descriptor address 0x%p", desc);
 
 

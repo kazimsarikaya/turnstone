@@ -12,79 +12,83 @@
 #include <types.h>
 #include <acpi/aml.h>
 
+#ifndef ___ACPI_AML_IMPLEMENTATION
+#error "This header is only for acpi implementation. Do not include this header directly."
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef enum {
-    ACPI_AML_RESOURCE_SMALLITEM=0,
+typedef enum acpi_aml_resource_type_t {
+    ACPI_AML_RESOURCE_SMALLITEM = 0,
     ACPI_AML_RESOURCE_LARGEITEM,
 }acpi_aml_resource_type_t;
 
-typedef enum {
-    ACPI_AML_RESOURCE_SMALLITEM_IRQ=4,
-    ACPI_AML_RESOURCE_SMALLITEM_DMA=5,
-    ACPI_AML_RESOURCE_SMALLITEM_START_DEPFUNC=6,
-    ACPI_AML_RESOURCE_SMALLITEM_END_DEPFUNC=7,
-    ACPI_AML_RESOURCE_SMALLITEM_IO=8,
-    ACPI_AML_RESOURCE_SMALLITEM_FIXEDIO=9,
-    ACPI_AML_RESOURCE_SMALLITEM_FIXEDDMA=10,
-    ACPI_AML_RESOURCE_SMALLITEM_VENDOR=14,
-    ACPI_AML_RESOURCE_SMALLITEM_ENDTAG=15,
+typedef enum acpi_aml_resource_smallitem_name_t {
+    ACPI_AML_RESOURCE_SMALLITEM_IRQ           = 4,
+    ACPI_AML_RESOURCE_SMALLITEM_DMA           = 5,
+    ACPI_AML_RESOURCE_SMALLITEM_START_DEPFUNC = 6,
+    ACPI_AML_RESOURCE_SMALLITEM_END_DEPFUNC   = 7,
+    ACPI_AML_RESOURCE_SMALLITEM_IO            = 8,
+    ACPI_AML_RESOURCE_SMALLITEM_FIXEDIO       = 9,
+    ACPI_AML_RESOURCE_SMALLITEM_FIXEDDMA      = 10,
+    ACPI_AML_RESOURCE_SMALLITEM_VENDOR        = 14,
+    ACPI_AML_RESOURCE_SMALLITEM_ENDTAG        = 15,
 }acpi_aml_resource_smallitem_name_t;
 
-typedef enum {
-    ACPI_AML_RESOURCE_LARGEITEM_24BIT_MEMORY_RANGE=1,
-    ACPI_AML_RESOURCE_LARGEITEM_GENERIC_REGISTER=2,
-    ACPI_AML_RESOURCE_LARGEITEM_VENDOR=4,
-    ACPI_AML_RESOURCE_LARGEITEM_32BIT_MEMORY_RANGE=5,
-    ACPI_AML_RESOURCE_LARGEITEM_32BIT_FIXEDMEMORY_RANGE=6,
-    ACPI_AML_RESOURCE_LARGEITEM_DWORD_ADDRESS_SPACE=7,
-    ACPI_AML_RESOURCE_LARGEITEM_WORD_ADDRESS_SPACE=8,
-    ACPI_AML_RESOURCE_LARGEITEM_EXTENDED_INTERRUPT=9,
-    ACPI_AML_RESOURCE_LARGEITEM_QWORD_ADDRESS_SPACE=10,
-    ACPI_AML_RESOURCE_LARGEITEM_EXTENDED_ADDRESS_SPACE=11,
-    ACPI_AML_RESOURCE_LARGEITEM_GPIO_CONNECTION=12,
-    ACPI_AML_RESOURCE_LARGEITEM_PIN_FUNCTION=13,
-    ACPI_AML_RESOURCE_LARGEITEM_GENERIC_SERIAL_BUS_CONNECTION=14,
-    ACPI_AML_RESOURCE_LARGEITEM_PIN_CONFIGURATION=15,
-    ACPI_AML_RESOURCE_LARGEITEM_PIN_GROUP=16,
-    ACPI_AML_RESOURCE_LARGEITEM_PIN_GROUP_FUNCTION=17,
-    ACPI_AML_RESOURCE_LARGEITEM_PIN_GROUP_CONFIGURATION=18,
+typedef enum acpi_aml_resource_largeitem_name_t {
+    ACPI_AML_RESOURCE_LARGEITEM_24BIT_MEMORY_RANGE            = 1,
+    ACPI_AML_RESOURCE_LARGEITEM_GENERIC_REGISTER              = 2,
+    ACPI_AML_RESOURCE_LARGEITEM_VENDOR                        = 4,
+    ACPI_AML_RESOURCE_LARGEITEM_32BIT_MEMORY_RANGE            = 5,
+    ACPI_AML_RESOURCE_LARGEITEM_32BIT_FIXEDMEMORY_RANGE       = 6,
+    ACPI_AML_RESOURCE_LARGEITEM_DWORD_ADDRESS_SPACE           = 7,
+    ACPI_AML_RESOURCE_LARGEITEM_WORD_ADDRESS_SPACE            = 8,
+    ACPI_AML_RESOURCE_LARGEITEM_EXTENDED_INTERRUPT            = 9,
+    ACPI_AML_RESOURCE_LARGEITEM_QWORD_ADDRESS_SPACE           = 10,
+    ACPI_AML_RESOURCE_LARGEITEM_EXTENDED_ADDRESS_SPACE        = 11,
+    ACPI_AML_RESOURCE_LARGEITEM_GPIO_CONNECTION               = 12,
+    ACPI_AML_RESOURCE_LARGEITEM_PIN_FUNCTION                  = 13,
+    ACPI_AML_RESOURCE_LARGEITEM_GENERIC_SERIAL_BUS_CONNECTION = 14,
+    ACPI_AML_RESOURCE_LARGEITEM_PIN_CONFIGURATION             = 15,
+    ACPI_AML_RESOURCE_LARGEITEM_PIN_GROUP                     = 16,
+    ACPI_AML_RESOURCE_LARGEITEM_PIN_GROUP_FUNCTION            = 17,
+    ACPI_AML_RESOURCE_LARGEITEM_PIN_GROUP_CONFIGURATION       = 18,
 }acpi_aml_resource_largeitem_name_t;
 
-typedef enum {
-    ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_MEMORY=0,
-    ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_IO=1,
-    ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_BUS=2,
+typedef enum acpi_aml_resource_word_address_space_type_t {
+    ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_MEMORY = 0,
+    ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_IO     = 1,
+    ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_BUS    = 2,
 }acpi_aml_resource_word_address_space_type_t;
 
-typedef enum {
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY=0,
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IO=1,
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_PCI_CONF_SPACE=2,
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_EMBEDED_CONTROLLER=3,
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_SMBUS=4,
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_CMOS=5,
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_PCI_BAR_TARGET=6,
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IPMI=7,
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_GPIO=8,
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_SERIALBUS=9,
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_PCC=10,
-    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_FUNCTIONAL_FIXED_HARDWARE=0X7F,
+typedef enum acpi_aml_resource_address_space_id_t {
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY                    = 0,
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IO                        = 1,
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_PCI_CONF_SPACE            = 2,
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_EMBEDED_CONTROLLER        = 3,
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_SMBUS                     = 4,
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_CMOS                      = 5,
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_PCI_BAR_TARGET            = 6,
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IPMI                      = 7,
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_GPIO                      = 8,
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_SERIALBUS                 = 9,
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_PCC                       = 10,
+    ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_FUNCTIONAL_FIXED_HARDWARE = 0X7F,
 } acpi_aml_resource_address_space_id_t;
 
-typedef enum {
-    ACPI_AML_RESOURCE_ACCESS_SIZE_UNDEFINED=0,
-    ACPI_AML_RESOURCE_ACCESS_SIZE_BYTE=1,
-    ACPI_AML_RESOURCE_ACCESS_SIZE_WORD=2,
-    ACPI_AML_RESOURCE_ACCESS_SIZE_DWORD=3,
-    ACPI_AML_RESOURCE_ACCESS_SIZE_QWORD=4,
+typedef enum acpi_aml_resource_access_size_t {
+    ACPI_AML_RESOURCE_ACCESS_SIZE_UNDEFINED = 0,
+    ACPI_AML_RESOURCE_ACCESS_SIZE_BYTE      = 1,
+    ACPI_AML_RESOURCE_ACCESS_SIZE_WORD      = 2,
+    ACPI_AML_RESOURCE_ACCESS_SIZE_DWORD     = 3,
+    ACPI_AML_RESOURCE_ACCESS_SIZE_QWORD     = 4,
 }acpi_aml_resource_access_size_t;
 
 
 
-typedef struct {
+typedef struct acpi_aml_resource_memory_flag_t {
     uint8_t write    : 1;
     uint8_t mem      : 2;
     uint8_t mtp      : 2;
@@ -92,7 +96,7 @@ typedef struct {
     uint8_t reserved : 2;
 } __attribute__((packed)) acpi_aml_resource_memory_flag_t;
 
-typedef struct {
+typedef struct acpi_aml_resource_io_flag_t {
     uint8_t rng       : 2;
     uint8_t reserved1 : 2;
     uint8_t ttp       : 1;
@@ -100,17 +104,17 @@ typedef struct {
     uint8_t reserved2 : 2;
 } __attribute__((packed)) acpi_aml_resource_io_flag_t;
 
-typedef struct {
+typedef struct acpi_aml_resource_bus_number_flag_t {
     uint8_t reserved;
 } __attribute__((packed))  acpi_aml_resource_bus_number_flag_t;
 
-typedef union {
+typedef union acpi_aml_resource_type_specific_flag_t {
     acpi_aml_resource_memory_flag_t     memory_flag;
     acpi_aml_resource_io_flag_t         io_flag;
     acpi_aml_resource_bus_number_flag_t bus_number_flag;
 }__attribute__((packed)) acpi_aml_resource_type_specific_flag_t;
 
-typedef struct {
+typedef struct acpi_aml_resource_smallitem_t {
     uint8_t                            length : 3;
     acpi_aml_resource_smallitem_name_t name   : 4;
     acpi_aml_resource_type_t           type   : 1;
@@ -171,7 +175,7 @@ typedef struct {
 }__attribute__((packed)) acpi_aml_resource_smallitem_t;
 
 
-typedef struct {
+typedef struct acpi_aml_resource_largeitem_t {
     acpi_aml_resource_largeitem_name_t name   : 7;
     acpi_aml_resource_type_t           type   : 1;
     uint16_t                           length : 16;
@@ -341,13 +345,13 @@ typedef struct {
 } __attribute__((packed)) acpi_aml_resource_largeitem_t;
 
 
-typedef struct {
+typedef struct acpi_aml_resource_type_identifier_t {
     uint8_t                  unused : 7;
     acpi_aml_resource_type_t type   : 1;
 } __attribute__((packed)) acpi_aml_resource_type_identifier_t;
 
 
-typedef union {
+typedef union acpi_aml_resource_t {
     acpi_aml_resource_type_identifier_t identifier;
     acpi_aml_resource_smallitem_t       smallitem;
     acpi_aml_resource_largeitem_t       largeitem;
@@ -356,6 +360,7 @@ typedef union {
 
 
 int32_t acpi_aml_resource_parse(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_object_t* buffer);
+int8_t  acpi_aml_resource_print(acpi_aml_parser_context_t* ctx, const acpi_aml_device_t* device);
 
 #ifdef __cplusplus
 }

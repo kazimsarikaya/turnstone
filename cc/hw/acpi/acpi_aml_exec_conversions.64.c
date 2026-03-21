@@ -6,6 +6,7 @@
  * Please read and understand latest version of Licence.
  */
 
+#define ___ACPI_AML_IMPLEMENTATION 0
 #include <acpi/aml_internal.h>
 #include <logging.h>
 
@@ -30,8 +31,8 @@ int8_t acpi_aml_exec_object_type(acpi_aml_parser_context_t* ctx, acpi_aml_opcode
         return -1;
     }
 
-    res->type = ACPI_AML_OT_NUMBER;
-    res->number.value = type;
+    res->type           = ACPI_AML_OT_NUMBER;
+    res->number.value   = type;
     res->number.bytecnt = 1; // i don't known one or 8?
 
     opcode->return_obj = res;
@@ -54,7 +55,7 @@ int8_t acpi_aml_exec_to_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 
     uint64_t ires = 0;
 
-    int64_t rem = 0;
+    int64_t rem     = 0;
     int8_t bitshift = 0;
 
     while(ival > 0) {
@@ -67,7 +68,7 @@ int8_t acpi_aml_exec_to_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
         ival = ival / 10;
     }
 
-    if(acpi_aml_is_null_target(dst) != 0) {
+    if(!acpi_aml_is_null_target(dst)) {
         if(acpi_aml_write_as_integer(ctx, ires, dst) != 0) {
             return -1;
         }
@@ -79,8 +80,8 @@ int8_t acpi_aml_exec_to_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
         return -1;
     }
 
-    res->type = ACPI_AML_OT_NUMBER;
-    res->number.value = ires;
+    res->type           = ACPI_AML_OT_NUMBER;
+    res->number.value   = ires;
     res->number.bytecnt = (ctx->revision == 2 ? 8 : 4);
 
     opcode->return_obj = res;
@@ -103,7 +104,7 @@ int8_t acpi_aml_exec_from_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t*
 
     uint64_t ires = 0;
 
-    int64_t rem = 0;
+    int64_t rem     = 0;
     int8_t bitshift = 0;
 
     while(ival > 0) {
@@ -116,7 +117,7 @@ int8_t acpi_aml_exec_from_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t*
         ival = ival >> 4;
     }
 
-    if(acpi_aml_is_null_target(dst) != 0) {
+    if(!acpi_aml_is_null_target(dst)) {
         if(acpi_aml_write_as_integer(ctx, ires, dst) != 0) {
             return -1;
         }
@@ -128,8 +129,46 @@ int8_t acpi_aml_exec_from_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t*
         return -1;
     }
 
-    res->type = ACPI_AML_OT_NUMBER;
-    res->number.value = ires;
+    res->type           = ACPI_AML_OT_NUMBER;
+    res->number.value   = ires;
+    res->number.bytecnt = (ctx->revision == 2 ? 8 : 4);
+
+    opcode->return_obj = res;
+
+    return 0;
+}
+
+int8_t acpi_aml_exec_to_integer(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
+    acpi_aml_object_t* src = opcode->operands[0];
+    acpi_aml_object_t* dst = opcode->operands[1];
+
+    if(src == NULL || dst == NULL) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "src or dst is null");
+        return -1;
+    }
+
+    int64_t ival = 0;
+    if(acpi_aml_read_as_integer(ctx, src, &ival) != 0) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "cannot read src as integer");
+        return -1;
+    }
+
+    if(!acpi_aml_is_null_target(dst)) {
+        if(acpi_aml_write_as_integer(ctx, ival, dst) != 0) {
+            PRINTLOG(ACPIAML, LOG_ERROR, "cannot write integer to dst");
+            return -1;
+        }
+    }
+
+    acpi_aml_object_t* res = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+    if(res == NULL) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "cannot allocate result");
+        return -1;
+    }
+
+    res->type           = ACPI_AML_OT_NUMBER;
+    res->number.value   = ival;
     res->number.bytecnt = (ctx->revision == 2 ? 8 : 4);
 
     opcode->return_obj = res;
@@ -149,5 +188,4 @@ int8_t acpi_aml_exec_from_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t*
 UNIMPLEXEC(to_buffer);
 UNIMPLEXEC(to_decimalstring);
 UNIMPLEXEC(to_hexstring);
-UNIMPLEXEC(to_integer);
 UNIMPLEXEC(to_string);
