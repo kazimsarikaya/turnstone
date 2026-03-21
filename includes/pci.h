@@ -42,6 +42,9 @@ extern "C" {
 #define PCI_DEVICE_SUBCLASS_VGA              0x00
 #define PCI_DEVICE_SUBCLASS_BRIDGE_HOST      0x00
 #define PCI_DEVICE_SUBCLASS_BRIDGE_ISA       0x01
+#define PCI_DEVICE_SUBCLASS_BRIDGE_EISA      0x02
+#define PCI_DEVICE_SUBCLASS_BRIDGE_MCA       0x03
+#define PCI_DEVICE_SUBCLASS_BRIDGE_PCI       0x04
 #define PCI_DEVICE_SUBCLASS_BRIDGE_OTHER     0x80
 #define PCI_DEVICE_SUBCLASS_SP_OTHER         0x80
 #define PCI_DEVICE_SUBCLASS_USB              0x80
@@ -221,11 +224,14 @@ typedef struct pci_cardbus_bridge_t {
     uint32_t              pccard_16bit_legacy_mode_base_address : 32;
 } __attribute__((packed, aligned(4))) pci_cardbus_bridge_t;
 
+typedef struct pci_dev_t pci_dev_t; ///< forward declaration for pci_dev_t
+
 /**
  * @struct pci_dev_t
  * @brief the pci device info returned by the iterator
  */
 typedef struct pci_dev_t {
+    pci_dev_t*           parent; ///< parent device if exists, else NULL
     uint16_t             group_number; ///< device's bus group number.
     uint8_t              bus_number; ///< bus number of the device
     uint8_t              device_number; ///< device number
@@ -233,16 +239,6 @@ typedef struct pci_dev_t {
     uint64_t             header_size; ///< header size of the device
     pci_common_header_t* pci_header; ///< pci generic memory area
 } pci_dev_t; ///< short hand for struct
-
-/**
- * @brief creates an iterator over pci device devices at mcfg memory area
- * @param  heap iterator of heap
- * @param  mcfg mcfg memory area which indentified by acpi table
- * @return      iterator
- */
-iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t* mcfg);
-/*! creates pci iterator at default heap */
-#define pci_iterator_create(mcfg) pci_iterator_create_with_heap(NULL, mcfg)
 
 typedef struct pci_capability_t {
     uint8_t capability_id : 8;
