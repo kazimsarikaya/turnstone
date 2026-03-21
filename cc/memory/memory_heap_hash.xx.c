@@ -166,7 +166,7 @@ static inline void* memory_heap_hash_try_alloc_from_free_list(memory_heap_hash_m
             continue;
         }
 
-        uint32_t free_list = pool->free_list;
+        uint32_t free_list                            = pool->free_list;
         memory_heap_hash_block_t* prev_free_list_node = NULL;
 
         // PRINTLOG(HEAP_HASH, LOG_TRACE, "try to allocate from free list");
@@ -210,7 +210,7 @@ static inline void* memory_heap_hash_try_alloc_from_free_list(memory_heap_hash_m
             }
 
             prev_free_list_node = free_node;
-            free_list = free_node->next;
+            free_list           = free_node->next;
         }
 
     }
@@ -230,7 +230,7 @@ static inline memory_heap_hash_block_t* memory_heap_hash_pool_new_hash_block(mem
     while(segment_idx < pool->segment_count) {
         if(blocks[hash].address == 0) {
             blocks[hash].address = address;
-            blocks[hash].size = size;
+            blocks[hash].size    = size;
 
             metadata->header_count++;
 
@@ -240,7 +240,7 @@ static inline memory_heap_hash_block_t* memory_heap_hash_pool_new_hash_block(mem
         segment_idx++;
 
         segment_offset += metadata->segment_size;
-        blocks = (memory_heap_hash_block_t*)segment_offset;
+        blocks          = (memory_heap_hash_block_t*)segment_offset;
     }
 
     if(pool->last_address > pool->segment_end + metadata->segment_size) {
@@ -248,7 +248,7 @@ static inline memory_heap_hash_block_t* memory_heap_hash_pool_new_hash_block(mem
         pool->segment_count++;
 
         blocks[hash].address = address;
-        blocks[hash].size = size;
+        blocks[hash].size    = size;
 
         metadata->header_count++;
 
@@ -277,7 +277,7 @@ static inline memory_heap_hash_block_t* memory_heap_hash_pool_search_hash_block(
         segment_idx++;
 
         segment_offset += metadata->segment_size;
-        blocks = (memory_heap_hash_block_t*)segment_offset;
+        blocks          = (memory_heap_hash_block_t*)segment_offset;
     }
 
     return NULL;
@@ -430,7 +430,7 @@ void* memory_heap_hash_malloc_ext(memory_heap_t* heap, uint64_t size, uint64_t a
 
             uint8_t* flag = (uint8_t*)real_remaining_address;
 
-            remaining_size -= 1;
+            remaining_size    -= 1;
             remaining_address += 1;
 
             memory_heap_hash_block_t* remaining_node = memory_heap_hash_pool_new_hash_block(metadata, pool, remaining_address, remaining_size);
@@ -457,7 +457,7 @@ void* memory_heap_hash_malloc_ext(memory_heap_t* heap, uint64_t size, uint64_t a
                     memory_heap_hash_block_t* fast_class_node = memory_heap_hash_pool_get_hash_block(pool, pool->fast_classes[fast_class].tail);
 
                     if(fast_class_node) {
-                        fast_class_node->next = block_address;
+                        fast_class_node->next               = block_address;
                         pool->fast_classes[fast_class].tail = block_address;
                     }
 
@@ -546,7 +546,7 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
     }
 
     if(hash_block->is_free) {
-        PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p is already freed. heap task 0x%llx", ptr, heap->task_id);
+        PRINTLOG(HEAP_HASH, LOG_WARNING, "address 0x%p is already freed. heap task 0x%llx", ptr, heap->task_id);
 
 #if ___KERNELBUILD == 1
         memory_heap_backtrace();
@@ -562,7 +562,7 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
     // PRINTLOG(HEAP_HASH, LOG_TRACE, "found block with address 0x%x(0x%llx) size 0x%x", hash_block->address, pool->pool_base + hash_block->address, hash_block->size);
 
     uint64_t real_address = req_address;
-    uint32_t real_size = hash_block->size;
+    uint32_t real_size    = hash_block->size;
 
     // PRINTLOG(HEAP_HASH, LOG_TRACE, "real address 0x%llx size 0x%x end 0x%llx", real_address, real_size, real_address + real_size);
 
@@ -583,7 +583,7 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
             memory_heap_hash_block_t* fast_class_node = memory_heap_hash_pool_get_hash_block(pool, pool->fast_classes[fast_class].tail);
 
             if(fast_class_node) {
-                fast_class_node->next = rel_block_address;
+                fast_class_node->next               = rel_block_address;
                 pool->fast_classes[fast_class].tail = rel_block_address;
             }
         }
@@ -616,10 +616,10 @@ void memory_heap_hash_stat(memory_heap_t* heap, memory_heap_stat_t* stat) {
     memory_heap_hash_metadata_t* metadata = (memory_heap_hash_metadata_t*)heap->metadata;
 
     stat->malloc_count = metadata->malloc_count;
-    stat->free_count = metadata->free_count;
-    stat->total_size = metadata->total_size;
-    stat->free_size = metadata->free_size;
-    stat->fast_hit = metadata->fast_hit;
+    stat->free_count   = metadata->free_count;
+    stat->total_size   = metadata->total_size;
+    stat->free_size    = metadata->free_size;
+    stat->fast_hit     = metadata->fast_hit;
     stat->header_count = metadata->header_count;
 }
 
@@ -630,10 +630,10 @@ memory_heap_t* memory_create_heap_hash(uint64_t start, uint64_t end) {
         program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
 
         heap_start = kernel->program_heap_virtual_address;
-        heap_end = heap_start + kernel->program_heap_size;
+        heap_end   = heap_start + kernel->program_heap_size;
     } else {
         heap_start = start;
-        heap_end = end;
+        heap_end   = end;
     }
 
     PRINTLOG(HEAP_HASH, LOG_DEBUG, "heap boundaries 0x%llx 0x%llx", heap_start, heap_end);
@@ -673,18 +673,18 @@ memory_heap_t* memory_create_heap_hash(uint64_t start, uint64_t end) {
     metadata->pools[0] = pool_start;
 
     memory_heap_hash_pool_t* pool = (memory_heap_hash_pool_t*)pool_start;
-    pool->pool_base = pool_start;
-    pool->pool_size = heap_size - (pool_start - heap_start);
+    pool->pool_base    = pool_start;
+    pool->pool_size    = heap_size - (pool_start - heap_start);
     pool->last_address = pool->pool_size - 1;
 
     metadata->segment_size = heap_size / 1024;
 
     int8_t msb = bit_most_significant(metadata->segment_size - 1);
-    metadata->segment_size = 1 << (msb + 1);
+    metadata->segment_size        = 1 << (msb + 1);
     metadata->segment_block_count = metadata->segment_size / sizeof(memory_heap_hash_block_t);
 
     if(metadata->segment_block_count < 256) {
-        metadata->segment_size = 0x1000;
+        metadata->segment_size        = 0x1000;
         metadata->segment_block_count = 256;
     }
 
@@ -699,7 +699,7 @@ memory_heap_t* memory_create_heap_hash(uint64_t start, uint64_t end) {
     }
 
     pool->segment_start = segment_start - (pool_start - heap_start);
-    pool->segment_end = segment_start;
+    pool->segment_end   = segment_start;
 
     metadata->total_size = heap_size;
 
@@ -712,8 +712,8 @@ memory_heap_t* memory_create_heap_hash(uint64_t start, uint64_t end) {
     metadata->free_size = heap_size - segment_start - 1;
 
     heap->malloc = memory_heap_hash_malloc_ext;
-    heap->free = memory_heap_hash_free;
-    heap->stat = memory_heap_hash_stat;
+    heap->free   = memory_heap_hash_free;
+    heap->stat   = memory_heap_hash_stat;
 
     return heap;
 }
