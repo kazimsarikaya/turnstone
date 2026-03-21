@@ -24,6 +24,7 @@
 #include <memory/frame.h>
 #include <stdbufs.h>
 #include <random.h>
+#include <acpi/acpi_tables.h>
 
 /*! module name */
 MODULE("turnstone.efi");
@@ -60,43 +61,6 @@ typedef struct efi_tosdb_context_t {
 } efi_tosdb_context_t; ///< typedef for efi_tosdb_context_t
 
 /**
- * @brief setup EFI heap
- * @return EFI_SUCCESS if all goes well
- */
-efi_status_t efi_setup_heap(void);
-
-/**
- * @brief setup EFI graphics
- * @details this method sets up graphics mode and returns video frame buffer. Min resolution is 1092x1080.
- * @param[out] vfb_res video frame buffer
- * @return EFI_SUCCESS if all goes well
- */
-efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res);
-
-/**
- * @brief prints efi variable names.
- * @return EFI_SUCCESS if all goes well.
- */
-efi_status_t efi_print_variable_names(void);
-
-/**
- * @brief check is current boot is PXE boot.
- * @details for checking PXE boot, this method checks if EFI variable "BootCurrent" contains mac address.
- * @param[out] result true if current boot is PXE boot, false otherwise.
- * @return EFI_SUCCESS if all goes well.
- */
-efi_status_t efi_is_pxe_boot(boolean_t* result);
-
-/**
- * @brief EFI main function
- * @details this function is wrapper for runnig after sse and avx enable.
- * @param[in] image image handle
- * @param[in] system_table system table
- * @return EFI_SUCCESS if all goes well
- */
-efi_status_t efi_main2(efi_handle_t image, efi_system_table_t* system_table);
-
-/**
  * @brief EFI main function
  * @details this function is called by EFI entry point. Also this function should be EFIAPI because of EFI calling convention.
  * @param[in] image image handle
@@ -106,38 +70,13 @@ efi_status_t efi_main2(efi_handle_t image, efi_system_table_t* system_table);
 EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table);
 
 /**
- * @brief helper function for local tosdb loading
- * @param[in] bio block io interface
- * @param[out] tdb_ctx tosdb context
- * @return EFI_SUCCESS if all goes well
- */
-efi_status_t efi_open_local_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx);
-
-/**
- * @brief loads tosdb from disk if current boot is not PXE boot.
- * @param[out] tdb_ctx tosdb context
- * @return EFI_SUCCESS if all goes well
- */
-efi_status_t efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx);
-
-/**
- * @brief loads tosdb from PXE if current boot is PXE boot.
- * @param[out] tdb_ctx tosdb context
- * @return EFI_SUCCESS if all goes well
- */
-efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx);
-
-/**
  * @brief reads config value for system from tosdb.
  * @param[in] tdb_ctx tosdb context
  * @param[in] config_key config key
  * @param[out] config_value config value
  * @return EFI_SUCCESS if all goes well
  */
-efi_status_t efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value);
-
-
-efi_status_t efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value) {
+static efi_status_t efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value) {
     efi_status_t status = EFI_OUT_OF_RESOURCES;
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(tdb_ctx->tosdb, "system");
@@ -180,13 +119,17 @@ catch_efi_error:
     return status;
 }
 
-efi_status_t efi_setup_heap(void){
+/**
+ * @brief setup EFI heap
+ * @return EFI_SUCCESS if all goes well
+ */
+static efi_status_t efi_setup_heap(uint64_t max_memory_address){
     efi_status_t res;
 
-    efi_physical_address_t heap_area = NULL;
+    efi_physical_address_t heap_area = (efi_physical_address_t)max_memory_address;
     int64_t heap_size                = 1024 * 1024 * 256;
 
-    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, heap_size / FRAME_SIZE, &heap_area);
+    res = BS->allocate_pages(EFI_ALLOCATE_MAX_ADDRESS, EFI_LOADER_DATA, heap_size / FRAME_SIZE, &heap_area);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "memory pool creation failed. err code 0x%llx", res);
@@ -211,13 +154,21 @@ efi_status_t efi_setup_heap(void){
 
     memory_set_default_heap(heap);
 
+    PRINTLOG(EFI, LOG_INFO, "default heap is at 0x%p with size 0x%llx", (void*)heap_area, heap_size);
+
     res = EFI_SUCCESS;
 
 catch_efi_error:
     return res;
 }
 
-efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
+/**
+ * @brief setup EFI graphics
+ * @details this method sets up graphics mode and returns video frame buffer. Min resolution is 1092x1080.
+ * @param[out] vfb_res video frame buffer
+ * @return EFI_SUCCESS if all goes well
+ */
+static efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
     efi_status_t res;
 
     video_frame_buffer_t* vfb = NULL;
@@ -268,7 +219,13 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
         vfb_struct_size += FRAME_SIZE - (vfb_struct_size % FRAME_SIZE);
     }
 
-    vfb = memory_malloc_ext(NULL, vfb_struct_size, FRAME_SIZE);
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, vfb_struct_size / FRAME_SIZE, (efi_physical_address_t*)&vfb);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot allocate vfb: 0x%llx", res);
+
+        goto catch_efi_error;
+    }
 
     if(vfb == NULL) {
         PRINTLOG(EFI, LOG_FATAL, "cannot allocate vfb");
@@ -295,7 +252,12 @@ catch_efi_error:
     return res;
 }
 
-efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
+/**
+ * @brief loads tosdb from PXE if current boot is PXE boot.
+ * @param[out] tdb_ctx tosdb context
+ * @return EFI_SUCCESS if all goes well
+ */
+static efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
     efi_status_t res = EFI_NOT_FOUND;
 
 
@@ -505,7 +467,13 @@ catch_efi_error:
     return res;
 }
 
-efi_status_t efi_open_local_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx) {
+/**
+ * @brief helper function for local tosdb loading
+ * @param[in] bio block io interface
+ * @param[out] tdb_ctx tosdb context
+ * @return EFI_SUCCESS if all goes well
+ */
+static efi_status_t efi_open_local_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx) {
     efi_status_t res;
 
     disk_t* sys_disk = efi_disk_impl_open(bio);
@@ -595,7 +563,12 @@ catch_efi_error:
     return res;
 }
 
-efi_status_t efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx) {
+/**
+ * @brief loads tosdb from disk if current boot is not PXE boot.
+ * @param[out] tdb_ctx tosdb context
+ * @return EFI_SUCCESS if all goes well
+ */
+static efi_status_t efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx) {
     efi_status_t res = EFI_NOT_FOUND;
 
     efi_guid_t bio_guid = EFI_BLOCK_IO_PROTOCOL_GUID;
@@ -683,7 +656,11 @@ catch_efi_error:
     return res;
 }
 
-efi_status_t efi_print_variable_names(void) {
+/**
+ * @brief prints efi variable names.
+ * @return EFI_SUCCESS if all goes well.
+ */
+static efi_status_t efi_print_variable_names(void) {
     efi_status_t res;
 
     char16_t buffer[256];
@@ -691,7 +668,7 @@ efi_status_t efi_print_variable_names(void) {
     efi_guid_t var_ven_guid;
     uint64_t var_size = 0;
 
-    while(1) {
+    while(true) {
         var_size = sizeof(buffer);
         res      = RS->get_next_variable_name(&var_size, buffer, &var_ven_guid);
 
@@ -714,7 +691,13 @@ catch_efi_error:
     return res;
 }
 
-efi_status_t efi_is_pxe_boot(boolean_t* result){
+/**
+ * @brief check is current boot is PXE boot.
+ * @details for checking PXE boot, this method checks if EFI variable "BootCurrent" contains mac address.
+ * @param[out] result true if current boot is PXE boot, false otherwise.
+ * @return EFI_SUCCESS if all goes well.
+ */
+static efi_status_t efi_is_pxe_boot(boolean_t* result){
     efi_status_t res;
 
     if(result == NULL) {
@@ -810,21 +793,207 @@ catch_efi_error:
     return res;
 }
 
-__attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_table_t* system_table) {
+/**
+ * @brief EFI main function
+ * @details this function is wrapper for runnig after sse and avx enable.
+ * @param[in] image image handle
+ * @param[in] system_table system table
+ * @return EFI_SUCCESS if all goes well
+ */
+__attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_system_table_t* system_table) {
     ST = system_table;
     BS = system_table->boot_services;
     RS = system_table->runtime_services;
+
+    efi_tosdb_context_t* tdb_ctx = NULL;
 
     time_t boot_time = time_ns(NULL);
 
     efi_status_t res;
 
+    video_frame_buffer_t* vfb = NULL;
+
     screen_clear();
+
+    stdbufs_set_video_printer(video_print);
+
+    res = efi_setup_graphics(&vfb);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot setup graphics %llx", res);
+
+        goto catch_efi_error;
+    }
 
     PRINTLOG(EFI, LOG_INFO, "TURNSTONE EFI Loader Starting...");
     PRINTLOG(EFI, LOG_INFO, "boot time: %llu", boot_time);
 
-    res = efi_setup_heap();
+    cpu_cpuid_regs_t query  = {1, 0, 0, 0};
+    cpu_cpuid_regs_t answer = {0};
+    cpu_cpuid(query, &answer);
+    uint32_t local_apic_id = answer.ebx >> 24;
+
+    PRINTLOG(EFI, LOG_DEBUG, "conf table count %lli", system_table->configuration_table_entry_count);
+    efi_guid_t acpi_table_v2_guid    = EFI_ACPI_20_TABLE_GUID;
+    efi_guid_t acpi_table_v1_guid    = EFI_ACPI_TABLE_GUID;
+    efi_guid_t smbios_table_v2_guild = EFI_SMBIOS_2_TABLE_GUID;
+    efi_guid_t smbios_table_v3_guild = EFI_SMBIOS_3_TABLE_GUID;
+    void* smbios_table_v2            = NULL;
+    void* smbios_table_v3            = NULL;
+
+    acpi_rsdp_descriptor_t* acpi_rsdp   = NULL;
+    acpi_xrsdp_descriptor_t* acpi_xrsdp = NULL;
+    acpi_table_srat_t* srat             = NULL;
+    acpi_sdt_header_t* slit             = NULL;
+
+    for (uint64_t i = 0; i <  system_table->configuration_table_entry_count; i++ ) {
+        if(efi_guid_equal(acpi_table_v2_guid, system_table->configuration_table[i].vendor_guid) == 0) {
+            acpi_xrsdp = system_table->configuration_table[i].vendor_table;
+            PRINTLOG(EFI, LOG_INFO, "acpi 2.0+ table 0x%p", acpi_xrsdp);
+        } else if(efi_guid_equal(acpi_table_v1_guid, system_table->configuration_table[i].vendor_guid) == 0) {
+            acpi_rsdp = system_table->configuration_table[i].vendor_table;
+            PRINTLOG(EFI, LOG_INFO, "acpi 1.0 table 0x%p", acpi_rsdp);
+        } else if(efi_guid_equal(smbios_table_v2_guild, system_table->configuration_table[i].vendor_guid) == 0) {
+            smbios_table_v2 = system_table->configuration_table[i].vendor_table;
+            PRINTLOG(EFI, LOG_INFO, "smbios v2 table 0x%p", smbios_table_v2);
+        } else if(efi_guid_equal(smbios_table_v3_guild, system_table->configuration_table[i].vendor_guid) == 0) {
+            smbios_table_v3 = system_table->configuration_table[i].vendor_table;
+            PRINTLOG(EFI, LOG_INFO, "smbios v3 table 0x%p", smbios_table_v3);
+        }
+    }
+
+    uint64_t max_memory_address = 0;
+
+    if(acpi_xrsdp) {
+
+        srat = (acpi_table_srat_t*)acpi_get_table(acpi_xrsdp, "SRAT");
+        slit = acpi_get_table(acpi_xrsdp, "SLIT");
+
+        if(srat) {
+            PRINTLOG(EFI, LOG_INFO, "srat table found at 0x%p", srat);
+
+            int32_t total_length            = srat->header.length;
+            int32_t remaining               = (total_length - sizeof(acpi_table_srat_t));
+            acpi_srat_entry_header_t* entry = (acpi_srat_entry_header_t*)(srat + 1);
+
+            uint32_t local_apic_proximity_domain = -1;
+
+            while(remaining > 0) {
+                PRINTLOG(EFI, LOG_DEBUG, "srat entry type %i length %i", entry->type, entry->length);
+
+                switch(entry->type) {
+                case ACPI_SRAT_ENTRY_TYPE_APIC_PROCESSOR_AFFINITY: {
+                    acpi_srat_apic_processor_affinity_t* proc_aff_entry = (acpi_srat_apic_processor_affinity_t*)entry;
+
+                    uint32_t proximity_domain = proc_aff_entry->proximity_domain_high << 24 | proc_aff_entry->proximity_domain_low;
+
+                    PRINTLOG(EFI, LOG_INFO, "processor affinity entry: proximity domain %i, apic id %i, flags 0x%08x", proximity_domain, proc_aff_entry->apic_id, proc_aff_entry->flags);
+
+                    if(proc_aff_entry->apic_id == local_apic_id) {
+                        local_apic_proximity_domain = proximity_domain;
+                    }
+
+                    break;
+                }
+
+                case ACPI_SRAT_ENTRY_TYPE_MEMORY_AFFINITY: {
+                    break;
+                }
+
+                case ACPI_SRAT_ENTRY_TYPE_X2APIC_PROCESSOR_AFFINITY: {
+                    acpi_srat_x2apic_processor_affinity_t* x2apic_proc_aff_entry = (acpi_srat_x2apic_processor_affinity_t*)entry;
+
+                    PRINTLOG(EFI, LOG_INFO, "x2apic processor affinity entry: proximity domain %i, apic id %i, flags 0x%08x", x2apic_proc_aff_entry->proximity_domain, x2apic_proc_aff_entry->x2apic_id, x2apic_proc_aff_entry->flags);
+
+                    if(x2apic_proc_aff_entry->x2apic_id == local_apic_id) {
+                        local_apic_proximity_domain = x2apic_proc_aff_entry->proximity_domain;
+                    }
+
+                    break;
+                }
+
+                default: {
+                    PRINTLOG(EFI, LOG_WARNING, "unknown srat entry type %i", entry->type);
+
+                    break;
+                }
+                }
+
+                remaining -= entry->length;
+
+                entry = (acpi_srat_entry_header_t*)((uint8_t*)entry + entry->length);
+            }
+
+            if(local_apic_proximity_domain != -1U) {
+                PRINTLOG(EFI, LOG_INFO, "local apic proximity domain: %i", local_apic_proximity_domain);
+            } else {
+                PRINTLOG(EFI, LOG_ERROR, "local apic proximity domain not found");
+                goto catch_efi_error;
+            }
+
+            remaining = (total_length - sizeof(acpi_table_srat_t));
+            entry     = (acpi_srat_entry_header_t*)(srat + 1);
+
+            while(remaining > 0) {
+                PRINTLOG(EFI, LOG_DEBUG, "srat entry type %i length %i", entry->type, entry->length);
+
+                switch(entry->type) {
+                case ACPI_SRAT_ENTRY_TYPE_APIC_PROCESSOR_AFFINITY: {
+                    break;
+                }
+
+                case ACPI_SRAT_ENTRY_TYPE_MEMORY_AFFINITY: {
+                    acpi_srat_memory_affinity_t* mem_aff_entry = (acpi_srat_memory_affinity_t*)entry;
+
+                    PRINTLOG(EFI, LOG_INFO, "memory affinity entry: proximity domain %i, base address 0x%llx, length 0x%llx, flags 0x%08x", mem_aff_entry->proximity_domain, mem_aff_entry->base_address, mem_aff_entry->length, mem_aff_entry->flags);
+
+                    if(local_apic_proximity_domain == mem_aff_entry->proximity_domain) {
+                        uint64_t mem_end = mem_aff_entry->base_address + mem_aff_entry->length;
+
+                        if(mem_end > max_memory_address) {
+                            max_memory_address = mem_end;
+                        }
+                    }
+
+                    break;
+                }
+
+                case ACPI_SRAT_ENTRY_TYPE_X2APIC_PROCESSOR_AFFINITY: {
+                    break;
+                }
+
+                default: {
+                    PRINTLOG(EFI, LOG_WARNING, "unknown srat entry type %i", entry->type);
+
+                    break;
+                }
+                }
+
+                remaining -= entry->length;
+
+                entry = (acpi_srat_entry_header_t*)((uint8_t*)entry + entry->length);
+            }
+
+            PRINTLOG(EFI, LOG_INFO, "maximum memory address 0x%llx for local apic proximity domain %i", max_memory_address, local_apic_proximity_domain);
+        } else {
+            PRINTLOG(EFI, LOG_ERROR, "srat table not found");
+
+            goto catch_efi_error;
+        }
+
+        if(slit) {
+            PRINTLOG(EFI, LOG_INFO, "slit table found at 0x%p", slit);
+        } else {
+            PRINTLOG(EFI, LOG_WARNING, "slit table not found");
+        }
+
+    }  else{
+        PRINTLOG(EFI, LOG_ERROR, "acpi 2.0+ table not found, computer not supported");
+
+        goto catch_efi_error;
+    }
+
+    res = efi_setup_heap(max_memory_address);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_FATAL, "cannot setup heap %llx", res);
@@ -840,7 +1009,7 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
         goto catch_efi_error;
     }
 
-    res = efi_frame_allocator_init();
+    res = efi_frame_allocator_init(max_memory_address);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_FATAL, "cannot setup frame allocator %llx", res);
@@ -848,19 +1017,10 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
         goto catch_efi_error;
     }
 
+    efi_print_variable_names();
 
-    video_frame_buffer_t* vfb = NULL;
-
-    res = efi_setup_graphics(&vfb);
-
-    if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_FATAL, "cannot setup graphics %llx", res);
-
-        goto catch_efi_error;
-    }
-
-    cpu_cpuid_regs_t query  = {.eax = 0xd};
-    cpu_cpuid_regs_t answer = {0};
+    query  = (cpu_cpuid_regs_t){.eax = 0xd};
+    answer = (cpu_cpuid_regs_t){0};
 
     cpu_cpuid(query, &answer);
 
@@ -895,8 +1055,6 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     if(res != EFI_SUCCESS) {
         goto catch_efi_error;
     }
-
-    efi_tosdb_context_t* tdb_ctx = NULL;
 
     if(is_pxe) {
         res = efi_load_pxe_tosdb(&tdb_ctx);
@@ -1320,32 +1478,6 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
 
     PRINTLOG(EFI, LOG_INFO, "program dumped into memory, building system info");
 
-
-    PRINTLOG(EFI, LOG_DEBUG, "conf table count %lli", system_table->configuration_table_entry_count);
-    efi_guid_t acpi_table_v2_guid    = EFI_ACPI_20_TABLE_GUID;
-    efi_guid_t acpi_table_v1_guid    = EFI_ACPI_TABLE_GUID;
-    efi_guid_t smbios_table_v2_guild = EFI_SMBIOS_2_TABLE_GUID;
-    efi_guid_t smbios_table_v3_guild = EFI_SMBIOS_3_TABLE_GUID;
-    void* smbios_table_v2            = NULL;
-    void* smbios_table_v3            = NULL;
-
-    void* acpi_rsdp  = NULL;
-    void* acpi_xrsdp = NULL;
-
-    for (uint64_t i = 0; i <  system_table->configuration_table_entry_count; i++ ) {
-        if(efi_guid_equal(acpi_table_v2_guid, system_table->configuration_table[i].vendor_guid) == 0) {
-            acpi_xrsdp = system_table->configuration_table[i].vendor_table;
-        } else if(efi_guid_equal(acpi_table_v1_guid, system_table->configuration_table[i].vendor_guid) == 0) {
-            acpi_rsdp = system_table->configuration_table[i].vendor_table;
-        } else if(efi_guid_equal(smbios_table_v2_guild, system_table->configuration_table[i].vendor_guid) == 0) {
-            smbios_table_v2 = system_table->configuration_table[i].vendor_table;
-            PRINTLOG(EFI, LOG_INFO, "smbios v2 table 0x%p", smbios_table_v2);
-        } else if(efi_guid_equal(smbios_table_v3_guild, system_table->configuration_table[i].vendor_guid) == 0) {
-            smbios_table_v3 = system_table->configuration_table[i].vendor_table;
-            PRINTLOG(EFI, LOG_INFO, "smbios v3 table 0x%p", smbios_table_v3);
-        }
-    }
-
     uint8_t* mmap = NULL;
     uint64_t map_size, map_key, descriptor_size;
     uint32_t descriptor_version;
@@ -1393,7 +1525,8 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     sysinfo->mmap_descriptor_version       = descriptor_version;
     sysinfo->frame_buffer                  = vfb;
     sysinfo->acpi_version                  = acpi_xrsdp != NULL?2:1;
-    sysinfo->acpi_table                    = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
+    sysinfo->acpi_rsdp                     = acpi_rsdp;
+    sysinfo->acpi_xrsdp                    = acpi_xrsdp;
     sysinfo->smbios_table_v2               = smbios_table_v2;
     sysinfo->smbios_table_v3               = smbios_table_v3;
     sysinfo->efi_system_table              = system_table;
@@ -1506,13 +1639,10 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
 
 catch_efi_error:
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-use-of-uninitialized-value"
     if(tdb_ctx != NULL) {
         tosdb_close(tdb_ctx->tosdb);
         tosdb_backend_close(tdb_ctx->backend);
     }
-#pragma GCC diagnostic pop
 
     PRINTLOG(EFI, LOG_FATAL, "efi app could not have finished correctly, infinite loop started. Halting...");
 

@@ -45,7 +45,7 @@ typedef struct frame_allocator_t frame_allocator_t;
  * @brief initializes frame allocator
  * @return status of initialization
  */
-efi_status_t efi_frame_allocator_init(void);
+efi_status_t efi_frame_allocator_init(uint64_t max_memory_address);
 
 /*! opaque type for time_t */
 typedef uint64_t time_t;

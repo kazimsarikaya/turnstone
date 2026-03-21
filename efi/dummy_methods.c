@@ -39,6 +39,10 @@ boolean_t windowmanager_is_initialized(void) {
     return false;
 }
 
+typedef struct efi_frame_allocator_context_t {
+    uint64_t max_memory_address;
+} efi_frame_allocator_context_t;
+
 /**
  * brief allocates a frame from the efi boot services.
  * @param[in] self frame allocator to use. (ignored)
@@ -49,18 +53,19 @@ boolean_t windowmanager_is_initialized(void) {
  * @return 0 on success. error code otherwise.
  */
 static int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size) {
-    UNUSED(self);
     UNUSED(fa_type);
     UNUSED(alloc_list_size);
 
-    uint64_t frame_address = 0;
+    efi_frame_allocator_context_t* ctx = (efi_frame_allocator_context_t*)self->context;
+
+    uint64_t frame_address = ctx->max_memory_address;
     uint64_t old_count     = count;
 
     if(count % 0x200) {
         count += 0x200;
     }
 
-    efi_status_t res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, count, &frame_address);
+    efi_status_t res = BS->allocate_pages(EFI_ALLOCATE_MAX_ADDRESS, EFI_LOADER_DATA, count, &frame_address);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "cannot allocate frame");
@@ -94,16 +99,26 @@ static int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, 
     return EFI_SUCCESS;
 }
 
-efi_status_t efi_frame_allocator_init(void) {
+efi_status_t efi_frame_allocator_init(uint64_t max_memory_address) {
     frame_allocator_t* frame_allocator = memory_malloc(sizeof(frame_allocator_t));
 
     if(!frame_allocator) {
         return EFI_OUT_OF_RESOURCES;
     }
 
-    frame_set_allocator(frame_allocator);
+    efi_frame_allocator_context_t* ctx = memory_malloc(sizeof(efi_frame_allocator_context_t));
 
+    if(!ctx) {
+        memory_free(frame_allocator);
+        return EFI_OUT_OF_RESOURCES;
+    }
+
+    ctx->max_memory_address = max_memory_address;
+
+    frame_allocator->context                 = ctx;
     frame_allocator->allocate_frame_by_count = efi_frame_allocate_frame_by_count;
+
+    frame_set_allocator(frame_allocator);
 
     return EFI_SUCCESS;
 }

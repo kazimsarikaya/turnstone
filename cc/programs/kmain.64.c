@@ -296,9 +296,9 @@ int8_t kmain64(size_t entry_point) {
     PRINTLOG(KERNEL, LOG_DEBUG, "Frame buffer at 0x%llx and size 0x%016llx", SYSTEM_INFO->frame_buffer->virtual_base_address, SYSTEM_INFO->frame_buffer->buffer_size);
     PRINTLOG(KERNEL, LOG_DEBUG, "Screen resultion %ix%i", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
 
-    if(SYSTEM_INFO->acpi_table) {
-        PRINTLOG(ACPI, LOG_DEBUG, "acpi rsdp table version: %lli address 0x%p", SYSTEM_INFO->acpi_version, SYSTEM_INFO->acpi_table);
-    }
+
+    PRINTLOG(ACPI, LOG_DEBUG, "acpi rsdp table version: %lli rsdp address 0x%p xrsdp address 0x%p",
+             SYSTEM_INFO->acpi_version, SYSTEM_INFO->acpi_rsdp, SYSTEM_INFO->acpi_xrsdp);
 
     const char_t* test_data = "çok güzel bir kış ayı İĞÜŞÖÇ ığüşöç";
     printf("address 0x%p %s\n", test_data, test_data);
