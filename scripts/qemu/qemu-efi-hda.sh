@@ -155,6 +155,7 @@ fi
 
 NUMCPUS=4
 RAMSIZE=8
+MAXRAMSIZE=$((RAMSIZE*2))
 
 MONITOR_XMAX=2048
 MONITOR_YMAX=1152
@@ -209,7 +210,26 @@ fi
 
 qemu-system-x86_64 \
   -nodefaults -no-user-config $PREVENTSHUTDOWN \
-  -M q35,kernel-irqchip=split,smbios-entry-point-type=64 -m ${RAMSIZE}g -smp cpus=${NUMCPUS} -name osdev-hda-efi-boot \
+  -M q35,kernel-irqchip=split,smbios-entry-point-type=64,hmat=on \
+  -m $((RAMSIZE))G,slots=4,maxmem=${MAXRAMSIZE}G \
+  -object memory-backend-ram,size=$((MAXRAMSIZE/4))G,id=ram-s0-d0,merge=false \
+  -object memory-backend-ram,size=$((MAXRAMSIZE/4))G,id=ram-s1-d0,merge=false \
+  -smbios type=17,loc_pfx=DIMM_A0,bank=BANK0,speed=3200 \
+  -smbios type=17,loc_pfx=DIMM_A1,bank=BANK0,speed=3200 \
+  -smbios type=17,loc_pfx=DIMM_B0,bank=BANK1,speed=3200 \
+  -smbios type=17,loc_pfx=DIMM_B1,bank=BANK1,speed=3200 \
+  -smp cpus=${NUMCPUS},sockets=2,cores=$((NUMCPUS/2)),threads=1 \
+  -numa node,nodeid=0,memdev=ram-s0-d0 \
+  -numa node,nodeid=1,memdev=ram-s1-d0 \
+  -numa cpu,node-id=0,socket-id=0 \
+  -numa cpu,node-id=1,socket-id=1 \
+  -numa hmat-lb,initiator=0,target=0,hierarchy=memory,data-type=access-latency,latency=5 \
+  -numa hmat-lb,initiator=0,target=0,hierarchy=memory,data-type=access-bandwidth,bandwidth=200M \
+  -numa hmat-lb,initiator=0,target=1,hierarchy=memory,data-type=access-latency,latency=10 \
+  -numa hmat-lb,initiator=0,target=1,hierarchy=memory,data-type=access-bandwidth,bandwidth=100M \
+  -numa hmat-cache,node-id=0,size=10K,level=1,associativity=direct,policy=write-back,line=8 \
+  -numa hmat-cache,node-id=1,size=10K,level=1,associativity=direct,policy=write-back,line=8 \
+  -name osdev-hda-efi-boot \
   -cpu host,topoext=on,x2apic=on \
   -accel $ACCEL ${TRACE_OPTS} \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${OUTPUTDIR}/edk2-x86_64-code.fd \
@@ -218,13 +238,14 @@ qemu-system-x86_64 \
   -drive id=cache,if=none,format=raw,file=${OUTPUTDIR}/qemu-nvme-cache,werror=report,rerror=report \
   -drive id=usbbot,if=none,format=raw,file=${OUTPUTDIR}/qemu-usb-bot,werror=report,rerror=report \
   -drive id=usbuas,if=none,format=raw,file=${OUTPUTDIR}/qemu-usb-uas,werror=report,rerror=report \
-  -device ide-hd,drive=system,bootindex=1 \
-  -device nvme,drive=cache,serial=qn0001,id=nvme0,logical_block_size=4096,physical_block_size=4096 \
-  -device VGA,id=gpu0,vgamem_mb=256,xmax=${MONITOR_XMAX},ymax=${MONITOR_YMAX},xres=640,yres=480 \
-  -device igb,netdev=t0,id=nic0 \
-  -netdev $NETDEV \
-  -device nec-usb-xhci,id=xhci0 \
-  -device nec-usb-xhci,id=xhci1 \
+  -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
+  -chardev socket,id=chrtpm,path=${TPM_DIR}/swtpm.ctrl \
+  -tpmdev emulator,id=tpm0,chardev=chrtpm \
+  -device tpm-tis,tpmdev=tpm0 \
+  -device pxb-pcie,id=pxb0,bus_nr=0x20,numa_node=0,bus=pcie.0 \
+  -device pcie-root-port,id=rp0,bus=pxb0,chassis=0 \
+  -device pcie-root-port,id=rp_edu,bus=pxb0,chassis=10 \
+  -device nec-usb-xhci,id=xhci0,bus=rp0 \
   -device usb-hub,bus=xhci0.0,id=hub0,port=1 \
   -device usb-tablet,bus=xhci0.0,port=1.1 \
   -device usb-kbd,bus=xhci0.0,port=1.2 \
@@ -232,13 +253,22 @@ qemu-system-x86_64 \
   -device usb-storage,bus=xhci0.0,id=bot0,port=2,removable=on,drive=usbbot \
   -device usb-uas,bus=xhci0.0,id=uas0,port=3 \
   -device scsi-hd,bus=uas0.0,lun=0,removable=on,drive=usbuas \
+  -device ich9-ahci,id=ahci0,bus=rp0 \
+  -device ide-hd,drive=system,bootindex=1,bus=ahci0.0 \
+  -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF,bus=rp_edu \
+  -device VGA,id=gpu0,vgamem_mb=256,xmax=${MONITOR_XMAX},ymax=${MONITOR_YMAX},xres=640,yres=480,bus=rp0 \
+  -device pxb-pcie,id=pxb1,bus_nr=0x40,numa_node=1,bus=pcie.0 \
+  -device pcie-root-port,id=rp1,bus=pxb1,chassis=1 \
+  -device nec-usb-xhci,id=xhci1,bus=rp1 \
+  -device pxb-pcie,id=pxb2,bus_nr=0x60,numa_node=0,bus=pcie.0 \
+  -device pcie-root-port,id=rp2,bus=pxb2,chassis=2 \
+  -device nvme,drive=cache,serial=qn0001,id=nvme0,logical_block_size=4096,physical_block_size=4096,bus=rp2 \
   -device usb-host,hostbus=6,bus=xhci1.0,port=1,guest-reset=true,guest-resets-all=true,loglevel=4 \
-  -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
-  -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
+  -device pxb-pcie,id=pxb3,bus_nr=0x80,numa_node=1,bus=pcie.0 \
+  -device pcie-root-port,id=rp3,bus=pxb3,chassis=3 \
+  -device igb,netdev=t0,id=nic0,bus=rp3 \
+  -netdev $NETDEV \
   $SERIALS \
-  -chardev socket,id=chrtpm,path=${TPM_DIR}/swtpm.ctrl \
-  -tpmdev emulator,id=tpm0,chardev=chrtpm \
-  -device tpm-tis,tpmdev=tpm0 \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
   -monitor stdio \
   -audio pipewire \
