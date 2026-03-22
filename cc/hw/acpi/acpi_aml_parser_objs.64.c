@@ -25,7 +25,7 @@ int8_t acpi_aml_parse_namestring(acpi_aml_parser_context_t* ctx, void** data, ui
     uint64_t idx        = 0;
     uint64_t t_consumed = 0;
 
-    while(acpi_aml_is_root_char(ctx->data) == 0 || acpi_aml_is_parent_prefix_char(ctx->data) == 0) {
+    while(acpi_aml_is_root_char(ctx->data) || acpi_aml_is_parent_prefix_char(ctx->data)) {
         name[idx++] = *ctx->data;
 
         ctx->data++;

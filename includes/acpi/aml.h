@@ -49,6 +49,8 @@ typedef struct acpi_aml_device_bus_t {
 typedef struct acpi_aml_device_ioport_t {
     uint16_t min;
     uint16_t max;
+    uint16_t alignment;
+    uint16_t length;
 } acpi_aml_device_ioport_t;
 
 typedef struct acpi_aml_device_dma_t {
@@ -99,31 +101,22 @@ struct acpi_aml_device_t {
 
 acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t* heap, uint8_t rev);
 #define acpi_aml_parser_context_create(rev) acpi_aml_parser_context_create_with_heap(NULL, rev)
-void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t* ctx);
 
 int8_t acpi_aml_parser_parse_table(acpi_aml_parser_context_t* ctx, acpi_sdt_header_t* table);
 
-acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t*, const char_t*);
-int8_t             acpi_aml_read_as_integer(acpi_aml_parser_context_t*, const acpi_aml_object_t*, int64_t*);
-int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t*, int64_t, acpi_aml_object_t*);
+acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t* ctx, const char_t* symbol_name);
 
-int8_t                   acpi_device_build(acpi_aml_parser_context_t*);
-int8_t                   acpi_device_init(acpi_aml_parser_context_t*);
-void                     acpi_device_print_all(acpi_aml_parser_context_t* ctx);
-void                     acpi_device_print(acpi_aml_parser_context_t* ctx, const acpi_aml_device_t* d);
+void acpi_device_print_all(acpi_aml_parser_context_t* ctx);
+void acpi_device_print(acpi_aml_parser_context_t* ctx, const acpi_aml_device_t* d);
+
 const acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, const char_t* dev_name, uint64_t address);
 #define acpi_device_lookup_by_address(c, a) acpi_device_lookup(c, NULL, a)
 #define acpi_device_lookup_by_name(c, n) acpi_device_lookup(c, n, 0)
-int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx);
-int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx);
 
 uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t addr, uint8_t* int_count);
 
-void acpi_aml_print_symbol_table(acpi_aml_parser_context_t*);
-void acpi_aml_print_object(acpi_aml_parser_context_t*, const acpi_aml_object_t*);
-
-void acpi_aml_destroy_symbol_table(acpi_aml_parser_context_t*, uint8_t);
-void acpi_aml_destroy_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
+void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx);
+void acpi_aml_print_object(acpi_aml_parser_context_t* ctx, const acpi_aml_object_t* obj);
 
 #ifdef __cplusplus
 }

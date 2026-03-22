@@ -56,8 +56,10 @@ static int8_t acpi_aml_resource_parse_smallitem_io(acpi_aml_parser_context_t* ct
         return -1;
     }
 
-    item->min = res->io.min;
-    item->max = res->io.max;
+    item->min       = res->io.min;
+    item->max       = res->io.max;
+    item->alignment = 1 << res->io.align;
+    item->length    = res->io.length;
 
     list_list_insert(device->ioports, item);
 
@@ -141,6 +143,9 @@ static int8_t acpi_aml_resource_parse_largeitem_extended_interrupt(acpi_aml_pars
 }
 
 static int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_largeitem_t* res) {
+    PRINTLOG(ACPIAML, LOG_TRACE, "parsing word address space resource for device %s", device->name);
+    PRINTLOG(ACPIAML, LOG_TRACE, "type %i decode_type %i ", res->word_address_space.type, res->word_address_space.decode_type);
+
     if(res->word_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_MEMORY) {
         if(device->memory_ranges == NULL) {
             device->memory_ranges = list_create_list_with_heap(ctx->heap);
@@ -191,6 +196,9 @@ static int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_pars
             item->max <<= res->word_address_space.gra + 1;
         }
 
+        item->alignment = 1 << res->word_address_space.type_spesific_flags.io_flag.rng;
+        item->length    = item->max - item->min + 1;
+
         list_list_insert(device->ioports, item);
     } else if(res->word_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_BUS) {
         if(device->buses == NULL) {
@@ -225,63 +233,180 @@ static int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_pars
 }
 
 static int8_t acpi_aml_resource_parse_largeitem_dword_address_space(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_largeitem_t* res) {
-    if(device->memory_ranges == NULL) {
-        device->memory_ranges = list_create_list_with_heap(ctx->heap);
-    }
+    PRINTLOG(ACPIAML, LOG_TRACE, "parsing dword address space resource for device %s", device->name);
+    PRINTLOG(ACPIAML, LOG_TRACE, "type %i decode_type %i ", res->dword_address_space.type, res->dword_address_space.decode_type);
 
-    acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
 
-    if(item == NULL) {
+    if(res->dword_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_MEMORY) {
+        if(device->memory_ranges == NULL) {
+            device->memory_ranges = list_create_list_with_heap(ctx->heap);
+        }
+
+        acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
+
+        if(item == NULL) {
+            return -1;
+        }
+
+        item->writable     = res->dword_address_space.type_spesific_flags.memory_flag.write;
+        item->cacheable    = (res->dword_address_space.type_spesific_flags.memory_flag.mem & 1) == 1;
+        item->prefetchable = (res->dword_address_space.type_spesific_flags.memory_flag.mem & 2) == 2;
+        item->type         = res->dword_address_space.type_spesific_flags.memory_flag.mtp;
+        item->min          = res->dword_address_space.min;
+        item->max          = res->dword_address_space.max;
+
+        if(res->dword_address_space.min_address_fixed == 0) {
+            item->min <<= res->dword_address_space.gra + 1;
+        }
+
+        if(res->dword_address_space.max_address_fixed == 0) {
+            item->max <<= res->dword_address_space.gra + 1;
+        }
+
+        list_list_insert(device->memory_ranges, item);
+    } else if(res->dword_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_IO) {
+        if(device->ioports == NULL) {
+            device->ioports = list_create_list_with_heap(ctx->heap);
+        }
+
+        acpi_aml_device_ioport_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_ioport_t), 0);
+
+        if(item == NULL) {
+            return -1;
+        }
+
+        item->min = res->dword_address_space.min;
+        item->max = res->dword_address_space.max;
+
+        if(res->dword_address_space.min_address_fixed == 0) {
+            item->min <<= res->dword_address_space.gra + 1;
+        }
+
+        if(res->dword_address_space.max_address_fixed == 0) {
+            item->max <<= res->dword_address_space.gra + 1;
+        }
+
+        item->alignment = 1 << res->dword_address_space.type_spesific_flags.io_flag.rng;
+        item->length    = item->max - item->min + 1;
+
+        list_list_insert(device->ioports, item);
+    } else if(res->dword_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_BUS) {
+        if(device->buses == NULL) {
+            device->buses = list_create_list_with_heap(ctx->heap);
+        }
+
+        acpi_aml_device_bus_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_bus_t), 0);
+
+        if(item == NULL) {
+            return -1;
+        }
+
+        item->min = res->dword_address_space.min;
+        item->max = res->dword_address_space.max;
+
+        if(res->dword_address_space.min_address_fixed == 0) {
+            item->min <<= res->dword_address_space.gra + 1;
+        }
+
+        if(res->dword_address_space.max_address_fixed == 0) {
+            item->max <<= res->dword_address_space.gra + 1;
+        }
+
+        list_list_insert(device->buses, item);
+    } else {
+        PRINTLOG(ACPIAML, LOG_ERROR, "device %s unknown dword address type %i", device->name, res->dword_address_space.type);
+
         return -1;
     }
-
-    item->writable     = res->dword_address_space.type_spesific_flags.memory_flag.write;
-    item->cacheable    = (res->dword_address_space.type_spesific_flags.memory_flag.mem & 1) == 1;
-    item->prefetchable = (res->dword_address_space.type_spesific_flags.memory_flag.mem & 2) == 2;
-    item->type         = res->dword_address_space.type_spesific_flags.memory_flag.mtp;
-    item->min          = res->dword_address_space.min;
-    item->max          = res->dword_address_space.max;
-
-    if(res->word_address_space.min_address_fixed == 0) {
-        item->min <<= res->word_address_space.gra + 1;
-    }
-
-    if(res->word_address_space.max_address_fixed == 0) {
-        item->max <<= res->word_address_space.gra + 1;
-    }
-
-    list_list_insert(device->memory_ranges, item);
 
     return 0;
 }
 
 static int8_t acpi_aml_resource_parse_largeitem_qword_address_space(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_largeitem_t* res) {
-    if(device->memory_ranges == NULL) {
-        device->memory_ranges = list_create_list_with_heap(ctx->heap);
-    }
+    PRINTLOG(ACPIAML, LOG_TRACE, "parsing qword address space resource for device %s", device->name);
+    PRINTLOG(ACPIAML, LOG_TRACE, "type %i decode_type %i ", res->qword_address_space.type, res->qword_address_space.decode_type);
 
-    acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
+    if(res->qword_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_MEMORY) {
+        if(device->memory_ranges == NULL) {
+            device->memory_ranges = list_create_list_with_heap(ctx->heap);
+        }
 
-    if(item == NULL) {
+        acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
+
+        if(item == NULL) {
+            return -1;
+        }
+
+        item->writable     = res->qword_address_space.type_spesific_flags.memory_flag.write;
+        item->cacheable    = (res->qword_address_space.type_spesific_flags.memory_flag.mem & 1) == 1;
+        item->prefetchable = (res->qword_address_space.type_spesific_flags.memory_flag.mem & 2) == 2;
+        item->type         = res->qword_address_space.type_spesific_flags.memory_flag.mtp;
+        item->min          = res->qword_address_space.min;
+        item->max          = res->qword_address_space.max;
+
+        if(res->qword_address_space.min_address_fixed == 0) {
+            item->min <<= res->qword_address_space.gra + 1;
+        }
+
+        if(res->qword_address_space.max_address_fixed == 0) {
+            item->max <<= res->qword_address_space.gra + 1;
+        }
+
+        list_list_insert(device->memory_ranges, item);
+    } else if (res->qword_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_IO) {
+        if(device->ioports == NULL) {
+            device->ioports = list_create_list_with_heap(ctx->heap);
+        }
+
+        acpi_aml_device_ioport_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_ioport_t), 0);
+
+        if(item == NULL) {
+            return -1;
+        }
+
+        item->min = res->qword_address_space.min;
+        item->max = res->qword_address_space.max;
+
+        if(res->qword_address_space.min_address_fixed == 0) {
+            item->min <<= res->qword_address_space.gra + 1;
+        }
+
+        if(res->qword_address_space.max_address_fixed == 0) {
+            item->max <<= res->qword_address_space.gra + 1;
+        }
+
+        item->alignment = 1 << res->qword_address_space.type_spesific_flags.io_flag.rng;
+        item->length    = item->max - item->min + 1;
+
+        list_list_insert(device->ioports, item);
+    } else if(res->qword_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_BUS) {
+        if(device->buses == NULL) {
+            device->buses = list_create_list_with_heap(ctx->heap);
+        }
+
+        acpi_aml_device_bus_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_bus_t), 0);
+
+        if(item == NULL) {
+            return -1;
+        }
+
+        item->min = res->qword_address_space.min;
+        item->max = res->qword_address_space.max;
+
+        if(res->qword_address_space.min_address_fixed == 0) {
+            item->min <<= res->qword_address_space.gra + 1;
+        }
+
+        if(res->qword_address_space.max_address_fixed == 0) {
+            item->max <<= res->qword_address_space.gra + 1;
+        }
+
+        list_list_insert(device->buses, item);
+    } else {
+        PRINTLOG(ACPIAML, LOG_ERROR, "device %s unknown qword address type %i", device->name, res->qword_address_space.type);
+
         return -1;
     }
-
-    item->writable     = res->qword_address_space.type_spesific_flags.memory_flag.write;
-    item->cacheable    = (res->qword_address_space.type_spesific_flags.memory_flag.mem & 1) == 1;
-    item->prefetchable = (res->qword_address_space.type_spesific_flags.memory_flag.mem & 2) == 2;
-    item->type         = res->qword_address_space.type_spesific_flags.memory_flag.mtp;
-    item->min          = res->qword_address_space.min;
-    item->max          = res->qword_address_space.max;
-
-    if(res->word_address_space.min_address_fixed == 0) {
-        item->min <<= res->word_address_space.gra + 1;
-    }
-
-    if(res->word_address_space.max_address_fixed == 0) {
-        item->max <<= res->word_address_space.gra + 1;
-    }
-
-    list_list_insert(device->memory_ranges, item);
 
     return 0;
 }
@@ -413,7 +538,7 @@ int8_t acpi_aml_resource_print(acpi_aml_parser_context_t* ctx, const acpi_aml_de
         while(!io_iter->end_of_iterator(io_iter)) {
             const acpi_aml_device_ioport_t* io = io_iter->get_item(io_iter);
 
-            printf("  ioport range 0x%x-0x%x\n", io->min, io->max);
+            printf("  ioport range 0x%x-0x%x alignment: 0x%x length: 0x%x\n", io->min, io->max, io->alignment, io->length);
 
             io_iter = io_iter->next(io_iter);
         }

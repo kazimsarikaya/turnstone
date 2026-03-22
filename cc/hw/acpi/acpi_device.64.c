@@ -656,7 +656,19 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 
             if(d->crs->type == ACPI_AML_OT_BUFFER) {
                 PRINTLOG(ACPI, LOG_TRACE, "device %s has crs with buffer len %lli, enumarating...", d->name, d->crs->buffer.buflen);
-                acpi_aml_resource_parse(ctx, (acpi_aml_device_t*)d, d->crs);
+
+                LOGBLOCK(ACPI, LOG_DEBUG) {
+                    printf("device %s crs buffer:\n", d->name);
+                    for(int64_t i = 0; i < d->crs->buffer.buflen; i++) {
+                        printf("%02x ", d->crs->buffer.buf[i]);
+                        if((i + 1) % 16 == 0) {
+                            printf("\n");
+                        }
+                    }
+                    printf("\n");
+                }
+
+                err_cnt += acpi_aml_resource_parse(ctx, (acpi_aml_device_t*)d, d->crs);
             } else if(d->crs->type == ACPI_AML_OT_METHOD) {
                 PRINTLOG(ACPI, LOG_TRACE, "device %s has crs with method, executing...", d->name);
                 acpi_aml_object_t* crs_res = NULL;
@@ -677,14 +689,16 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
                         continue;
                     }
 
-                    printf("device %s crs method return buffer len %lli, enumarating...\n", d->name, crs_res->buffer.buflen);
-                    for(int64_t i = 0; i < crs_res->buffer.buflen; i++) {
-                        printf("%02x ", crs_res->buffer.buf[i]);
-                        if((i + 1) % 16 == 0) {
-                            printf("\n");
+                    LOGBLOCK(ACPI, LOG_INFO) {
+                        printf("device %s crs method return buffer len %lli, enumarating...\n", d->name, crs_res->buffer.buflen);
+                        for(int64_t i = 0; i < crs_res->buffer.buflen; i++) {
+                            printf("%02x ", crs_res->buffer.buf[i]);
+                            if((i + 1) % 16 == 0) {
+                                printf("\n");
+                            }
                         }
+                        printf("\n");
                     }
-                    printf("\n");
 
                     err_cnt += acpi_aml_resource_parse(ctx, (acpi_aml_device_t*)d, crs_res);
 

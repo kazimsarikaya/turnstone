@@ -162,7 +162,7 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
 
     int8_t res = -1;
 
-    if (*ctx->data != NULL && acpi_aml_is_namestring_start(ctx->data) == 0) {
+    if (*ctx->data != NULL && acpi_aml_is_namestring_start(ctx->data)) {
         res = acpi_aml_parse_symbol(ctx, data, consumed);
     } else {
         acpi_aml_parse_f parser = acpi_aml_parse_fs[*ctx->data];
@@ -176,8 +176,9 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
         }
     }
 
-    if(res == -1 && ctx->flags.fatal) {
-        PRINTLOG(ACPIAML, LOG_ERROR, "scope: -%s- data: 0x%02x length: %lli remaining: %lli", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
+    if(res == -1) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "scope: -%s- data: 0x%02x length: %lli remaining: %lli is fatal? %i",
+                 ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining, ctx->flags.fatal);
         return -1;
     }
 
@@ -201,6 +202,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 
     int64_t tmp_start = ctx->remaining;
     if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "failed to parse name for symbol");
         memory_free_ext(ctx->heap, name);
         return -1;
     }
@@ -216,6 +218,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
         tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
         if(tmp_obj == NULL) {
+            PRINTLOG(ACPIAML, LOG_ERROR, "failed to allocate object for symbol parser");
             return -1;
         }
 
@@ -234,6 +237,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
         t_consumed = 0;
 
         if(acpi_aml_parse_op_code_with_cnt(ACPI_AML_METHODCALL, tmp_obj->method.arg_count, ctx, data, &t_consumed, tmp_obj) != 0) {
+            PRINTLOG(ACPIAML, LOG_ERROR, "failed to parse method call for symbol");
             return -1;
         }
 
@@ -245,6 +249,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
             }
             *data = (void*)tmp_obj;
         } else {
+            PRINTLOG(ACPIAML, LOG_ERROR, "data pointer null for symbol parser");
             return -1;
         }
     }
@@ -290,6 +295,23 @@ const acpi_aml_parse_f acpi_aml_parse_ext_fs[] = {
     PARSER_F_NAME(region),
 };
 
+static uint8_t acpi_aml_get_index_of_extended_code(uint8_t code) {
+    uint8_t res = -1;
+
+    if(code >= 0x80) {
+        res = code - 0x6d;
+    }else if(code >= 0x30) {
+        res = code - 0x21;
+    } else if(code >= 0x1f) {
+        res = code - 0x1b;
+    } else if(code >= 0x12) {
+        res = code - 0x10;
+    } else {
+        res = code - 0x01;
+    }
+
+    return res;
+}
 
 int8_t acpi_aml_parse_op_extended(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
     uint64_t t_consumed = 0;
@@ -318,15 +340,15 @@ int8_t acpi_aml_parse_op_extended(acpi_aml_parser_context_t* ctx, void** data, u
 
 uint8_t acpi_aml_parser_defaults[] =
 {
-    0x10, 0x05, 0x5F, 0x47, 0x50, 0x45, // _GPE
-    0x10, 0x05, 0x5F, 0x50, 0x52, 0x5F, // _PR_
-    0x10, 0x05, 0x5F, 0x53, 0x42, 0x5F, // _SB_
-    0x10, 0x05, 0x5F, 0x53, 0x49, 0x5F, // _SI_
-    0x10, 0x05, 0x5F, 0x54, 0x5A, 0x5F, // _TZ_
-    0x5B, 0x01, 0x5F, 0x47, 0x4C, 0x5F, 0x00, // _GL_
-    0x08, 0x5F, 0x4F, 0x53, 0x5F, 0x0D, 0x48, 0x6F, 0x62, 0x62, 0x79, 0x20, 0x4F, 0x53, 0x00, // _OS_ -> Hobby OS
-    0x14, 0x08, 0x5F, 0x4F, 0x53, 0x49, 0x01, 0xA4, 0x00, // _OSI
-    0x08, 0x5F, 0x52, 0x45, 0x56, 0x0A, 0x00 // _REV
+    0x10, 0x05, '_', 'G', 'P', 'E', // _GPE
+    0x10, 0x05, '_', 'P', 'R', '_', // _PR_
+    0x10, 0x05, '_', 'S', 'B', '_', // _SB_
+    0x10, 0x05, '_', 'S', 'I', '_', // _SI_
+    0x10, 0x05, '_', 'T', 'Z', '_', // _TZ_
+    0x5B, 0x01, '_', 'G', 'L', '_', 0x00, // _GL_
+    0x08, '_', 'O', 'S', '_', 0x0D, 'T', 'u', 'r', 'n', 's', 't', 'o', 'n', 'e', ' ', 'O', 'S', 0x00, // _OS_ -> Turnstone OS
+    0x14, 0x08, '_', 'O', 'S', 'I', 0x01, 0xA4, 0x00, // _OSI
+    0x08, '_', 'R', 'E', 'V', 0x0A, 0x00 // _REV
 };
 
 static int8_t acpi_aml_object_name_comparator(const void* data1, const void* data2) {
@@ -366,6 +388,7 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
     ctx->revision     = revision;
 
     if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "failed to parse default AML code");
         memory_free_ext(heap, ctx);
         return NULL;
     }
