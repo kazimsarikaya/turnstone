@@ -22,6 +22,9 @@ void time_timer_spinsleep(uint64_t usecs);
 uint64_t time_timer_get_rdtsc_delta(void);
 uint64_t time_timer_get_rdtsc_delta_us(void);
 
+void time_timer_set_rdtsc_delta(uint64_t delta);
+void time_timer_set_rdtsc_delta_us(uint64_t delta_us);
+
 #ifdef __cplusplus
 }
 #endif

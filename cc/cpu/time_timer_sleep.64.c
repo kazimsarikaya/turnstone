@@ -13,8 +13,8 @@
 
 MODULE("turnstone.kernel.timer.sleep");
 
-uint64_t time_timer_rdtsc_delta = 0; // for ms
-uint64_t time_timer_rdtsc_delta_us = 0; // for us
+static volatile uint64_t time_timer_rdtsc_delta    = 0; // for ms
+static volatile uint64_t time_timer_rdtsc_delta_us = 0; // for us
 
 void time_timer_spinsleep(uint64_t usecs) {
     uint64_t end_tsc = rdtsc() + (time_timer_rdtsc_delta_us * usecs);
@@ -32,7 +32,7 @@ void time_timer_configure_sleep(void) {
         volatile uint64_t end_tsc = rdtsc();
         total_tsc += (end_tsc - start_tsc);
     }
-    time_timer_rdtsc_delta = total_tsc / 1000; // for ms
+    time_timer_rdtsc_delta    = total_tsc / 1000; // for ms
     time_timer_rdtsc_delta_us = time_timer_rdtsc_delta / 1000; // for us
 }
 
@@ -42,4 +42,12 @@ uint64_t time_timer_get_rdtsc_delta(void) {
 
 uint64_t time_timer_get_rdtsc_delta_us(void) {
     return time_timer_rdtsc_delta_us;
+}
+
+void time_timer_set_rdtsc_delta(uint64_t delta) {
+    time_timer_rdtsc_delta = delta;
+}
+
+void time_timer_set_rdtsc_delta_us(uint64_t delta_us) {
+    time_timer_rdtsc_delta_us = delta_us;
 }

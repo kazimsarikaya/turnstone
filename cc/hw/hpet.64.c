@@ -13,6 +13,7 @@
 #include <cpu/interrupt.h>
 #include <cpu.h>
 #include <time.h>
+#include <time/timer.h>
 #include <device/rtc.h>
 #include <random.h>
 
@@ -24,16 +25,13 @@ MODULE("turnstone.kernel.hw.hpet");
  */
 boolean_t hpet_enabled = false;
 
-volatile uint64_t hpet_tick_count = 0;
+volatile uint64_t hpet_tick_count  = 0;
 volatile uint64_t hpet_rdtsc_start = 0;
-volatile uint64_t hpet_rdtsc_end = 0;
-volatile uint64_t hpet_last_rdtsc = 0;
+volatile uint64_t hpet_rdtsc_end   = 0;
+volatile uint64_t hpet_last_rdtsc  = 0;
 
 uint64_t hpet_next_calibration_tick = 0;
-uint64_t hpet_next_rtc_resync_tick = 0;
-
-extern uint64_t time_timer_rdtsc_delta; // cycles per ms
-extern uint64_t time_timer_rdtsc_delta_us; // cycles per µs
+uint64_t hpet_next_rtc_resync_tick  = 0;
 
 #define HPET_CALIBRATION_INTERVAL_US     (1000000ULL) // 1 second
 #define HPET_CALIBRATION_INTERVAL_TICKS  (HPET_CALIBRATION_INTERVAL_US / HPET_MIN_US_SLEEP)
@@ -53,6 +51,9 @@ void video_text_print(const char_t* str);
 static int8_t hpet_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
 
+    uint64_t time_timer_rdtsc_delta    = time_timer_get_rdtsc_delta();
+    uint64_t time_timer_rdtsc_delta_us = time_timer_get_rdtsc_delta_us();
+
     hpet_tick_count++;
     TIME_EPOCH += HPET_MIN_US_SLEEP; // advance OS time by µs per tick
 
@@ -60,10 +61,9 @@ static int8_t hpet_isr(interrupt_frame_ext_t* frame) {
 
     // --- Start calibration window ---
     if (hpet_tick_count == hpet_next_calibration_tick) {
-        hpet_rdtsc_start = hpet_last_rdtsc;
+        hpet_rdtsc_start           = hpet_last_rdtsc;
         hpet_next_calibration_tick = hpet_tick_count + HPET_CALIBRATION_INTERVAL_TICKS;
     }
-
     // --- End calibration window ---
     else if (hpet_tick_count == hpet_next_calibration_tick - 1) {
         hpet_rdtsc_end = hpet_last_rdtsc;
@@ -75,7 +75,10 @@ static int8_t hpet_isr(interrupt_frame_ext_t* frame) {
 
         // Smooth result with exponential moving average (7/8 old + 1/8 new)
         time_timer_rdtsc_delta_us = (time_timer_rdtsc_delta_us * 7 + new_cycles_per_us) / 8;
-        time_timer_rdtsc_delta = time_timer_rdtsc_delta_us * 1000;
+        time_timer_rdtsc_delta    = time_timer_rdtsc_delta_us * 1000;
+
+        time_timer_set_rdtsc_delta_us(time_timer_rdtsc_delta_us);
+        time_timer_set_rdtsc_delta(time_timer_rdtsc_delta);
     }
 
     // --- Periodic RTC resync (every ~15 min) ---
@@ -111,8 +114,7 @@ void hpet_usleep(uint64_t usecs) {
 int8_t hpet_init(void) {
     hpet_table_t * hpet_table = (hpet_table_t *)acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "HPET");
 
-    if (hpet_table == NULL)
-    {
+    if (hpet_table == NULL) {
         PRINTLOG(HPET, LOG_ERROR, "HPET table not found");
 
         return -1;
@@ -151,7 +153,7 @@ int8_t hpet_init(void) {
                           | APIC_IOAPIC_DESTINATION_MODE_PHYSICAL
                           | APIC_IOAPIC_TRIGGER_MODE_EDGE | APIC_IOAPIC_PIN_POLARITY_ACTIVE_HIGH);
 
-    uint64_t period_fs = capabilities.fields.counter_clk_period;
+    uint64_t period_fs    = capabilities.fields.counter_clk_period;
     uint64_t ticks_per_ns = 1000000ULL / period_fs; // may round down
     uint64_t ticks_per_us = 1000000000ULL / period_fs;
     uint64_t ticks_per_ms = 1000000000000ULL / period_fs;
@@ -166,11 +168,11 @@ int8_t hpet_init(void) {
 
     hpet->configuration = 0;
 
-    tmr0_config.fields.interrupt_type = 0;
+    tmr0_config.fields.interrupt_type   = 0;
     tmr0_config.fields.interrupt_enable = 1;
-    tmr0_config.fields.timer_type = 1;
-    tmr0_config.fields.value_set = 1;
-    tmr0_config.fields.interrupt_route = 17;
+    tmr0_config.fields.timer_type       = 1;
+    tmr0_config.fields.value_set        = 1;
+    tmr0_config.fields.interrupt_route  = 17;
 
     hpet->timer0_configuration = tmr0_config.raw;
 
