@@ -12,6 +12,9 @@
 #include <logging.h>
 #include <bplustree.h>
 #include <utils.h>
+#include <strings.h>
+#include <time/timer.h>
+#include <cpu/task.h>
 
 MODULE("turnstone.kernel.hw.acpi");
 
@@ -243,7 +246,11 @@ int8_t acpi_aml_exec_mth_return(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 
     obj = acpi_aml_get_if_arg_local_obj(ctx, obj, false, false);
 
-    mthctx->mthobjs[15] = obj; // acpi_aml_duplicate_object(ctx, obj);
+    if(obj->type == ACPI_AML_OT_LOCAL_OR_ARG) {
+        PRINTLOG(ACPIAML, LOG_WARNING, "method return with local/arg object");
+    }
+
+    mthctx->mthobjs[15] = obj;
     opcode->return_obj  = obj;
 
     PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s method return obj 0x%p type %i", ctx->scope_prefix, obj, obj->type);
@@ -289,7 +296,7 @@ int8_t acpi_aml_execute(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* mth, 
     return res;
 }
 
-int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
+static int8_t acpi_aml_exec_method_internal(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode) {
     int8_t res = -1;
 
     acpi_aml_method_context_t* mthctx = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_method_context_t), 0x0);
@@ -330,6 +337,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 
     if(res != 0) {
         PRINTLOG(ACPIAML, LOG_ERROR, "ctx %s method execution failed with res %i", ctx->scope_prefix, res);
+
         for(int64_t i = 0; i < mth->method.termlist_length; i++) {
             printf("0x%02x ", mth->method.termlist[i]);
             if((i + 1) % 16 == 0) {
@@ -339,8 +347,24 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
         printf("\n");
     }
 
-    PRINTLOG(ACPIAML, LOG_TRACE, "execution of method %s argument count %i completed", mth->name, mthctx->arg_count);
+    PRINTLOG(ACPIAML, LOG_TRACE, "execution of method %s argument count %i completed",
+             mth->name, mthctx->arg_count);
 
+    for(uint8_t i = 0; i < 8; i++) {
+        if(mthctx->mthobjs[i] && mthctx->mthobjs[i] != mthctx->mthobjs[15]) {
+            PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free local obj at %i 0x%p",
+                     ctx->scope_prefix, i, mthctx->mthobjs[i]);
+            acpi_aml_destroy_object(ctx, mthctx->mthobjs[i]);
+        }
+    }
+
+    for(uint32_t i = 0; i < sizeof(mthctx->dirty_args); i++) {
+        if(mthctx->dirty_args[i] && mthctx->mthobjs[i + 8] && mthctx->mthobjs[i + 8] != mthctx->mthobjs[15]) {
+            PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free dirty arg obj at %i 0x%p",
+                     ctx->scope_prefix, i, mthctx->mthobjs[i + 8]);
+            acpi_aml_destroy_object(ctx, mthctx->mthobjs[i + 8]);
+        }
+    }
 
     iterator_t* iter = ctx->local_symbols->create_iterator(ctx->local_symbols);
 
@@ -348,6 +372,8 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
         acpi_aml_object_t* tmp = (acpi_aml_object_t*)iter->get_item(iter);
 
         if(tmp == mthctx->mthobjs[15]) {
+            PRINTLOG(ACPIAML, LOG_TRACE, "scope %s duplicate return obj for free from symbol table name %s type %i 0x%p",
+                     ctx->scope_prefix, tmp->name, tmp->type, tmp);
             tmp = acpi_aml_duplicate_object(ctx, tmp);
             memory_free_ext(ctx->heap, tmp->name);
             tmp->name           = NULL;
@@ -359,30 +385,15 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 
     iter->destroy(iter);
 
-    for(uint32_t i = 0; i < sizeof(mthctx->dirty_args); i++) {
-        if(mthctx->dirty_args[i]) {
-            PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free dirty arg obj at %i 0x%p", ctx->scope_prefix, i, mthctx->mthobjs[i + 8]);
-            acpi_aml_destroy_object(ctx, mthctx->mthobjs[i + 8]);
-        }
-    }
+    acpi_aml_destroy_symbol_table(ctx, true);
 
-    acpi_aml_destroy_symbol_table(ctx, 1);
-
-    if(res == 0 && !ctx->flags.fatal && ctx->flags.method_return) {
+    if(res == 0 && ctx->flags.method_return) {
         PRINTLOG(ACPIAML, LOG_TRACE, "return obj type %i", mthctx->mthobjs[15]->type);
         opcode->return_obj = mthctx->mthobjs[15];
-        res                = 0;
 
         if(opcode->return_obj) {
-            PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s method execution finished. obj name %s type %i", ctx->scope_prefix, opcode->return_obj->name, opcode->return_obj->type);
-        }
-
-    }
-
-    for(uint8_t i = 0; i < 8; i++) {
-        if(mthctx->mthobjs[i] && mthctx->mthobjs[i] != opcode->return_obj) {
-            PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free local obj at %i 0x%p", ctx->scope_prefix, i, mthctx->mthobjs[i]);
-            acpi_aml_destroy_object(ctx, mthctx->mthobjs[i]);
+            PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s method execution finished. obj name %s type %i",
+                     ctx->scope_prefix, opcode->return_obj->name, opcode->return_obj->type);
         }
     }
 
@@ -400,6 +411,129 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
     return res;
 }
 
+static int8_t acpi_aml_exec_osi(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode) {
+    acpi_aml_object_t* arg = opcode->operands[1];
+
+    if(arg == NULL || arg->type != ACPI_AML_OT_STRING) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "invalid argument for _OSI method call");
+        return -1;
+    }
+
+    char_t* str = arg->string;
+
+    PRINTLOG(ACPIAML, LOG_TRACE, "_OSI method call with argument %s", str);
+
+    const char_t* win10 = "Windows 2015";
+    const char_t* win11 = "Windows 2021";
+
+    if(strncmp(str, win10, strlen(win10)) == 0 || strncmp(str, win11, strlen(win11)) == 0) {
+        opcode->return_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+        if(opcode->return_obj == NULL) {
+            return -1;
+        }
+
+        opcode->return_obj->type           = ACPI_AML_OT_NUMBER;
+        opcode->return_obj->number.bytecnt = ctx->revision >= 2?8:4;
+        opcode->return_obj->number.value   = -1ULL;
+
+        return 0;
+    }
+
+    opcode->return_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+    if(opcode->return_obj == NULL) {
+        return -1;
+    }
+
+    opcode->return_obj->type           = ACPI_AML_OT_NUMBER;
+    opcode->return_obj->number.bytecnt = 1;
+    opcode->return_obj->number.value   = 0;
+
+    return 0;
+}
+
+int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
+
+    acpi_aml_object_t* mth = opcode->operands[0];
+
+    if(mth->type != ACPI_AML_OT_METHOD) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "object for method call is not method type");
+        return -1;
+    }
+
+    if(mth->method.termlist == NULL) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "method has no termlist to execute");
+        return -1;
+    }
+
+    if(opcode->operand_count - 1 > mth->method.arg_count) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "too many arguments for method call, expected %i got %i",
+                 mth->method.arg_count, opcode->operand_count - 1);
+        return -1;
+    }
+
+    if(strncmp(mth->name, "\\_OSI", 5) == 0) {
+        return acpi_aml_exec_osi(ctx, opcode);
+    }
+
+    return acpi_aml_exec_method_internal(ctx, opcode);
+}
+
+int8_t acpi_aml_exec_stall(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode) {
+    acpi_aml_object_t* arg = opcode->operands[0];
+
+    if(arg == NULL) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "invalid argument for stall method call");
+        return -1;
+    }
+
+    int64_t val;
+
+    if(acpi_aml_read_as_integer(ctx, arg, &val) != 0) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "cannot read argument for stall method call as integer");
+        return -1;
+    }
+
+    if(val < 0) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "invalid argument for stall method call, negative value");
+        return -1;
+    }
+
+    time_timer_spinsleep(val);
+
+    return 0;
+}
+
+int8_t acpi_aml_exec_sleep(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode) {
+    acpi_aml_object_t* arg = opcode->operands[0];
+
+    if(arg == NULL) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "invalid argument for stall method call");
+        return -1;
+    }
+
+    int64_t val;
+
+    if(acpi_aml_read_as_integer(ctx, arg, &val) != 0) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "cannot read argument for stall method call as integer");
+        return -1;
+    }
+
+    if(val < 0) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "invalid argument for stall method call, negative value");
+        return -1;
+    }
+
+    if(task_get_current_task()) {
+        task_msleep(val);
+    } else {
+        time_timer_spinsleep(val * 1000);
+    }
+
+    return 0;
+}
+
 #define UNIMPLEXEC(name) \
         int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, acpi_aml_opcode_t * opcode){ \
             UNUSED(ctx); \
@@ -411,5 +545,3 @@ UNIMPLEXEC(copy);
 
 UNIMPLEXEC(notify);
 
-UNIMPLEXEC(stall);
-UNIMPLEXEC(sleep);

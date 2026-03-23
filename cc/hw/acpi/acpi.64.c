@@ -19,6 +19,9 @@
 #include <list.h>
 #include <cpu.h>
 #include <strings.h>
+#include <pci.h>
+#include <time.h>
+#include <time/timer.h>
 
 MODULE("turnstone.kernel.hw.acpi");
 
@@ -189,6 +192,51 @@ static int8_t acpi_build_register(acpi_aml_object_t** reg, uint64_t address, uin
 
 #define acpi_build_register_with_gas(reg, gas) acpi_build_register(reg, gas.address, gas.address_space, gas.bit_width, gas.bit_offset)
 
+static int8_t acpi_pm_configure_timer(void) {
+    acpi_table_fadt_t* fadt = ACPI_CONTEXT->fadt;
+
+    if(fadt->pm_timer_block_address_64bit.address == 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "acpi timer address is 0");
+        return -1;
+    }
+
+    if(fadt->pm_timer_block_address_64bit.address_space != ACPI_AML_OPREGT_SYSIO) {
+        PRINTLOG(ACPI, LOG_ERROR, "acpi timer address space is not system io");
+        return -1;
+    }
+
+    uint64_t timer_address = fadt->pm_timer_block_address_64bit.address;
+
+    uint64_t timer_tick_hz = fadt->pm_timer_block_address_64bit.bit_width == 32?3579545:14318180;
+
+    uint64_t total_tsc = 0;
+
+    for(int i = 0; i < 10; i++) {
+        volatile uint64_t start_tsc = rdtsc();
+        // sleep 100ms using acpi timer
+        uint64_t start_timer = inl(timer_address);
+        uint64_t end_timer   = 0;
+
+        do {
+            end_timer = inl(timer_address);
+        } while((end_timer - start_timer) * 1000 / timer_tick_hz < 100);
+
+        volatile uint64_t end_tsc = rdtsc();
+        total_tsc += (end_tsc - start_tsc);
+    }
+
+    uint64_t time_timer_rdtsc_delta    = total_tsc / 1000; // for ms
+    uint64_t time_timer_rdtsc_delta_us = time_timer_rdtsc_delta / 1000; // for us
+
+    time_timer_set_rdtsc_delta(time_timer_rdtsc_delta);
+    time_timer_set_rdtsc_delta_us(time_timer_rdtsc_delta_us);
+
+    PRINTLOG(ACPI, LOG_INFO, "acpi timer configured with rdtsc delta %llu for ms and %llu for us", time_timer_rdtsc_delta, time_timer_rdtsc_delta_us);
+
+    return 0;
+
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
@@ -212,16 +260,16 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
     PRINTLOG(ACPI, LOG_DEBUG, "fadt found");
 
-    int8_t acpi_enabled = -1;
+    boolean_t acpi_enabled = false;
 
     if(fadt->smi_command_port == 0) {
         PRINTLOG(ACPI, LOG_DEBUG, "smi command port is 0.");
-        acpi_enabled = 0;
+        acpi_enabled = true;
     }
 
     if(fadt->acpi_enable == 0 && fadt->acpi_disable == 0) {
         PRINTLOG(ACPI, LOG_DEBUG, "acpi enable/disable is 0.");
-        acpi_enabled = 0;
+        acpi_enabled = true;
     }
 
     acpi_build_register_with_gas(&ACPI_RESET_REGISTER, fadt->reset_reg);
@@ -242,13 +290,15 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
     if((pm_1a_value & 0x1) == 0x1) {
         PRINTLOG(ACPI, LOG_DEBUG, "pm 1a control block acpi en is setted");
-        acpi_enabled = 0;
+        acpi_enabled = true;
     }
 
-    if(acpi_enabled != 0) {
+    if(!acpi_enabled) {
         outb(fadt->smi_command_port, fadt->acpi_enable);
 
         while((inw(pm_1a_port) & 0x1) != 0x1) {;}
+
+        acpi_enabled = true;
     }
 
     uint16_t pm_1b_port = fadt->pm_1b_control_block_address_64bit.address;
@@ -258,9 +308,50 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
         if((pm_1b_value & 0x1) == 0x1) {
             PRINTLOG(ACPI, LOG_DEBUG, "pm 1b control block acpi en is setted");
-            acpi_enabled = 0;
+            acpi_enabled = true;
+        } else {
+            PRINTLOG(ACPI, LOG_DEBUG, "pm 1b control block acpi en is not setted");
+            acpi_enabled = false;
         }
+
+        if(!acpi_enabled) {
+            outb(fadt->smi_command_port, fadt->acpi_enable);
+
+            while((inw(pm_1b_port) & 0x1) != 0x1) {;}
+        }
+
+        acpi_enabled = true;
     }
+
+    if(!acpi_enabled) {
+        PRINTLOG(ACPI, LOG_ERROR, "cannot enable acpi");
+        return -1;
+    }
+
+    ACPI_CONTEXT->mcfg = (acpi_table_mcfg_t*)acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "MCFG");
+
+    if(!ACPI_CONTEXT->mcfg) {
+        PRINTLOG(ACPI, LOG_ERROR, "mcfg table not found");
+
+        return -1;
+    }
+    for(size_t i = 0; i < ACPI_MCFG_PCI_SEGMENT_GROUP_CONFIG_COUNT(ACPI_CONTEXT->mcfg); i++) {
+        uint64_t pci_base_address_fa = ACPI_CONTEXT->mcfg->pci_segment_group_configs[i].base_address;
+        uint64_t pci_base_address_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_base_address_fa);
+        uint64_t frm_count           = (ACPI_CONTEXT->mcfg->pci_segment_group_configs[i].bus_end - ACPI_CONTEXT->mcfg->pci_segment_group_configs[i].bus_start + 1) * PCI_DEVICE_MAX_COUNT * PCI_FUNCTION_MAX_COUNT * 4096 / FRAME_SIZE;
+
+        PRINTLOG(ACPI, LOG_INFO, "mapping pci mmio space at 0x%llx with frame count %lli", pci_base_address_fa, frm_count);
+
+        frame_t req_frame = {pci_base_address_fa, frm_count, FRAME_TYPE_RESERVED, 0};
+
+        if(memory_paging_add_va_for_frame(pci_base_address_va, &req_frame, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(ACPI, LOG_ERROR, "cannot map pci mmio space");
+            return -1;
+        }
+
+    }
+
+    acpi_pm_configure_timer();
 
     PRINTLOG(ACPI, LOG_INFO, "ACPI Enabled");
 
@@ -325,11 +416,6 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
         return -1;
     }
 
-    LOGBLOCK(ACPI, LOG_INFO){
-        acpi_device_print_all(pctx);
-        acpi_aml_print_symbol_table(pctx);
-    }
-
     PRINTLOG(ACPI, LOG_INFO, "Devices initialized");
 
     if(acpi_device_reserve_memory_ranges(pctx) != 0) {
@@ -344,7 +430,10 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
     PRINTLOG(ACPI, LOG_INFO, "Interrupt map builded");
 
-    ACPI_CONTEXT->mcfg = (acpi_table_mcfg_t*)acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "MCFG");
+    LOGBLOCK(ACPI, LOG_INFO){
+        acpi_device_print_all(pctx);
+        acpi_aml_print_symbol_table(pctx);
+    }
 
     PRINTLOG(ACPI, LOG_INFO, "acpi init completed successfully");
 

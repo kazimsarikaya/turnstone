@@ -37,17 +37,21 @@ typedef struct acpi_xrsdt_t {
     acpi_sdt_header_t* acpi_sdt_header_ptrs[];
 }__attribute__((packed)) acpi_xrsdt_t;
 
+typedef struct acpi_mcfg_pci_segment_group_config_t {
+    uint64_t base_address;
+    uint16_t group_number;
+    uint8_t  bus_start;
+    uint8_t  bus_end;
+    uint32_t reserved0;
+}__attribute__((packed)) acpi_mcfg_pci_segment_group_config_t;
+
 typedef struct acpi_table_mcfg_t {
-    acpi_sdt_header_t header;
-    uint64_t          reserved0;
-    struct pci_segment_group_config_t {
-        uint64_t base_address;
-        uint16_t group_number;
-        uint8_t  bus_start;
-        uint8_t  bus_end;
-        uint32_t reserved0;
-    }pci_segment_group_config[];
+    acpi_sdt_header_t                    header;
+    uint64_t                             reserved0;
+    acpi_mcfg_pci_segment_group_config_t pci_segment_group_configs[];
 }__attribute__((packed)) acpi_table_mcfg_t;
+
+#define ACPI_MCFG_PCI_SEGMENT_GROUP_CONFIG_COUNT(table) ((table->header.length - sizeof(acpi_table_mcfg_t)) / sizeof(acpi_mcfg_pci_segment_group_config_t))
 
 typedef struct acpi_rsdp_descriptor_t {
     char_t   signature[8];

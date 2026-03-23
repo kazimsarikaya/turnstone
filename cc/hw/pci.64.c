@@ -30,7 +30,6 @@ typedef struct {
     uint8_t            function_number;
     uint64_t           pci_mmio_addr_fa;
     uint64_t           pci_mmio_addr_va;
-    uint64_t           frame_count;
     int8_t             end_of_iter;
 }pci_iterator_internal_t;
 
@@ -52,7 +51,7 @@ static iterator_t* pci_iterator_next(iterator_t* iterator){
         iter_metadata->group_number = bus_group;
 
         for(size_t bus_addr = iter_metadata->bus_number;
-            bus_addr < iter_metadata->mcfg->pci_segment_group_config[bus_group].bus_end;
+            bus_addr < iter_metadata->mcfg->pci_segment_group_configs[bus_group].bus_end;
             bus_addr++) {
             iter_metadata->bus_number = bus_addr;
 
@@ -60,28 +59,13 @@ static iterator_t* pci_iterator_next(iterator_t* iterator){
                 iter_metadata->device_number = dev_addr;
 
                 // calculate mmio address of device
-                size_t pci_mmio_addr_fa = iter_metadata->mcfg->pci_segment_group_config[bus_group].base_address + ( bus_addr << 20 | dev_addr << 15 | 0 << 12 );
+                size_t pci_mmio_addr_fa = iter_metadata->mcfg->pci_segment_group_configs[bus_group].base_address + ( bus_addr << 20 | dev_addr << 15 | 0 << 12 );
                 size_t pci_mmio_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_fa);
-
-
-                frame_t* pci_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)pci_mmio_addr_fa);
-
-                if(pci_frames == NULL) {
-                    PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016llx", pci_mmio_addr_fa);
-                    iter_metadata->end_of_iter = true; // end iter
-
-                    return iterator;
-                } else if((pci_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-                    PRINTLOG(PCI, LOG_DEBUG, "frames of pci dev 0x%016llx is 0x%llx 0x%llx", pci_mmio_addr_fa, pci_frames->frame_address, pci_frames->frame_count);
-                    memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_frames->frame_address), pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-                    pci_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
-                }
 
                 pci_common_header_t* pci_hdr = (pci_common_header_t*)pci_mmio_addr_va;
 
                 iter_metadata->pci_mmio_addr_fa = pci_mmio_addr_fa;
                 iter_metadata->pci_mmio_addr_va = pci_mmio_addr_va;
-                iter_metadata->frame_count      = pci_frames->frame_count;
 
                 if(pci_hdr->vendor_id != 0xFFFF) { // look for vendor_id
                     if(check_func0) { // one/multi func check?
@@ -95,27 +79,13 @@ static iterator_t* pci_iterator_next(iterator_t* iterator){
                             for(size_t func_addr = iter_metadata->function_number; func_addr < PCI_FUNCTION_MAX_COUNT; func_addr++) {
                                 iter_metadata->function_number = func_addr;
 
-                                size_t pci_mmio_addr_f_fa = iter_metadata->mcfg->pci_segment_group_config[bus_group].base_address + ( bus_addr << 20 | dev_addr << 15 | func_addr << 12 );
+                                size_t pci_mmio_addr_f_fa = iter_metadata->mcfg->pci_segment_group_configs[bus_group].base_address + ( bus_addr << 20 | dev_addr << 15 | func_addr << 12 );
                                 size_t pci_mmio_addr_f_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_f_fa);
-
-                                pci_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)pci_mmio_addr_f_fa);
-
-                                if(pci_frames == NULL) {
-                                    PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016llx", pci_mmio_addr_fa);
-                                    iter_metadata->end_of_iter = true; // end iter
-
-                                    return iterator;
-                                } else if((pci_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-                                    PRINTLOG(PCI, LOG_DEBUG, "frames of pci dev 0x%016llx is 0x%llx 0x%llx", pci_mmio_addr_f_fa, pci_frames->frame_address, pci_frames->frame_count);
-                                    memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_frames->frame_address), pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-                                    pci_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
-                                }
 
                                 pci_hdr = (pci_common_header_t*)pci_mmio_addr_f_va;
 
                                 iter_metadata->pci_mmio_addr_fa = pci_mmio_addr_fa;
                                 iter_metadata->pci_mmio_addr_va = pci_mmio_addr_f_va;
-                                iter_metadata->frame_count      = pci_frames->frame_count;
 
                                 if(pci_hdr->vendor_id != 0xFFFF) {
                                     dev_found = true;
@@ -147,7 +117,7 @@ static iterator_t* pci_iterator_next(iterator_t* iterator){
         if(dev_found) {
             break;
         }else if((bus_group + 1) < iter_metadata->group_number_count) {
-            iter_metadata->bus_number = iter_metadata->mcfg->pci_segment_group_config[bus_group + 1].bus_start;
+            iter_metadata->bus_number = iter_metadata->mcfg->pci_segment_group_configs[bus_group + 1].bus_start;
         }
     } // end of bus group loop
 
@@ -177,7 +147,6 @@ static const void* pci_iterator_get_item(iterator_t* iterator){
     d->device_number   = iter_metadata->device_number;
     d->function_number = iter_metadata->function_number;
     d->pci_header      = (pci_common_header_t*)iter_metadata->pci_mmio_addr_va;
-    d->header_size     = iter_metadata->frame_count * FRAME_SIZE;
 
     return d;
 }
@@ -200,16 +169,14 @@ static iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table
     iter_metadata->heap = heap;
     iter_metadata->mcfg = mcfg;
 
-    size_t count = mcfg->header.length - sizeof(acpi_sdt_header_t) - sizeof_field(acpi_table_mcfg_t, reserved0);
-    count                            /= 16;
-    iter_metadata->group_number_count = count;
+    iter_metadata->group_number_count = ACPI_MCFG_PCI_SEGMENT_GROUP_CONFIG_COUNT(mcfg);
 
     boolean_t dev_found = false;
 
     for(size_t i = 0; i < iter_metadata->group_number_count; i++) {
         iter_metadata->group_number = i;
-        for(size_t bus_addr = mcfg->pci_segment_group_config[i].bus_start;
-            bus_addr <= mcfg->pci_segment_group_config[i].bus_end;
+        for(size_t bus_addr = mcfg->pci_segment_group_configs[i].bus_start;
+            bus_addr <= mcfg->pci_segment_group_configs[i].bus_end;
             bus_addr++) {
             iter_metadata->bus_number = bus_addr;
             for(size_t dev_addr = 0; dev_addr < PCI_DEVICE_MAX_COUNT; dev_addr++) {
@@ -218,29 +185,13 @@ static iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table
                     iter_metadata->function_number = func_addr;
 
                     // calculate mmio address of device
-                    size_t pci_mmio_addr_fa = iter_metadata->mcfg->pci_segment_group_config[i].base_address + ( bus_addr << 20 | dev_addr << 15 | func_addr << 12 );
+                    size_t pci_mmio_addr_fa = iter_metadata->mcfg->pci_segment_group_configs[i].base_address + ( bus_addr << 20 | dev_addr << 15 | func_addr << 12 );
                     size_t pci_mmio_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_fa);
-
-
-                    frame_t* pci_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)pci_mmio_addr_fa);
-
-                    if(pci_frames == NULL) {
-                        PRINTLOG(PCI, LOG_ERROR, "cannot find frames of mmio 0x%016llx", pci_mmio_addr_fa);
-                        memory_free_ext(heap, iter_metadata);
-                        memory_free_ext(heap, iter);
-
-                        return NULL;
-                    } else if((pci_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-                        PRINTLOG(PCI, LOG_DEBUG, "frames of mmio 0x%016llx is 0x%llx 0x%llx", pci_mmio_addr_fa, pci_frames->frame_address, pci_frames->frame_count);
-                        memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_frames->frame_address), pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-                        pci_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
-                    }
 
                     pci_common_header_t* pci_hdr = (pci_common_header_t*)pci_mmio_addr_va;
 
                     iter_metadata->pci_mmio_addr_fa = pci_mmio_addr_fa;
                     iter_metadata->pci_mmio_addr_va = pci_mmio_addr_va;
-                    iter_metadata->frame_count      = pci_frames->frame_count;
 
                     if(pci_hdr->vendor_id != 0xFFFF) {
                         dev_found = true;
@@ -327,7 +278,7 @@ int8_t pci_setup(memory_heap_t* heap) {
                 return -1;
             }
 
-            pci_disable_interrupt((pci_generic_device_t*)p->pci_header);
+            // pci_disable_interrupt((pci_generic_device_t*)p->pci_header);
 
             PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x -> %04x:%04x -> %02x:%02x",
                      p->group_number, p->bus_number, p->device_number, p->function_number,

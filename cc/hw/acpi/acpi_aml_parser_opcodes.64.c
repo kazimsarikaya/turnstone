@@ -9,6 +9,8 @@
 #define ___ACPI_AML_IMPLEMENTATION 0
 #include <acpi/aml_internal.h>
 #include <logging.h>
+#include <time.h>
+#include <time/timer.h>
 
 MODULE("turnstone.kernel.hw.acpi");
 
@@ -41,8 +43,12 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
         return_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
         if(return_obj != NULL) {
+            uint64_t timer_value = rdtsc();
+            timer_value            -= ctx->timer_base;
+            timer_value            /= time_timer_get_rdtsc_delta_us();
+            timer_value            *= 10; // convert to 100ns unit
             return_obj->type        = ACPI_AML_OT_TIMER;
-            return_obj->timer_value = ctx->timer;
+            return_obj->timer_value = timer_value;
             res                     = 0;
         }
 
@@ -218,6 +224,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
                 PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free return obj type %i 0x%p refcnt %i",
                          ctx->scope_prefix, return_obj->type, return_obj, return_obj->ref_count);
                 acpi_aml_destroy_object(ctx, return_obj);
+                return_obj = NULL;
             }
         }
     }
@@ -780,6 +787,7 @@ int8_t acpi_aml_parse_acquire(acpi_aml_parser_context_t* ctx, void** data, uint6
     if(delete_for_return_obj == return_obj) {
         delete_for_return_obj = NULL;
     } else if(delete_for_return_obj->type == ACPI_AML_OT_LOCAL_OR_ARG) {
+        PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free return obj type %i 0x%p", ctx->scope_prefix, delete_for_return_obj->type, delete_for_return_obj);
         acpi_aml_destroy_object(ctx, delete_for_return_obj);
         delete_for_return_obj = NULL;
     }
@@ -790,7 +798,6 @@ int8_t acpi_aml_parse_acquire(acpi_aml_parser_context_t* ctx, void** data, uint6
         resobj->opcode_exec_return = return_obj;
     }  else{
         if(return_obj && return_obj->name == NULL) {
-            // FIXME: when tgt and return_obj same never destroy obj
             boolean_t found = false;
 
             if(return_obj->type != ACPI_AML_OT_DEBUG) {
@@ -822,6 +829,7 @@ int8_t acpi_aml_parse_acquire(acpi_aml_parser_context_t* ctx, void** data, uint6
             if(!found) {
                 PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free return obj type %i 0x%p ", ctx->scope_prefix, return_obj->type, return_obj);
                 acpi_aml_destroy_object(ctx, return_obj);
+                return_obj = NULL;
             }
         }
     }

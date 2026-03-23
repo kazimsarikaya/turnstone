@@ -11,6 +11,7 @@
 #include <logging.h>
 #include <strings.h>
 #include <bplustree.h>
+#include <time.h>
 
 MODULE("turnstone.kernel.hw.acpi");
 
@@ -386,6 +387,7 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
     ctx->scope_prefix = (char_t*)"\\";
     ctx->symbols      = acpi_aml_create_symbol_table(ctx, 0);
     ctx->revision     = revision;
+    ctx->timer_base   = rdtsc();
 
     if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
         PRINTLOG(ACPIAML, LOG_ERROR, "failed to parse default AML code");

@@ -31,6 +31,106 @@ boolean_t acpi_aml_is_null_target(acpi_aml_object_t* obj) {
     return false;
 }
 
+static uint64_t acpi_aml_get_device_pci_address(acpi_aml_parser_context_t* ctx, const acpi_aml_device_t* dev) {
+    if(!dev) {
+        return 0;
+    }
+
+    const acpi_aml_device_t* pci_root = NULL;
+
+    const acpi_aml_device_t* dev_iter = dev;
+
+    while(dev_iter) {
+        PRINTLOG(ACPIAML, LOG_TRACE, "checking device %s for pci root", dev_iter->name);
+        acpi_aml_object_t* hid_or_cid_obj = dev_iter->hid ? dev_iter->hid : dev_iter->cid;
+
+        if(!hid_or_cid_obj) {
+            PRINTLOG(ACPIAML, LOG_TRACE, "device %s has no hid or cid, skipping", dev_iter->name);
+            dev_iter = dev_iter->parent;
+
+            continue;
+        }
+        if(hid_or_cid_obj->type == ACPI_AML_OT_STRING) {
+            const char_t* hid_str = hid_or_cid_obj->string;
+            PRINTLOG(ACPIAML, LOG_TRACE, "device %s hid/cid is string %s", dev_iter->name, hid_str);
+
+            if(strncmp(hid_str, "PNP0A03", 7) == 0) {
+                pci_root = dev;
+                break;
+            }
+
+            if(strncmp(hid_str, "PNP0A08", 7) == 0) {
+                pci_root = dev;
+                break;
+            }
+        }
+
+        if(hid_or_cid_obj->type == ACPI_AML_OT_NUMBER) {
+            PRINTLOG(ACPIAML, LOG_TRACE, "device %s hid/cid is number 0x%llx", dev_iter->name, hid_or_cid_obj->number.value);
+            if(hid_or_cid_obj->number.value == 0x030AD041) { // PNP0A03
+                pci_root = dev;
+                break;
+            }
+
+            if(hid_or_cid_obj->number.value == 0x080AD041) { // PNP0A08
+                pci_root = dev;
+                break;
+            }
+        }
+
+        dev_iter = dev_iter->parent;
+    }
+
+    if(!pci_root) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "cannot find pci root for device %s", dev->name);
+        return 0;
+    }
+
+    int64_t seg     = 0;
+    int64_t bus_num = 0;
+
+    if(pci_root->properties) {
+        const acpi_aml_object_t* seg_obj = hashmap_get(pci_root->properties, "_SEG");
+
+        if(seg_obj) {
+            if(acpi_aml_read_as_integer(ctx, seg_obj, &seg) != 0) {
+                PRINTLOG(ACPIAML, LOG_ERROR, "cannot read pci root _SEG");
+                return 0;
+            }
+        }
+
+        const acpi_aml_object_t* bus_obj = pci_root->bbn;
+
+        if(bus_obj) {
+            if(acpi_aml_read_as_integer(ctx, bus_obj, &bus_num) != 0) {
+                PRINTLOG(ACPIAML, LOG_ERROR, "cannot read pci root _BBN");
+                return 0;
+            }
+        }
+    }
+
+    const acpi_table_mcfg_t* mcfg = ACPI_CONTEXT->mcfg;
+
+    for(size_t i = 0; i < ACPI_MCFG_PCI_SEGMENT_GROUP_CONFIG_COUNT(mcfg); i++) {
+        if(mcfg->pci_segment_group_configs[i].group_number == seg) {
+            uint64_t pci_base_address = mcfg->pci_segment_group_configs[i].base_address;
+            pci_base_address = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_base_address);
+            int64_t adr = 0;
+
+            if(acpi_aml_read_as_integer(ctx, dev->adr, &adr) != 0) {
+                PRINTLOG(ACPIAML, LOG_ERROR, "cannot read device address");
+                return 0;
+            }
+
+            return pci_base_address + (bus_num << 20) + (((adr >> 16) & 0x1f) << 15) + ((adr & 0x7) << 12);
+        }
+    }
+
+    PRINTLOG(ACPIAML, LOG_ERROR, "cannot find pci address for device %s", dev->name);
+
+    return 0;
+}
+
 acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, boolean_t write, boolean_t copy) {
     if(!obj) {
         return NULL;
@@ -69,40 +169,12 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
             la_obj->type           = ACPI_AML_OT_UNINITIALIZED;
             mthctx->mthobjs[laidx] = la_obj;
             PRINTLOG(ACPIAML, LOG_TRACE, "----- new local arg %i for read 0x%p", laidx, la_obj);
-
-            return la_obj;
         }
-
-        if(!write) {
-            return la_obj;
-        }
-
-        PRINTLOG(ACPIAML, LOG_TRACE, "----- overwrite local arg %i 0x%p for write.", laidx, la_obj);
-
-        if(la_obj != mthctx->mthobjs[15]) {
-            // if local/arg is not same as return obj then we can free it safely.
-            // otherwise we will free it when we free return obj.
-            PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free old local arg obj at %i 0x%p return obj 0x%p refcnt %i",
-                     ctx->scope_prefix, laidx, la_obj, mthctx->mthobjs[15], la_obj->ref_count);
-            acpi_aml_destroy_object(ctx, la_obj);
-        }
-
-        la_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
-
-        if(!la_obj) {
-            PRINTLOG(ACPIAML, LOG_ERROR, "cannot allocate local arg obj for write");
-            return NULL;
-        }
-
-        la_obj->type           = ACPI_AML_OT_UNINITIALIZED;
-        mthctx->mthobjs[laidx] = la_obj;
-
-        PRINTLOG(ACPIAML, LOG_TRACE, "----- new local arg %i for write 0x%p", laidx, la_obj);
 
         return la_obj;
     }
 
-    // for args, la_obj should b exists.
+    // for args, la_obj should be exists.
     if(!la_obj) {
         PRINTLOG(ACPIAML, LOG_FATAL, "local/arg does not exists %x", laidx);
         return NULL;
@@ -113,7 +185,7 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
         memory_free_ext(ctx->heap, la_obj->name);
         la_obj->name = NULL;
 
-        if(mthctx->mthobjs[laidx]->name == NULL && mthctx->mthobjs[laidx] != mthctx->mthobjs[15]) {
+        if(mthctx->mthobjs[laidx]->name == NULL) {
             // if arg is not same as return obj then we can free it safely.
             // otherwise we will free it when we free return obj.
             PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free old arg obj at %i 0x%p return obj 0x%p refcnt %i",
@@ -162,11 +234,11 @@ static int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, in
         return -1;
     }
 
-    uint64_t offset       = 0;
-    uint64_t field_offset = 0;
-    uint8_t access_type   = 0;
-    uint8_t update_rule   = 0;
-    uint64_t sizeasbit    = 0;
+    uint64_t offset                          = 0;
+    uint64_t field_offset                    = 0;
+    acpi_aml_field_access_type_t access_type = 0;
+    acpi_aml_field_update_rule_t update_rule = 0;
+    uint64_t sizeasbit                       = 0;
 
     if(indexedfield) {
         if(acpi_aml_write_sysio_as_integer(ctx, obj->field.offset / 8, obj->field.related_object) != 0) {
@@ -217,7 +289,7 @@ static int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, in
 
     mask <<= (field_offset % access_len);
 
-    PRINTLOG(ACPIAML, LOG_TRACE, "io writing old data 0x%llx value 0x%llx mask 0x%llx", tmp, val, mask );
+    PRINTLOG(ACPIAML, LOG_TRACE, "io writing after masking old data 0x%llx value 0x%llx mask 0x%llx", tmp, val, mask );
 
     switch (update_rule) {
     case ACPI_AML_FIELD_UPDATE_PRESERVE:
@@ -228,9 +300,14 @@ static int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, in
         break;
     case ACPI_AML_FIELD_UPDATE_WRITE_ZEROES:
         break;
+    case ACPI_AML_FIELD_UPDATE_OVERRIDE:
+        break;
+    default:
+        PRINTLOG(ACPIAML, LOG_ERROR, "Unknown field update rule %i", obj->field.update_rule);
+        return -1;
     }
 
-    PRINTLOG(ACPIAML, LOG_TRACE, "io writing offset 0x%llx value 0x%llx", offset, val);
+    PRINTLOG(ACPIAML, LOG_TRACE, "io writing after masking offset 0x%llx value 0x%llx", offset, val);
 
     switch (access_type) {
     case ACPI_AML_FIELD_ACCESS_BYTE:
@@ -259,9 +336,9 @@ static int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int6
         return -1;
     }
 
-    acpi_aml_object_t* opregion = NULL;
-    boolean_t indexedfield      = 0;
-    uint8_t update_rule         = 0;
+    acpi_aml_object_t* opregion              = NULL;
+    boolean_t indexedfield                   = 0;
+    acpi_aml_field_update_rule_t update_rule = 0;
 
     if(obj->field.related_object->type == ACPI_AML_OT_OPREGION  &&
        obj->field.related_object->opregion.region_space == ACPI_AML_OPREGT_PCICFG) {
@@ -276,10 +353,10 @@ static int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int6
         return -1;
     }
 
-    uint64_t offset       = 0;
-    uint64_t field_offset = 0;
-    uint8_t access_type   = 0;
-    uint64_t sizeasbit    = 0;
+    uint64_t offset                          = 0;
+    uint64_t field_offset                    = 0;
+    acpi_aml_field_access_type_t access_type = 0;
+    uint64_t sizeasbit                       = 0;
 
     if(indexedfield) {
         if(acpi_aml_write_pci_as_integer(ctx, obj->field.offset / 8, obj->field.related_object) != 0) {
@@ -326,7 +403,14 @@ static int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int6
         return -1;
     }
 
-    uint32_t pci_address = PCI_IO_PORT_CREATE_ADDRESS(0, (adr >> 16) & 0x1F, adr & 0x7, offset);
+    uint64_t pci_address = acpi_aml_get_device_pci_address(ctx, dev);
+
+    if(!pci_address) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "cannot get pci address");
+        return -1;
+    }
+
+    pci_address |= (offset & 0xFFF);
 
     uint64_t tmp        = 0;
     uint64_t access_len = 0;
@@ -334,15 +418,15 @@ static int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int6
     switch (access_type) {
     case ACPI_AML_FIELD_ACCESS_BYTE:
         access_len = 8;
-        tmp        = pci_io_port_read_data(pci_address, 1);
+        tmp        = *((volatile uint8_t*)pci_address);
         break;
     case ACPI_AML_FIELD_ACCESS_WORD:
         access_len = 16;
-        tmp        = pci_io_port_read_data(pci_address, 2);
+        tmp        = *((volatile uint16_t*)pci_address);
         break;
     case ACPI_AML_FIELD_ACCESS_DWORD:
         access_len = 32;
-        tmp        = pci_io_port_read_data(pci_address, 4);
+        tmp        = *((volatile uint32_t*)pci_address);
         break;
     default:
         PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
@@ -365,17 +449,22 @@ static int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int6
         break;
     case ACPI_AML_FIELD_UPDATE_WRITE_ZEROES:
         break;
+    case ACPI_AML_FIELD_UPDATE_OVERRIDE:
+        break;
+    default:
+        PRINTLOG(ACPIAML, LOG_ERROR, "Unknown field update rule %i", obj->field.update_rule);
+        return -1;
     }
 
     switch (access_type) {
     case ACPI_AML_FIELD_ACCESS_BYTE:
-        pci_io_port_write_data(pci_address, val, 1);
+        *((volatile uint8_t*)pci_address) = (uint8_t)val;
         break;
     case ACPI_AML_FIELD_ACCESS_WORD:
-        pci_io_port_write_data(pci_address, val, 2);
+        *((volatile uint16_t*)pci_address) = (uint16_t)val;
         break;
     case ACPI_AML_FIELD_ACCESS_DWORD:
-        pci_io_port_write_data(pci_address, val, 4);
+        *((volatile uint32_t*)pci_address) = (uint32_t)val;
         break;
     default:
         PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
@@ -407,7 +496,7 @@ static int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, i
         return -1;
     }
 
-    PRINTLOG(ACPIAML, LOG_TRACE, "memory writing offset 0x%llx value 0x%llx", obj->field.offset, val);
+    PRINTLOG(ACPIAML, LOG_TRACE, "memory base 0x%p writing offset 0x%llx value 0x%llx", memva, obj->field.offset, val);
 
     memva += obj->field.offset / 8;
 
@@ -443,21 +532,23 @@ static int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, i
 
     uint64_t mask = (1ULL << obj->field.sizeasbit) - 1;
 
-    PRINTLOG(ACPIAML, LOG_TRACE, "memory writing masking sizeasbit 0x%llx value 0x%llx old value 0x%llx access_len 0x%llx mask 0x%llx update rule %i dest type %i",
+    PRINTLOG(ACPIAML, LOG_TRACE, "memory 0x%p writing before masking sizeasbit 0x%llx value 0x%llx old value 0x%llx access_len 0x%llx mask 0x%llx update rule %i dest type %i",
+             memva,
              obj->field.sizeasbit, val, tmp, access_len, mask, obj->field.update_rule, obj->field.related_object->type);
 
     val &= mask;
 
+    // TODO: do memory need to support unaligned access? if not we can just return error
+    // when field offset is not aligned with access type, which is easier to implement and also more efficient.
+    // val  <<= (obj->field.offset % access_len);
+    // mask <<= (obj->field.offset % access_len);
+
     switch (obj->field.update_rule) {
     case ACPI_AML_FIELD_UPDATE_PRESERVE:
-        val  <<= (obj->field.offset % access_len);
-        mask <<= (obj->field.offset % access_len);
-        tmp    = (tmp & ~mask) | val;
+        tmp = (tmp & ~mask) | val;
         break;
     case ACPI_AML_FIELD_UPDATE_WRITE_ONES:
-        val  <<= (obj->field.offset % access_len);
-        mask <<= (obj->field.offset % access_len);
-        tmp    = ~mask | val;
+        tmp = ~mask | val;
         break;
     case ACPI_AML_FIELD_UPDATE_WRITE_ZEROES:
         tmp = val;
@@ -470,7 +561,7 @@ static int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, i
         return -1;
     }
 
-    PRINTLOG(ACPIAML, LOG_TRACE, "memory writing offset 0x%llx value 0x%llx", obj->field.offset, tmp);
+    PRINTLOG(ACPIAML, LOG_TRACE, "memory 0x%p writing after masking offset 0x%llx value 0x%llx", memva, obj->field.offset, tmp);
 
     switch (obj->field.access_type) {
     case ACPI_AML_FIELD_ACCESS_BYTE:
@@ -515,10 +606,10 @@ static int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, con
         return -1;
     }
 
-    uint64_t offset       = 0;
-    uint64_t field_offset = 0;
-    uint8_t access_type   = 0;
-    uint64_t sizeasbit    = 0;
+    uint64_t offset                          = 0;
+    uint64_t field_offset                    = 0;
+    acpi_aml_field_access_type_t access_type = 0;
+    uint64_t sizeasbit                       = 0;
 
     if(indexedfield) {
         if(acpi_aml_write_sysio_as_integer(ctx, obj->field.offset / 8, obj->field.related_object) != 0) {
@@ -560,13 +651,15 @@ static int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, con
         return -1;
     }
 
-    PRINTLOG(ACPIAML, LOG_TRACE, "read value 0x%llx field_offset 0x%llx size %lli", tmp, field_offset, sizeasbit);
+    PRINTLOG(ACPIAML, LOG_TRACE, "read before masking value 0x%llx field_offset 0x%llx size %lli", tmp, field_offset, sizeasbit);
 
     uint64_t mask = (1ULL << sizeasbit) - 1;
     tmp >>= (field_offset % access_len);
     tmp  &= mask;
 
     *res = tmp;
+
+    PRINTLOG(ACPIAML, LOG_TRACE, "read after masking value 0x%llx field_offset 0x%llx size %lli", tmp, field_offset, sizeasbit);
 
     return 0;
 }
@@ -593,10 +686,10 @@ static int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, const
         return -1;
     }
 
-    uint64_t offset       = 0;
-    uint64_t field_offset = 0;
-    uint8_t access_type   = 0;
-    uint64_t sizeasbit    = 0;
+    uint64_t offset                          = 0;
+    uint64_t field_offset                    = 0;
+    acpi_aml_field_access_type_t access_type = 0;
+    uint64_t sizeasbit                       = 0;
 
     if(indexedfield) {
         if(acpi_aml_write_pci_as_integer(ctx, obj->field.offset / 8, obj->field.related_object) != 0) {
@@ -641,7 +734,17 @@ static int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, const
         return -1;
     }
 
-    uint32_t pci_address = PCI_IO_PORT_CREATE_ADDRESS(0, (adr >> 16) & 0x1F, adr & 0x7, offset);
+    uint64_t pci_address = acpi_aml_get_device_pci_address(ctx, dev);
+
+    if(!pci_address) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "cannot get pci address");
+        return -1;
+    }
+
+    pci_address |= (offset & 0xFFF);
+
+    PRINTLOG(ACPIAML, LOG_TRACE, "reading pci config space offset 0x%04llx address 0x%llx pci address 0x%llx",
+             offset, adr, pci_address);
 
     uint64_t tmp        = 0;
     uint64_t access_len = 0;
@@ -649,26 +752,30 @@ static int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, const
     switch (access_type) {
     case ACPI_AML_FIELD_ACCESS_BYTE:
         access_len = 8;
-        tmp        = pci_io_port_read_data(pci_address, 1);
+        tmp        = *((volatile uint8_t*)pci_address);
         break;
     case ACPI_AML_FIELD_ACCESS_WORD:
         access_len = 16;
-        tmp        = pci_io_port_read_data(pci_address, 2);
+        tmp        = *((volatile uint16_t*)pci_address);
         break;
     case ACPI_AML_FIELD_ACCESS_DWORD:
         access_len = 32;
-        tmp        = pci_io_port_read_data(pci_address, 4);
+        tmp        = *((volatile uint32_t*)pci_address);
         break;
     default:
         PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
         return -1;
     }
 
+    PRINTLOG(ACPIAML, LOG_TRACE, "read value before masking 0x%llx offset 0x%llx size %lli", tmp, offset, sizeasbit);
+
     uint64_t mask = (1ULL << sizeasbit) - 1;
     tmp >>= (field_offset % access_len);
     tmp  &= mask;
 
     *res = tmp;
+
+    PRINTLOG(ACPIAML, LOG_TRACE, "read value after masking 0x%llx offset 0x%llx size %lli", tmp, offset, sizeasbit);
 
     return 0;
 }
@@ -698,6 +805,8 @@ static int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, co
         PRINTLOG(ACPIAML, LOG_ERROR, "not opregion or buffer %i", obj->field.related_object->type);
         return -1;
     }
+
+    PRINTLOG(ACPIAML, LOG_TRACE, "memory base 0x%p reading offset 0x%llx", memva, obj->field.offset);
 
     memva += obj->field.offset / 8;
 
@@ -731,11 +840,20 @@ static int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, co
         return -1;
     }
 
+    PRINTLOG(ACPIAML, LOG_TRACE, "read memory 0x%p value before masking 0x%llx offset 0x%llx size %lli access_len=0x%llx",
+             memva, tmp, obj->field.offset, obj->field.sizeasbit, access_len);
+
     uint64_t mask = (1ULL << obj->field.sizeasbit) - 1;
-    tmp >>= (obj->field.offset % access_len);
-    tmp  &= mask;
+
+    // TODO: do memory need to support unaligned access? if not we can just return error
+    // when field offset is not aligned with access type, which is easier to implement and also more efficient.
+    // tmp >>= (obj->field.offset % access_len);
+
+    tmp &= mask;
 
     *res = tmp;
+
+    PRINTLOG(ACPIAML, LOG_TRACE, "read memory 0x%p value after masking 0x%llx offset 0x%llx size %lli", memva, tmp, obj->field.offset, obj->field.sizeasbit);
 
     return 0;
 }

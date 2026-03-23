@@ -62,8 +62,6 @@ extern "C" {
 #define PCI_IO_PORT_CONFIG 0x0CF8
 #define PCI_IO_PORT_DATA   0x0CFC
 
-#define PCI_IO_PORT_CREATE_ADDRESS(bus, dev, func, offset) ((bus << 16) | (dev << 11) | (func << 8) | (offset & 0xFC) | 0x80000000UL)
-
 int8_t   pci_io_port_write_data(uint32_t address, uint32_t data, uint8_t bc);
 uint32_t pci_io_port_read_data(uint32_t address, uint8_t bc);
 

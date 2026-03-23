@@ -552,7 +552,7 @@ int8_t acpi_aml_resource_print(acpi_aml_parser_context_t* ctx, const acpi_aml_de
         while(!int_iter->end_of_iterator(int_iter)) {
             const acpi_aml_device_interrupt_t* int_item = int_iter->get_item(int_iter);
 
-            printf("  interrupt %i edge %i low %i shared %i wake_capability %i\n", int_item->interrupt_no, int_item->edge, int_item->low, int_item->shared, int_item->wake_capability);
+            printf("  interrupt 0x%02x edge %i low %i shared %i wake_capability %i\n", int_item->interrupt_no, int_item->edge, int_item->low, int_item->shared, int_item->wake_capability);
 
             int_iter = int_iter->next(int_iter);
         }

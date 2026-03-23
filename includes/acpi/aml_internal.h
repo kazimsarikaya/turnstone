@@ -333,7 +333,7 @@ struct acpi_aml_parser_context_t {
         boolean_t method_return;
         boolean_t dismiss_execute_method;
     }        flags;
-    uint64_t timer;
+    uint64_t timer_base;
     int8_t   revision;
     void*    method_context;
 };
