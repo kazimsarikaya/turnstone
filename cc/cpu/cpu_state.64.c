@@ -1,5 +1,5 @@
 /**
- * @file local_apic_id.64.c
+ * @file cpu_state.64.c
  * @brief Local APIC ID
  *
  * This work is licensed under TURNSTONE OS Public License.
@@ -9,7 +9,6 @@
 #include <cpu/cpu_state.h>
 #include <types.h>
 
-MODULE("turnstone.kernel.cpu.apic");
+MODULE("turnstone.kernel.cpu.state");
 
-volatile boolean_t local_apic_id_is_valid = false;
 volatile cpu_state_t __seg_gs * cpu_state = NULL;

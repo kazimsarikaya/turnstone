@@ -16,6 +16,7 @@
 #include <ports.h>
 #include <graphics/text_cursor.h>
 #include <cpu/sync.h>
+#include <cpu/cpu_state.h>
 
 MODULE("turnstone.kernel.hw.video");
 
@@ -44,7 +45,7 @@ void video_text_print(const char_t* string) {
         return;
     }
 
-    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t apic_id = cpu_state->local_apic_id;
 
     if(apic_id >= ARRAY_SIZE(serial_ports)) {
         return;

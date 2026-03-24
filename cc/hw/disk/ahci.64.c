@@ -17,6 +17,7 @@
 #include <cpu.h>
 #include <time/timer.h>
 #include <utils.h>
+#include <cpu/cpu_state.h>
 
 MODULE("turnstone.kernel.hw.drivers.ahci");
 
@@ -366,7 +367,7 @@ int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
 
             pci_bar_register_t* bar = &pci_sata->bar5;
             bar++;
-            uint64_t tmp = (uint64_t)(*((uint32_t*)bar));
+            uint64_t tmp = (uint64_t)(*((uint32_t*)(void*)bar));
 
             abar_fa = tmp << 32 | abar_fa;
         }
@@ -440,7 +441,7 @@ int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
             hba->intnum_count = msg_count;
 
             uint32_t msg_addr = 0xFEE00000;
-            uint32_t apic_id  = apic_get_local_apic_id();
+            uint32_t apic_id  = cpu_state->local_apic_id;
             apic_id <<= 12;
             msg_addr |= apic_id;
 

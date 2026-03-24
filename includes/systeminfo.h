@@ -53,9 +53,11 @@ typedef struct system_info_t {
     uint64_t              spool_physical_start; ///< spool physical start
     uint64_t              spool_virtual_start; ///< spool virtual start
     uint64_t              interrupt_handlers_module_id; ///< the module id of interrupt handlers, used for task switching for userspace processes
+    uint64_t              gs_page_address_base;
+    uint64_t              gs_page_size;
 } system_info_t; ///< struct short hand for system_info_t
 
-_Static_assert(sizeof(system_info_t) == 168, "system_info_t size should be 168 bytes");
+_Static_assert(sizeof(system_info_t) == 184, "system_info_t size should be 184 bytes");
 
 /*! static location of system information */
 extern system_info_t* SYSTEM_INFO;

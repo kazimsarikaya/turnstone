@@ -90,6 +90,10 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
 
     cpu_cld();
 
+    cpu_write_msr(CPU_MSR_IA32_GS_BASE, SYSTEM_INFO->gs_page_address_base);
+    asm volatile ("swapgs\n");
+    cpu_write_msr(CPU_MSR_IA32_GS_BASE, SYSTEM_INFO->gs_page_address_base);
+
     int8_t res = 0;
 
 #ifndef ___TESTMODE
@@ -196,6 +200,14 @@ int8_t kmain64(size_t entry_point) {
     if(fa) {
         PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator created");
         frame_set_allocator(fa);
+
+        frame_t gs_pages = {MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(SYSTEM_INFO->gs_page_address_base),
+                            SYSTEM_INFO->gs_page_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
+
+        if(fa->allocate_frame(fa, &gs_pages) != 0) {
+            PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate gs pages frames");
+            cpu_hlt();
+        }
 
         program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
 

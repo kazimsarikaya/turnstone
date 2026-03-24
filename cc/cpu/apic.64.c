@@ -37,29 +37,22 @@ list_t* irq_remappings = NULL;
 static int8_t apic_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
 
-    if(local_apic_id_is_valid) {
-        cpu_state->tick_count++;
+    cpu_state->tick_count++;
 
-        if(cpu_state->local_apic_id == 0) {
-            hypervisor_vm_notify_timers(); // TODO: notify only vms on current cpu
-        }
+    if(cpu_state->local_apic_id == 0) {
+        hypervisor_vm_notify_timers(); // TODO: notify only vms on current cpu
+    }
 
-        if(cpu_state->tasking_enabled && (cpu_state->tick_count % TASK_MAX_TICK_COUNT) == 0) {
-            task_task_switch_set_parameters(true);
-            task_switch_task();
-            task_task_switch_exit();
-        } else {
-            apic_eoi();
-        }
+    if(cpu_state->tasking_enabled && (cpu_state->tick_count % TASK_MAX_TICK_COUNT) == 0) {
+        task_task_switch_set_parameters(true);
+        task_switch_task();
+        task_task_switch_exit();
     } else {
         apic_eoi();
     }
 
     return 0;
 }
-
-typedef uint32_t (*lock_get_local_apic_id_getter_f)(void);
-extern lock_get_local_apic_id_getter_f lock_get_local_apic_id_getter;
 
 static inline uint64_t apic_read_timer_current_value(void) {
     if(apic_x2apic) {
@@ -245,9 +238,8 @@ int8_t apic_init_apic(list_t* apic_entries){
 
     apic_write_spurious_interrupt_vector(0x10f);
 
-    apic_ap_count                 = apic_get_ap_count();
-    lock_get_local_apic_id_getter = &apic_get_local_apic_id;
-    apic_enabled                  = 1;
+    apic_ap_count = apic_get_ap_count();
+    apic_enabled  = 1;
 
     return 0;
 }
@@ -417,7 +409,7 @@ int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
     uint8_t base_irq = INTERRUPT_IRQ_BASE;
 
     // props |= APIC_IOAPIC_DESTINATION_MODE_LOGICAL;
-    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t apic_id = cpu_state->local_apic_id;
     uint32_t dest    = apic_id;
     dest = dest << 24;
 
@@ -447,17 +439,14 @@ int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
 }
 
 int8_t apic_ioapic_switch_irq(uint8_t irq, uint32_t disabled){
-    uint8_t base_irq = INTERRUPT_IRQ_BASE;
-
     for(uint8_t i = 0; i < ioapic_count; i++) {
-        __volatile__ apic_ioapic_register_t* io_apic_r = (__volatile__ apic_ioapic_register_t*)ioapic_bases[i];
+        volatile apic_ioapic_register_t* io_apic_r = (volatile apic_ioapic_register_t*)ioapic_bases[i];
 
         io_apic_r->selector = APIC_IOAPIC_REGISTER_VERSION;
         uint8_t max_r_e = APIC_IOAPIC_MAX_REDIRECTION_ENTRY(io_apic_r->value);
 
         if(irq >= max_r_e) {
-            irq      -= max_r_e;
-            base_irq += max_r_e;
+            irq -= max_r_e;
 
             continue;
         }
@@ -487,27 +476,6 @@ void  apic_eoi(void) {
             *eio = 0;
         }
     }
-}
-
-uint32_t apic_get_local_apic_id(void) {
-    if(local_apic_id_is_valid) {
-        return cpu_state->local_apic_id;
-    } else if(apic_enabled) {
-        if(apic_x2apic) {
-            uint64_t msr = cpu_read_msr(APIC_X2APIC_MSR_APICID);
-            return msr & 0xFFFFFFFF;
-        } else {
-            volatile uint32_t* id = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ID);
-            return (*id >> 24) & 0xFF;
-        }
-    } else {
-        cpu_cpuid_regs_t query  = {1, 0, 0, 0};
-        cpu_cpuid_regs_t answer = {0};
-        cpu_cpuid(query, &answer);
-        return answer.ebx >> 24;
-    }
-
-    return 0;
 }
 
 void apic_send_init(uint8_t destination) {
@@ -601,7 +569,7 @@ void apic_send_nmi(uint8_t destination) {
 uint64_t apic_get_ap_count(void) {
     uint64_t ap_count = 0;
 
-    uint8_t lcl_apic_id = apic_get_local_apic_id();
+    uint8_t lcl_apic_id = cpu_state->local_apic_id;
 
     acpi_sdt_header_t* madt = acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "APIC");
 

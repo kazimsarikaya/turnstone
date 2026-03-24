@@ -19,6 +19,7 @@
 #include <linker.h>
 #include <pci.h>
 #include <apic.h>
+#include <cpu/cpu_state.h>
 
 MODULE("turnstone.hypervisor");
 
@@ -76,8 +77,8 @@ uint64_t hypervisor_create_stack(hypervisor_vm_t* vm, uint64_t stack_size) {
 }
 
 static void hypervisor_cleanup_unused_modules(hypervisor_vm_t * vm, uint64_t got_fa, uint64_t got_size){
-    uint64_t got_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_fa);
-    uint64_t got_entry_count = got_size / sizeof(linker_global_offset_table_entry_t);
+    uint64_t got_va                                 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_fa);
+    uint64_t got_entry_count                        = got_size / sizeof(linker_global_offset_table_entry_t);
     linker_global_offset_table_entry_t* got_entries = (linker_global_offset_table_entry_t*)got_va;
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "got 0x%llx 0x%llx", got_fa, got_size);
@@ -107,9 +108,9 @@ static void hypervisor_cleanup_unused_modules(hypervisor_vm_t * vm, uint64_t got
 int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_name) {
     tosdb_manager_ipc_t ipc = {0};
 
-    ipc.type = TOSDB_MANAGER_IPC_TYPE_PROGRAM_LOAD;
+    ipc.type                           = TOSDB_MANAGER_IPC_TYPE_PROGRAM_LOAD;
     ipc.program_build.entry_point_name = entry_point_name;
-    ipc.program_build.for_vm = true;
+    ipc.program_build.for_vm           = true;
 
     if(tosdb_manager_ipc_send_and_wait(&ipc) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot send program build ipc");
@@ -134,16 +135,16 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
 
     hypervisor_vm_module_load_t ml = {0};
 
-    ml.old_got_physical_address = vm->got_physical_address;
-    ml.old_got_size = vm->got_size;
-    ml.new_got_physical_address = ipc.program_build.got_physical_address;
-    ml.new_got_size = ipc.program_build.got_size;
-    ml.module_physical_address = ipc.program_build.module.module_physical_address;
-    ml.module_virtual_address = ipc.program_build.module.module_virtual_address;
-    ml.module_size = ipc.program_build.module.module_size;
+    ml.old_got_physical_address  = vm->got_physical_address;
+    ml.old_got_size              = vm->got_size;
+    ml.new_got_physical_address  = ipc.program_build.got_physical_address;
+    ml.new_got_size              = ipc.program_build.got_size;
+    ml.module_physical_address   = ipc.program_build.module.module_physical_address;
+    ml.module_virtual_address    = ipc.program_build.module.module_virtual_address;
+    ml.module_size               = ipc.program_build.module.module_size;
     ml.metadata_physical_address = ipc.program_build.module.metadata_physical_address;
-    ml.metadata_virtual_address = ipc.program_build.module.metadata_virtual_address;
-    ml.metadata_size = ipc.program_build.module.metadata_size;
+    ml.metadata_virtual_address  = ipc.program_build.module.metadata_virtual_address;
+    ml.metadata_size             = ipc.program_build.module.metadata_size;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "module id 0x%llx loaded", ipc.program_build.module.module_handle);
     PRINTLOG(HYPERVISOR, LOG_TRACE, "old got 0x%llx 0x%llx", ml.old_got_physical_address, ml.old_got_size);
@@ -161,9 +162,9 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
 }
 
 int8_t hypervisor_load_module(hypervisor_vm_t* vm, uint64_t got_entry_address) {
-    uint64_t got_fa = vm->got_physical_address;
+    uint64_t got_fa   = vm->got_physical_address;
     uint64_t got_size = vm->got_size;
-    uint64_t got_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_fa);
+    uint64_t got_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_fa);
 
     if(got_entry_address > got_size) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "module id 0x%llx is out of got size 0x%llx", got_entry_address, got_size);
@@ -188,9 +189,9 @@ int8_t hypervisor_load_module(hypervisor_vm_t* vm, uint64_t got_entry_address) {
 
     tosdb_manager_ipc_t ipc = {0};
 
-    ipc.type = TOSDB_MANAGER_IPC_TYPE_MODULE_LOAD;
+    ipc.type                               = TOSDB_MANAGER_IPC_TYPE_MODULE_LOAD;
     ipc.program_build.module.module_handle = module_id;
-    ipc.program_build.for_vm = true;
+    ipc.program_build.for_vm               = true;
 
     if(tosdb_manager_ipc_send_and_wait(&ipc) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot send program build ipc");
@@ -213,16 +214,16 @@ int8_t hypervisor_load_module(hypervisor_vm_t* vm, uint64_t got_entry_address) {
 
     hypervisor_vm_module_load_t ml = {0};
 
-    ml.old_got_physical_address = vm->got_physical_address;
-    ml.old_got_size = vm->got_size;
-    ml.new_got_physical_address = ipc.program_build.got_physical_address;
-    ml.new_got_size = ipc.program_build.got_size;
-    ml.module_physical_address = ipc.program_build.module.module_physical_address;
-    ml.module_virtual_address = ipc.program_build.module.module_virtual_address;
-    ml.module_size = ipc.program_build.module.module_size;
+    ml.old_got_physical_address  = vm->got_physical_address;
+    ml.old_got_size              = vm->got_size;
+    ml.new_got_physical_address  = ipc.program_build.got_physical_address;
+    ml.new_got_size              = ipc.program_build.got_size;
+    ml.module_physical_address   = ipc.program_build.module.module_physical_address;
+    ml.module_virtual_address    = ipc.program_build.module.module_virtual_address;
+    ml.module_size               = ipc.program_build.module.module_size;
     ml.metadata_physical_address = ipc.program_build.module.metadata_physical_address;
-    ml.metadata_virtual_address = ipc.program_build.module.metadata_virtual_address;
-    ml.metadata_size = ipc.program_build.module.metadata_size;
+    ml.metadata_virtual_address  = ipc.program_build.module.metadata_virtual_address;
+    ml.metadata_size             = ipc.program_build.module.metadata_size;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "module id 0x%llx loaded", module_id);
     PRINTLOG(HYPERVISOR, LOG_TRACE, "old got 0x%llx 0x%llx", ml.old_got_physical_address, ml.old_got_size);
@@ -238,9 +239,9 @@ int8_t hypervisor_load_module(hypervisor_vm_t* vm, uint64_t got_entry_address) {
 }
 
 uint64_t hypervisor_attach_pci_dev(hypervisor_vm_t* vm, uint32_t pci_address) {
-    uint8_t group = (pci_address >> 24) & 0xff;
-    uint8_t bus = (pci_address >> 16) & 0xff;
-    uint8_t device = (pci_address >> 8) & 0xff;
+    uint8_t group    = (pci_address >> 24) & 0xff;
+    uint8_t bus      = (pci_address >> 16) & 0xff;
+    uint8_t device   = (pci_address >> 8) & 0xff;
     uint8_t function = pci_address & 0xff;
 
     const pci_dev_t* pci_dev = pci_find_device_by_address(group, bus, device, function);
@@ -252,7 +253,7 @@ uint64_t hypervisor_attach_pci_dev(hypervisor_vm_t* vm, uint32_t pci_address) {
 
     uint64_t pci_va = hypervisor_ept_map_pci_device(vm, pci_dev);
 
-    if(pci_va != -1ULL){
+    if(pci_va != -1ULL) {
         list_list_insert(vm->mapped_pci_devices, pci_dev);
     }
 
@@ -323,7 +324,7 @@ static int8_t hypervisor_vmcall_interrupt_mapped_isr(interrupt_frame_ext_t* fram
 int16_t  hypervisor_attach_interrupt(hypervisor_vm_t* vm, uint64_t pci_dev_address, vm_guest_interrupt_type_t interrupt_type, uint8_t interrupt_number) {
     pci_generic_device_t* pci_dev = (pci_generic_device_t*)pci_dev_address;
 
-    pci_capability_msi_t* msi_cap = NULL;
+    pci_capability_msi_t* msi_cap   = NULL;
     pci_capability_msix_t* msix_cap = NULL;
 
     if(pci_dev->common_header.status.capabilities_list) {
@@ -357,15 +358,15 @@ int16_t  hypervisor_attach_interrupt(hypervisor_vm_t* vm, uint64_t pci_dev_addre
 
     if(interrupt_type == VM_GUEST_INTERRUPT_TYPE_MSI) {
         uint32_t msg_addr = 0xFEE00000;
-        uint32_t apic_id = apic_get_local_apic_id();
+        uint32_t apic_id  = cpu_state->local_apic_id;
         apic_id <<= 12;
         msg_addr |= apic_id;
 
         if(msi_cap->ma64_support) {
             msi_cap->ma64.message_address = msg_addr; // | (1 << 3) | (0 << 2);
 
-            if(!msi_cap->ma64.message_data){
-                intnum = interrupt_get_next_empty_interrupt();
+            if(!msi_cap->ma64.message_data) {
+                intnum                     = interrupt_get_next_empty_interrupt();
                 msi_cap->ma64.message_data = intnum;
             } else {
                 intnum = msi_cap->ma64.message_data;
@@ -374,8 +375,8 @@ int16_t  hypervisor_attach_interrupt(hypervisor_vm_t* vm, uint64_t pci_dev_addre
         } else {
             msi_cap->ma32.message_address = msg_addr; // | (1 << 3) | (0 << 2);
 
-            if(!msi_cap->ma32.message_data){
-                intnum = interrupt_get_next_empty_interrupt();
+            if(!msi_cap->ma32.message_data) {
+                intnum                     = interrupt_get_next_empty_interrupt();
                 msi_cap->ma32.message_data = intnum;
             } else {
                 intnum = msi_cap->ma32.message_data;
@@ -387,7 +388,7 @@ int16_t  hypervisor_attach_interrupt(hypervisor_vm_t* vm, uint64_t pci_dev_addre
 
         msi_cap->enable = 1;
     } else if(interrupt_type == VM_GUEST_INTERRUPT_TYPE_MSIX) {
-        intnum = pci_msix_set_isr(pci_dev, msix_cap, interrupt_number, &hypervisor_vmcall_interrupt_mapped_isr);
+        intnum  = pci_msix_set_isr(pci_dev, msix_cap, interrupt_number, &hypervisor_vmcall_interrupt_mapped_isr);
         intnum += INTERRUPT_IRQ_BASE;
     } else {
         intnum = INTERRUPT_IRQ_BASE + pci_dev->interrupt_line;

@@ -15,6 +15,7 @@
 #include <ports.h>
 #include <apic.h>
 #include <device/mmio.h>
+#include <cpu/cpu_state.h>
 
 MODULE("turnstone.kernel.hw.pci.utils");
 
@@ -109,7 +110,7 @@ uint8_t pci_msix_set_isr(const pci_generic_device_t* pci_dev, const pci_capabili
     pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_table_address);
 
     uint32_t msg_addr = 0xFEE00000;
-    uint32_t apic_id  = apic_get_local_apic_id();
+    uint32_t apic_id  = cpu_state->local_apic_id;
     apic_id <<= 12;
     msg_addr |= apic_id;
 
@@ -148,7 +149,7 @@ uint8_t pci_msix_update_lapic(const pci_generic_device_t* pci_dev, const pci_cap
 
     uint32_t msg_addr = msix_table->entries[msix_vector].message_address;
     msg_addr &= 0xFFF00FFF;
-    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t apic_id = cpu_state->local_apic_id;
     apic_id <<= 12;
     msg_addr |= apic_id;
 

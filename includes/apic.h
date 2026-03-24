@@ -344,13 +344,6 @@ uint8_t apic_get_irq_override(uint8_t old_irq);
 void apic_eoi(void);
 
 /**
- * @brief Retrieves the Local APIC ID of the current processor.
- *
- * @return The 32-bit Local APIC ID.
- */
-uint32_t apic_get_local_apic_id(void);
-
-/**
  * @brief Sends an Inter-Processor Interrupt (IPI) to a destination APIC.
  *
  * @param destination The APIC ID of the destination processor.

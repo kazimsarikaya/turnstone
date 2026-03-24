@@ -34,7 +34,7 @@ void video_text_print(const char_t* str);
 extern hashmap_t* task_map;
 
 uint64_t task_get_id(void) {
-    uint64_t id = apic_get_local_apic_id() + 1;
+    uint64_t id = cpu_state->local_apic_id + 1;
 
     task_t* current_task = task_get_current_task();
 
@@ -46,7 +46,7 @@ uint64_t task_get_id(void) {
 }
 
 uint64_t task_get_cpu_id(void) {
-    return apic_get_local_apic_id();
+    return cpu_state->local_apic_id;
 }
 
 void task_current_task_sleep(uint64_t wake_tick) {
@@ -490,7 +490,7 @@ list_t* task_get_message_queue(uint64_t task_id, uint64_t queue_number) {
 }
 
 void task_toggle_wait_for_future(uint64_t tid) {
-    if(tid == 0 || tid == apic_get_local_apic_id() + 1) {
+    if(tid == 0 || tid == cpu_state->local_apic_id + 1) {
         return;
     }
 

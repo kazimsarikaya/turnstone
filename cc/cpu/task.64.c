@@ -897,8 +897,8 @@ static int8_t task_create_idle_task(void) {
 
         cpu_hlt();
     }
-    new_task->task_id = apic_get_local_apic_id() + 1;
-    new_task->cpu_id  = apic_get_local_apic_id();
+    new_task->task_id = cpu_state->local_apic_id + 1;
+    new_task->cpu_id  = cpu_state->local_apic_id;
 
     new_task->state       = TASK_STATE_CREATED;
     new_task->entry_point = task_idle_task;
@@ -907,7 +907,7 @@ static int8_t task_create_idle_task(void) {
     new_task->stack_size  = stack_size;
     new_task->stack       = (void*)stack_va;
 
-    char_t* tmp_task_name = strprintf("%s-%d", "idle", apic_get_local_apic_id());
+    char_t* tmp_task_name = strprintf("%s-%lli", "idle", cpu_state->local_apic_id);
 
     new_task->task_name = strdup_at_heap(heap, tmp_task_name);
 
@@ -998,8 +998,8 @@ static int8_t task_create_cleaner_task(void) {
 
         cpu_hlt();
     }
-    new_task->task_id = apic_get_local_apic_id() + 1 + apic_get_ap_count() + 1;
-    new_task->cpu_id  = apic_get_local_apic_id();
+    new_task->task_id = cpu_state->local_apic_id + 1 + apic_get_ap_count() + 1;
+    new_task->cpu_id  = cpu_state->local_apic_id;
 
     new_task->state       = TASK_STATE_CREATED;
     new_task->entry_point = task_cleaner_task;
@@ -1008,7 +1008,7 @@ static int8_t task_create_cleaner_task(void) {
     new_task->stack_size  = stack_size;
     new_task->stack       = (void*)stack_va;
 
-    char_t* tmp_task_name = strprintf("%s-%d", "task-cleaner", apic_get_local_apic_id());
+    char_t* tmp_task_name = strprintf("%s-%lli", "task-cleaner", cpu_state->local_apic_id);
 
     new_task->task_name = strdup_at_heap(heap, tmp_task_name);
 
@@ -1148,40 +1148,11 @@ void task_remove_task_after_fault(uint64_t task_id) {
 int8_t task_init_tasking_ext(memory_heap_t* heap) {
     PRINTLOG(TASKING, LOG_INFO, "tasking system initialization started");
 
-    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t apic_id = cpu_state->local_apic_id;
 
     task_max_tick_count_limit = TASK_MAX_TICK_COUNT * time_timer_get_rdtsc_delta();
 
     frame_allocator_t* fa = frame_get_allocator();
-
-    frame_t* kernel_gs_frames = NULL;
-
-    if(fa->allocate_frame_by_count(fa, 4, FRAME_ALLOCATION_TYPE_BLOCK, &kernel_gs_frames, NULL) != 0) {
-        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 4");
-
-        return -1;
-    }
-
-    uint64_t kernel_gs_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(kernel_gs_frames->frame_address);
-
-    memory_paging_add_va_for_frame(kernel_gs_va, kernel_gs_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-
-    memory_memclean((void*)kernel_gs_va, 0x4000);
-
-    uint64_t old_gs_base = cpu_read_msr(CPU_MSR_IA32_GS_BASE);
-
-    PRINTLOG(TASKING, LOG_TRACE, "old gs base 0x%llx new gs base 0x%llx", old_gs_base, kernel_gs_va);
-
-    cpu_cli();
-    cpu_write_msr(CPU_MSR_IA32_GS_BASE, kernel_gs_va);
-    asm volatile ("swapgs\n");
-    cpu_write_msr(CPU_MSR_IA32_GS_BASE, kernel_gs_va);
-    cpu_sti();
-
-    cpu_state_t* current_cpu_state = (cpu_state_t*)kernel_gs_va;
-    current_cpu_state->local_apic_id = apic_id;
-    local_apic_id_is_valid           = true;
-
 
     descriptor_register_t gdtr = descriptor_get_gdt_register();
     descriptor_gdt_t* gdts     = (descriptor_gdt_t*)gdtr.base;
@@ -1344,10 +1315,10 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     }
 
 
-    current_cpu_state->task_queue         = task_queues[0];
-    current_cpu_state->task_sleep_queue   = task_sleep_queues[0];
-    current_cpu_state->task_wait_queue    = task_wait_queues[0];
-    current_cpu_state->task_cleanup_queue = task_cleanup_queues[0];
+    cpu_state->task_queue         = task_queues[0];
+    cpu_state->task_sleep_queue   = task_sleep_queues[0];
+    cpu_state->task_wait_queue    = task_wait_queues[0];
+    cpu_state->task_cleanup_queue = task_cleanup_queues[0];
 
     interrupt_irq_set_handler(0xde, &task_task_switch_isr);
 
@@ -1474,7 +1445,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
     memory_heap_t* heap      = task_map_heap;
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
 
-    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t apic_id = cpu_state->local_apic_id;
 
     if(task_queues[apic_id] == NULL || task_cleanup_queues[apic_id] == NULL ||
        task_sleep_queues[apic_id] == NULL || task_wait_queues[apic_id] == NULL) {
@@ -1503,7 +1474,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     current_task->cpu_id = apic_id;
 
-    char_t* tmp_task_name = strprintf("%s-%d", "kernel-init", current_task->cpu_id);
+    char_t* tmp_task_name = strprintf("%s-%lli", "kernel-init", current_task->cpu_id);
 
     current_task->task_name = strdup_at_heap(heap, tmp_task_name);
 

@@ -15,6 +15,7 @@
 #include <cpu/cpu_registers.h>
 #include <cpu/crx.h>
 #include <cpu/sync.h>
+#include <cpu/cpu_state.h>
 #include <buffer.h>
 #include <data.h>
 #include <zpack.h>
@@ -863,11 +864,32 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
     }
 
     uint64_t max_memory_address = 0;
+    uint32_t cpu_count          = 0;
 
     if(acpi_xrsdp) {
 
         srat = (acpi_table_srat_t*)acpi_get_table(acpi_xrsdp, "SRAT");
         slit = acpi_get_table(acpi_xrsdp, "SLIT");
+        acpi_sdt_header_t* madt = acpi_get_table(acpi_xrsdp, "APIC");
+
+        if(madt) {
+            acpi_table_madt_entry_t* madt_entry = (acpi_table_madt_entry_t*)((uint8_t*)madt + sizeof(acpi_sdt_header_t) + 2 * sizeof(uint32_t)); // skip header, local apic address and flags
+            int32_t madt_remaining              = madt->length - sizeof(acpi_sdt_header_t);
+
+            while(madt_remaining > 0) {
+                if(madt_entry->info.type == ACPI_MADT_ENTRY_TYPE_PROCESSOR_LOCAL_APIC) {
+                    cpu_count++;
+                }
+
+                madt_remaining -= madt_entry->info.length;
+                madt_entry      = (acpi_table_madt_entry_t*)((uint8_t*)madt_entry + madt_entry->info.length);
+            }
+
+            PRINTLOG(EFI, LOG_INFO, "madt table found at 0x%p, cpu count %i local apic id %i", madt, cpu_count, local_apic_id);
+        } else {
+            PRINTLOG(EFI, LOG_ERROR, "madt table not found");
+            goto catch_efi_error;
+        }
 
         if(srat) {
             PRINTLOG(EFI, LOG_INFO, "srat table found at 0x%p", srat);
@@ -1478,6 +1500,18 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
 
     PRINTLOG(EFI, LOG_INFO, "program dumped into memory, building system info");
 
+    // gs pages 4*cpu_count.
+
+    uint64_t gs_page_address_base = max_memory_address;
+
+    if(BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, 4 * cpu_count, &gs_page_address_base) != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate gs pages");
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_INFO, "gs page address base 0x%llx", gs_page_address_base);
+
     uint8_t* mmap = NULL;
     uint64_t map_size, map_key, descriptor_size;
     uint32_t descriptor_version;
@@ -1537,8 +1571,10 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
     sysinfo->random_seed                   = rand64();
     sysinfo->spool_size                    = spool_size;
     sysinfo->spool_physical_start          = spool_address;
-    sysinfo->spool_virtual_start           = (64UL << 30) | spool_address;
+    sysinfo->spool_virtual_start           = (64UL << 40) | spool_address;
     sysinfo->interrupt_handlers_module_id  = ih_module_id;
+    sysinfo->gs_page_address_base          = (64ULL << 40) | gs_page_address_base;
+    sysinfo->gs_page_size                  = 4 * cpu_count * FRAME_SIZE;
 
     memory_page_table_context_t* page_table_ctx = (memory_page_table_context_t*)program_header->page_table_context_address;
 
@@ -1549,6 +1585,24 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
 
     if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot add system info to page table");
+
+        goto catch_efi_error;
+    }
+
+    uint8_t* gs_page = (uint8_t*)gs_page_address_base;
+    memory_memclean(gs_page, 4 * cpu_count * FRAME_SIZE);
+
+    for(uint32_t i = 0; i < cpu_count; i++) {
+        cpu_state_t* cpu_cpu_state = (cpu_state_t*)(void*)(gs_page + i * 4 * FRAME_SIZE);
+
+        cpu_cpu_state->local_apic_id = i;
+    }
+
+    frm.frame_address = gs_page_address_base;
+    frm.frame_count   = 4 * cpu_count;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, sysinfo->gs_page_address_base, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add gs pages to page table");
 
         goto catch_efi_error;
     }

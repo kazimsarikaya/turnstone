@@ -20,7 +20,9 @@
 #include <cpu/descriptor.h>
 #include <cpu/interrupt.h>
 #include <cpu/syscall.h>
+#include <cpu/cpu_state.h>
 #include <hypervisor/hypervisor.h>
+#include <systeminfo.h>
 
 MODULE("turnstone.kernel.cpu.smp");
 
@@ -68,7 +70,7 @@ const uint8_t trampoline_code[] = {
     0x66, 0xb8, 0x01, 0x00, 0x00, 0x80, // 809e: mov $0x80000001, %eax
     0x0f, 0x22, 0xc0, // 80a4: mov %eax, %cr0
     0xea, 0xb0, 0x80, 0x08, 0x00, // 80a7: jmp $0x08:$0x80b0
-    0x00, 0x00, 0x00, 0x00, // nop
+    0x00, 0x00, 0x00, 0x00, // padding
     0x66, 0x31, 0xc0, // 80b0: xor %eax, %eax
     0x8e, 0xd8, // 80b3:mov %ax, %ds
     0x8e, 0xc0, // 80b5: mov %ax, %es
@@ -98,8 +100,8 @@ const uint8_t trampoline_code[] = {
     0x48, 0x8b, 0x43, 0x28, // 8106: mov 0x28(%rbx), %rax
     0x48, 0xc7, 0xc0, 0x00, 0x00, 0x00, 0x00, // 810a: mov $0x0, %rax
     0xff, 0xd0, // 8111: callq *%rax
-    0xf4, // 8013: hlt
-    0xeb, 0xfd, // 8014: jmp 0x80e3
+    0xf4, // 8113: hlt
+    0xeb, 0xfd, // 8114: jmp 0x8113
 };
 
 
@@ -119,7 +121,7 @@ int8_t smp_init_cpu(uint8_t cpu_id) {
 int8_t smp_init(void) {
     PRINTLOG(APIC, LOG_INFO, "SMP Initialisation");
 
-    uint32_t local_apic_id = apic_get_local_apic_id();
+    uint32_t local_apic_id = cpu_state->local_apic_id;
 
     PRINTLOG(APIC, LOG_INFO, "SMP: Bootstrap APIC ID: 0x%x", local_apic_id);
     uint8_t ap_cpu_count = apic_get_ap_count();
@@ -155,7 +157,7 @@ int8_t smp_init(void) {
     list_t* apic_entries = acpi_get_apic_table_entries(madt);
 
     frame_t* stack_frames;
-    uint64_t stack_frames_cnt = 16 * ap_cpu_count;
+    uint64_t stack_frames_cnt = 16 * (ap_cpu_count + 1);
     uint64_t stack_size       = 16 * FRAME_SIZE;
 
     if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt,
@@ -174,31 +176,14 @@ int8_t smp_init(void) {
 
     memory_memclean((void*)stack_frames_va, stack_frames_cnt * FRAME_SIZE);
 
-    frame_t* ap_gs_frames     = NULL;
-    uint64_t ap_gs_frames_cnt = 4 * ap_cpu_count;
-    uint64_t ap_gs_size       = 4 * FRAME_SIZE;
+    uint64_t ap_gs_size = 4 * FRAME_SIZE;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), ap_gs_frames_cnt,
-                                                      FRAME_ALLOCATION_TYPE_BLOCK,
-                                                      &ap_gs_frames, NULL) != 0) {
-        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate gs frames of count 4");
-
-        return -1;
-    }
-
-    uint64_t ap_gs_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ap_gs_frames->frame_address);
-
-    memory_paging_add_va_for_frame(ap_gs_va, ap_gs_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-
-    memory_memclean((void*)ap_gs_va, ap_gs_frames_cnt * FRAME_SIZE);
-
-    uint64_t* ap_gs = (uint64_t*)ap_gs_va;
-
+    uint64_t ap_gs_va = SYSTEM_INFO->gs_page_address_base;
 
     smp_data->stack_base   = stack_frames_va;
     smp_data->stack_size   = stack_size;
     smp_data->cr0          = cpu_read_cr0();
-    smp_data->cr3          =  MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(memory_paging_get_table()->page_table);
+    smp_data->cr3          = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(memory_paging_get_table()->page_table);
     smp_data->cr4          = cpu_read_cr4();
     smp_data->gs_base      = ap_gs_va;
     smp_data->gs_base_size = ap_gs_size;
@@ -212,8 +197,6 @@ int8_t smp_init(void) {
             PRINTLOG(APIC, LOG_INFO, "SMP: Found APIC ID: %d local apic? %i", apic_id, apic_id == local_apic_id);
 
             if(apic_id != local_apic_id) {
-                ap_gs[((apic_id - 1) * ap_gs_size) / sizeof(uint64_t)] = apic_id;
-
                 smp_init_cpu(apic_id);
             }
         }
@@ -230,18 +213,18 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
     smp_data_t* smp_data = (smp_data_t*)0x9000;
 
     uint64_t gs_base = smp_data->gs_base;
-    gs_base += (cpu_id - 1) * smp_data->gs_base_size;
+    gs_base += cpu_id * smp_data->gs_base_size;
 
     cpu_write_msr(CPU_MSR_IA32_GS_BASE, gs_base);
     asm volatile ("swapgs\n");
     cpu_write_msr(CPU_MSR_IA32_GS_BASE, gs_base);
 
     uint64_t stack_base = smp_data->stack_base;
-    stack_base += (cpu_id - 1) * smp_data->stack_size;
+    stack_base += cpu_id * smp_data->stack_size;
 
     apic_enable_lapic();
 
-    uint32_t local_apic_id = apic_get_local_apic_id();
+    uint32_t local_apic_id = cpu_state->local_apic_id;
 
     if(local_apic_id != cpu_id) {
         PRINTLOG(APIC, LOG_ERROR, "SMP: AP cpu id %i mismatch local apic id %i", cpu_id, local_apic_id);

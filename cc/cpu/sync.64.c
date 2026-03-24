@@ -12,6 +12,7 @@
 #include <apic.h>
 #include <logging.h>
 #include <utils.h>
+#include <cpu/cpu_state.h>
 
 MODULE("turnstone.kernel.cpu.sync");
 
@@ -27,23 +28,13 @@ void video_text_print(const char* str);
 
 boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
 
-typedef uint32_t (*lock_get_local_apic_id_getter_f)(void);
-typedef task_t   * (*lock_current_task_getter_f)(void);
-typedef void     (*lock_task_yielder_f)(void);
+typedef task_t * (*lock_current_task_getter_f)(void);
+typedef void   (*lock_task_yielder_f)(void);
 
-lock_get_local_apic_id_getter_f lock_get_local_apic_id_getter = NULL;
 lock_current_task_getter_f lock_get_current_task_getter = NULL;
-lock_task_yielder_f lock_task_yielder = NULL;
+lock_task_yielder_f lock_task_yielder                   = NULL;
 
 void future_task_wait_toggler(uint64_t task_id);
-
-static uint32_t lock_get_local_apic_id(void) {
-    if(lock_get_local_apic_id_getter) {
-        return lock_get_local_apic_id_getter();
-    }
-
-    return NULL;
-}
 
 static task_t* lock_get_current_task(void) {
     if(lock_get_current_task_getter) {
@@ -68,12 +59,12 @@ lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_futu
         return NULL;
     }
 
-    lock->heap = heap;
+    lock->heap       = heap;
     lock->for_future = for_future;
 
     if(lock->for_future) {
         lock->owner_task_id = task_id;
-        lock->lock_value = 1;
+        lock->lock_value    = 1;
     }
 
     return lock;
@@ -97,7 +88,7 @@ void lock_acquire(lock_t* lock) {
     }
 
 
-    uint64_t current_cpu_id = lock_get_local_apic_id() + 1; // add one for preventing bsp cpu id 0
+    uint64_t current_cpu_id = cpu_state->local_apic_id + 1; // add one for preventing bsp cpu id 0
 
     task_t* current_task = lock_get_current_task();
 
@@ -150,8 +141,8 @@ void lock_release(lock_t* lock) {
         }
 
         lock->owner_task_id = 0;
-        lock->owner_cpu_id = 0;
-        lock->lock_value = 0;
+        lock->owner_cpu_id  = 0;
+        lock->lock_value    = 0;
         asm volatile ("pause" ::: "memory");
     }
 }
@@ -180,8 +171,8 @@ semaphore_t* semaphore_create_with_heap_and_check_initial_count(memory_heap_t* h
     }
 
     semaphore->check_initial_count = check_initial_count;
-    semaphore->initial_count = count;
-    semaphore->current_count = count;
+    semaphore->initial_count       = count;
+    semaphore->current_count       = count;
 
     return semaphore;
 }

@@ -11,6 +11,7 @@
 #include <cpu/interrupt.h>
 #include <cpu/descriptor.h>
 #include <cpu/crx.h>
+#include <cpu/cpu_state.h>
 #include <logging.h>
 #include <strings.h>
 #include <memory/paging.h>
@@ -305,7 +306,7 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot find irq for 0x%02x", intnum);
     }
 
-    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t apic_id = cpu_state->local_apic_id;
 
     PRINTLOG(KERNEL, LOG_FATAL, "lapic id 0x%x", apic_id);
     PRINTLOG(KERNEL, LOG_FATAL, "Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%016llx", intnum, frame->return_rip);
@@ -351,7 +352,7 @@ extern boolean_t we_sended_nmi_to_bsp;
 static int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
     KERNEL_PANIC_DISABLE_LOCKS = true;
 
-    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t apic_id = cpu_state->local_apic_id;
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
 
@@ -403,7 +404,7 @@ static int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t* frame)
 static int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame){
     // KERNEL_PANIC_DISABLE_LOCKS = true;
 
-    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t apic_id = cpu_state->local_apic_id;
 
     uint64_t tid = task_get_id();
 
@@ -436,7 +437,7 @@ static int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t
 static int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
     // KERNEL_PANIC_DISABLE_LOCKS = true;
 
-    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t apic_id = cpu_state->local_apic_id;
 
     uint64_t tid = task_get_id();
 
