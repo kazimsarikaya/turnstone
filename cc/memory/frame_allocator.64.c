@@ -27,11 +27,23 @@ typedef struct frame_allocator_context_t {
     index_t*       free_frames_by_address;
     index_t*       allocated_frames_by_address;
     index_t*       reserved_frames_by_address;
+    index_t*       under_2m_reserved_frames_by_address;
     lock_t*        lock;
     uint64_t       total_frame_count;
     uint64_t       free_frame_count;
     uint64_t       allocated_frame_count;
 } frame_allocator_context_t;
+
+static const char_t*const fa_frame_type_names[] = {
+    [FRAME_TYPE_FREE]                = "free",
+    [FRAME_TYPE_USED]                = "used",
+    [FRAME_TYPE_UNDER_2M_RESERVED]   = "under_2m_reserved",
+    [FRAME_TYPE_RESERVED]            = "reserved",
+    [FRAME_TYPE_ACPI_RECLAIM_MEMORY] = "acpi_reclaim_memory",
+    [FRAME_TYPE_ACPI_CODE]           = "acpi_code",
+    [FRAME_TYPE_ACPI_DATA]           = "acpi_data",
+    [FRAME_TYPE_ACPI_NVS]            = "acpi_nvs",
+};
 
 
 static int8_t frame_allocator_cmp_by_size(const void* data1, const void* data2){
@@ -299,10 +311,6 @@ static int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count
 
         ctx->allocated_frame_count += count;
         ctx->free_frame_count      -= count;
-
-        if(fa_type & FRAME_ALLOCATION_TYPE_OLD_RESERVED) {
-            new_frm->frame_attributes |= FRAME_ATTRIBUTE_OLD_RESERVED;
-        }
 
         *fs = new_frm;
 
@@ -814,24 +822,32 @@ static frame_t* fa_get_reserved_frames_of_address(frame_allocator_t* self, void*
 }
 
 static frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type){
-    if(efi_m_type == EFI_LOADER_CODE || efi_m_type == EFI_LOADER_DATA) {
+    switch(efi_m_type) {
+    case EFI_LOADER_CODE:
+    case EFI_LOADER_DATA:
+    case EFI_CONVENTIONAL_MEMORY:
         return FRAME_TYPE_FREE;
-    }
-
-    if(efi_m_type == EFI_BOOT_SERVICES_CODE || efi_m_type == EFI_RUNTIME_SERVICES_CODE || efi_m_type == EFI_PAL_CODE) {
+        return FRAME_TYPE_FREE;
+    case EFI_BOOT_SERVICES_CODE:
+    case EFI_RUNTIME_SERVICES_CODE:
+    case EFI_PAL_CODE:
         return FRAME_TYPE_ACPI_CODE;
-    }
-
-    if(efi_m_type == EFI_BOOT_SERVICES_DATA || efi_m_type == EFI_RUNTIME_SERVICES_DATA) {
+    case EFI_BOOT_SERVICES_DATA:
+    case EFI_RUNTIME_SERVICES_DATA:
         return FRAME_TYPE_ACPI_DATA;
-    }
-
-    if(efi_m_type == EFI_CONVENTIONAL_MEMORY) {
-        return FRAME_TYPE_FREE;
-    }
-
-    if(efi_m_type == EFI_ACPI_RECLAIM_MEMORY) {
+    case EFI_UNUSABLE_MEMORY:
+    case EFI_ACPI_RECLAIM_MEMORY:
         return FRAME_TYPE_ACPI_RECLAIM_MEMORY;
+    case EFI_ACPI_MEMORY_NVS:
+        return FRAME_TYPE_ACPI_NVS;
+    case EFI_MEMORY_MAPPED_IO:
+    case EFI_MEMORY_MAPPED_IO_PORT_SPACE:
+    case EFI_RESERVED_MEMORY_TYPE:
+    case EFI_PERSISTENT_MEMORY:
+    case EFI_UNACCEPTED_MEMORY:
+        return FRAME_TYPE_RESERVED;
+    default:
+        return FRAME_TYPE_RESERVED;
     }
 
     return FRAME_TYPE_RESERVED;
@@ -861,6 +877,57 @@ static int8_t frame_allocator_destroy_key(memory_heap_t* heap, void* key) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+static int8_t fa_add_mem_desc(frame_allocator_context_t* ctx, uint64_t frame_start, uint64_t frame_count, frame_type_t type, uint64_t attribute) {
+    PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "adding memory descriptor to frame allocator, frame start 0x%llx count 0x%llx type %s attribute 0x%llx", frame_start, frame_count, fa_frame_type_names[type], attribute);
+
+    frame_t* f = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+    if(!f) {
+        return -1;
+    }
+
+
+    f->frame_address    = frame_start;
+    f->frame_count      = frame_count;
+    f->type             = type;
+    f->frame_attributes = attribute;
+
+    ctx->total_frame_count += frame_count;
+
+    switch (type) {
+    case FRAME_TYPE_FREE:
+        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f, NULL);
+        list_sortedlist_insert(ctx->free_frames_sorted_by_size, f);
+        ctx->free_frame_count += frame_count;
+        break;
+    case FRAME_TYPE_USED:
+        ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, f, f, NULL);
+        ctx->allocated_frame_count += frame_count;
+        break;
+    case FRAME_TYPE_RESERVED:
+        ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, f, f, NULL);
+        ctx->allocated_frame_count += frame_count;
+        break;
+    case FRAME_TYPE_UNDER_2M_RESERVED:
+        ctx->under_2m_reserved_frames_by_address->insert(ctx->under_2m_reserved_frames_by_address, f, f, NULL);
+        ctx->allocated_frame_count += frame_count;
+        break;
+    case FRAME_TYPE_ACPI_RECLAIM_MEMORY:
+        f->frame_attributes |= FRAME_ATTRIBUTE_ACPI_RECLAIM_MEMORY;
+        ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, f, f, NULL);
+        ctx->allocated_frame_count += frame_count;
+        break;
+    case FRAME_TYPE_ACPI_CODE:
+    case FRAME_TYPE_ACPI_DATA:
+    case FRAME_TYPE_ACPI_NVS:
+        f->frame_attributes |= FRAME_ATTRIBUTE_ACPI;
+        list_sortedlist_insert(ctx->acpi_frames, f);
+        ctx->allocated_frame_count += frame_count;
+    }
+
+    return 0;
+}
+
 frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
     frame_allocator_context_t* ctx = memory_malloc_ext(heap, sizeof(frame_allocator_context_t), 0);
 
@@ -893,80 +960,110 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
     bplustree_set_key_cloner(ctx->reserved_frames_by_address, frame_allocator_clone_key);
     bplustree_set_key_destroyer(ctx->reserved_frames_by_address, frame_allocator_destroy_key);
 
+    ctx->under_2m_reserved_frames_by_address = bplustree_create_index_with_heap_and_unique(heap, 64, frame_allocator_cmp_by_address, true);
+    bplustree_set_key_cloner(ctx->under_2m_reserved_frames_by_address, frame_allocator_clone_key);
+    bplustree_set_key_destroyer(ctx->under_2m_reserved_frames_by_address, frame_allocator_destroy_key);
+
     ctx->lock = lock_create_with_heap(heap);
 
-    efi_memory_descriptor_t* mem_desc;
-
-    mem_desc = (efi_memory_descriptor_t*)(void*)(SYSTEM_INFO->mmap_data);
-
-    uint64_t frame_start = mem_desc->physical_start;
-    uint64_t frame_count = mem_desc->page_count;
-    frame_type_t type    = fa_get_fa_type(mem_desc->type);
-    uint64_t frame_attr  = mem_desc->attribute;
-
     uint64_t mmap_ent_cnt = SYSTEM_INFO->mmap_size / SYSTEM_INFO->mmap_descriptor_size;
-    for(size_t i = 1; i < mmap_ent_cnt; i++) {
-        mem_desc = (efi_memory_descriptor_t*)(void*)(SYSTEM_INFO->mmap_data + (i * SYSTEM_INFO->mmap_descriptor_size));
 
-        if(type == fa_get_fa_type(mem_desc->type) && (frame_start + frame_count * FRAME_SIZE) == mem_desc->physical_start && frame_attr == mem_desc->attribute) {
-            frame_count += mem_desc->page_count;
+    efi_memory_descriptor_t* mem_desc;
+    efi_memory_descriptor_t mem_desc_current, mem_desc_remaining, mem_desc_next;
+    boolean_t has_remaining = false;
+
+    mem_desc         = (efi_memory_descriptor_t*)(void*)(SYSTEM_INFO->mmap_data);
+    mem_desc_current = *mem_desc;
+
+    uint64_t current_frame_start = mem_desc_current.physical_start;
+    uint64_t current_frame_count = mem_desc_current.page_count;
+    uint64_t current_frame_attr  = mem_desc_current.attribute;
+
+    frame_type_t current_type          = fa_get_fa_type(mem_desc_current.type);
+    frame_type_t current_original_type = mem_desc_current.type;
+
+#define LOWER_2MB (2 << 20)
+
+    if(current_frame_start < LOWER_2MB && current_type == FRAME_TYPE_FREE) {
+        current_type = FRAME_TYPE_UNDER_2M_RESERVED;
+
+        if(current_frame_start + current_frame_count * FRAME_SIZE > LOWER_2MB) {
+            mem_desc_remaining = mem_desc_current;
+
+            mem_desc_remaining.physical_start = LOWER_2MB;
+            mem_desc_remaining.page_count     = (mem_desc_current.physical_start + mem_desc_current.page_count * FRAME_SIZE - LOWER_2MB) / FRAME_SIZE;
+            mem_desc_remaining.type           = current_original_type;
+
+            mem_desc_current.page_count = (LOWER_2MB - mem_desc_current.physical_start) / FRAME_SIZE;
+
+            if(mem_desc_remaining.page_count) {
+                has_remaining = true;
+            }
+        }
+    }
+
+    size_t i = 1;
+
+    while(i < mmap_ent_cnt) {
+        if(has_remaining) {
+            mem_desc_next = mem_desc_remaining;
+            has_remaining = false;
+
+            PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "using remaining memory descriptor. physical start 0x%llx, page count 0x%llx, attribute 0x%llx type %s efi type 0x%x",
+                     mem_desc_next.physical_start, mem_desc_next.page_count, mem_desc_next.attribute, fa_frame_type_names[fa_get_fa_type(mem_desc_next.type)], mem_desc_next.type);
         } else {
+            mem_desc      = (efi_memory_descriptor_t*)(void*)(SYSTEM_INFO->mmap_data + (i * SYSTEM_INFO->mmap_descriptor_size));
+            mem_desc_next = *mem_desc;
 
+            PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "next memory descriptor. physical start 0x%llx, page count 0x%llx, attribute 0x%llx type %s efi type 0x%x",
+                     mem_desc_next.physical_start, mem_desc_next.page_count, mem_desc_next.attribute, fa_frame_type_names[fa_get_fa_type(mem_desc_next.type)], mem_desc_next.type);
 
-            frame_t* f = memory_malloc_ext(heap, sizeof(frame_t), 0);
+            i++;
+        }
 
-            if(f == NULL) {
-                memory_free_ext(ctx->heap, fa);
-                memory_free_ext(ctx->heap, ctx);
+        uint64_t new_frame_start = mem_desc_next.physical_start;
+        uint64_t new_frame_count = mem_desc_next.page_count;
+        uint64_t new_frame_attr  = mem_desc_next.attribute;
+
+        frame_type_t new_type          = fa_get_fa_type(mem_desc_next.type);
+        frame_type_t new_original_type = mem_desc_next.type;
+
+        if(new_frame_start < LOWER_2MB && new_type == FRAME_TYPE_FREE) {
+            new_type = FRAME_TYPE_UNDER_2M_RESERVED;
+
+            if(new_frame_start + new_frame_count * FRAME_SIZE > LOWER_2MB) {
+                mem_desc_remaining = mem_desc_next;
+
+                mem_desc_remaining.physical_start = LOWER_2MB;
+                mem_desc_remaining.page_count     = (mem_desc_next.physical_start + mem_desc_next.page_count * FRAME_SIZE - LOWER_2MB) / FRAME_SIZE;
+                mem_desc_remaining.type           = new_original_type;
+
+                new_frame_count = (LOWER_2MB - new_frame_start) / FRAME_SIZE;
+
+                if(mem_desc_remaining.page_count) {
+                    has_remaining = true;
+                }
+            }
+        }
+
+        PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "current memory descriptor. physical start 0x%llx, page count 0x%llx, attribute 0x%llx type %s", current_frame_start, current_frame_count, current_frame_attr, fa_frame_type_names[current_type]);
+
+        // can we merge current and next memory descriptors?
+        if(current_frame_start + current_frame_count * FRAME_SIZE == new_frame_start && current_frame_attr == new_frame_attr && current_type == new_type) {
+            current_frame_count += new_frame_count;
+        } else {
+            if(fa_add_mem_desc(ctx, current_frame_start, current_frame_count, current_type, current_frame_attr) != 0) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "failed to add memory descriptor to frame allocator. physical start 0x%llx, page count 0x%llx, attribute 0x%llx type 0x%x",
+                         current_frame_start, current_frame_count, current_frame_attr, current_type);
 
                 return NULL;
             }
 
-
-            f->frame_address    = frame_start;
-            f->frame_count      = frame_count;
-            f->type             = type;
-            f->frame_attributes = mem_desc->attribute;
-
-            if((frame_start + frame_count * FRAME_SIZE) <= (1 << 20)) {
-                type    = FRAME_TYPE_RESERVED;
-                f->type = type;
-            }
-
-            ctx->total_frame_count += frame_count;
-
-            switch (type) {
-            case FRAME_TYPE_FREE:
-                ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f, NULL);
-                list_sortedlist_insert(ctx->free_frames_sorted_by_size, f);
-                ctx->free_frame_count += frame_count;
-                break;
-            case FRAME_TYPE_USED:
-                ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, f, f, NULL);
-                ctx->allocated_frame_count += frame_count;
-                break;
-            case FRAME_TYPE_RESERVED:
-                ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, f, f, NULL);
-                ctx->allocated_frame_count += frame_count;
-                break;
-            case FRAME_TYPE_ACPI_RECLAIM_MEMORY:
-                f->frame_attributes |= FRAME_ATTRIBUTE_ACPI_RECLAIM_MEMORY;
-                ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, f, f, NULL);
-                ctx->allocated_frame_count += frame_count;
-                break;
-            case FRAME_TYPE_ACPI_CODE:
-            case FRAME_TYPE_ACPI_DATA:
-                f->frame_attributes |= FRAME_ATTRIBUTE_ACPI;
-                list_sortedlist_insert(ctx->acpi_frames, f);
-                ctx->allocated_frame_count += frame_count;
-            }
-
-
-            frame_start = mem_desc->physical_start;
-            frame_count = mem_desc->page_count;
-            type        = fa_get_fa_type(mem_desc->type);
+            current_frame_start = new_frame_start;
+            current_frame_count = new_frame_count;
+            current_frame_attr  = new_frame_attr;
+            current_type        = new_type;
         }
-
     }
 
     fa->context                        = ctx;
@@ -1051,9 +1148,23 @@ void frame_allocator_print(frame_allocator_t* fa) {
 
     iter->destroy(iter);
 
-    iter = list_iterator_create(ctx->acpi_frames);
+    printf("under 2M reserved frames by address\n");
+
+    iter = ctx->under_2m_reserved_frames_by_address->create_iterator(ctx->under_2m_reserved_frames_by_address);
+
+    while(!iter->end_of_iterator(iter)) {
+        frame_t* f = (frame_t*)iter->get_item(iter);
+
+        printf("0x%016llx \t 0x%016llx \t 0x%016llx\n", f->frame_address, f->frame_count, f->frame_attributes);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
 
     printf("acpi code/data frames by address\n");
+
+    iter = list_iterator_create(ctx->acpi_frames);
 
     while(!iter->end_of_iterator(iter)) {
         frame_t* f = (frame_t*)iter->get_item(iter);

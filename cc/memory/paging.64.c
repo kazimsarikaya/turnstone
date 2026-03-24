@@ -36,7 +36,7 @@ static void memory_paging_internal_frame_build(memory_page_table_context_t* tabl
 
     if(fa->allocate_frame_by_count(fa,
                                    MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT,
-                                   FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                   FRAME_ALLOCATION_TYPE_BLOCK,
                                    &internal_frms, NULL) != 0) {
         PRINTLOG(PAGING, LOG_PANIC, "cannot allocate internal paging frames. Halting...");
         cpu_hlt();

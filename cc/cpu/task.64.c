@@ -1156,7 +1156,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     frame_t* kernel_gs_frames = NULL;
 
-    if(fa->allocate_frame_by_count(fa, 4, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &kernel_gs_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, 4, FRAME_ALLOCATION_TYPE_BLOCK, &kernel_gs_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 4");
 
         return -1;
@@ -1205,7 +1205,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     frame_t* stack_frames = NULL;
 
-    if(fa->allocate_frame_by_count(fa, frame_count, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, frame_count, FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 0x%llx", frame_count);
 
         return -1;

@@ -179,7 +179,7 @@ int8_t smp_init(void) {
     uint64_t ap_gs_size       = 4 * FRAME_SIZE;
 
     if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), ap_gs_frames_cnt,
-                                                      FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      FRAME_ALLOCATION_TYPE_BLOCK,
                                                       &ap_gs_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate gs frames of count 4");
 

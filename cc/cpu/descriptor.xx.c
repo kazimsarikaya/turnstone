@@ -37,7 +37,7 @@ int8_t descriptor_build_gdt_register(void){
 
     if(fa->allocate_frame_by_count(fa,
                                    gdt_fa_size / FRAME_SIZE,
-                                   FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                   FRAME_ALLOCATION_TYPE_BLOCK,
                                    &gdt_fa, NULL) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate frames for gdt");
 
@@ -119,7 +119,7 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
 
     if(fa->allocate_frame_by_count(fa,
                                    gdt_fa_size / FRAME_SIZE,
-                                   FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                   FRAME_ALLOCATION_TYPE_BLOCK,
                                    &gdt_fa, NULL) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate frames for gdt");
 
@@ -177,7 +177,7 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
 
     if(fa->allocate_frame_by_count(fa,
                                    frame_count,
-                                   FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                   FRAME_ALLOCATION_TYPE_BLOCK,
                                    &stack_frames,
                                    NULL) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate stack frames of count 0x%llx", frame_count);
@@ -201,7 +201,7 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
 
     if(fa->allocate_frame_by_count(fa,
                                    tss_size / FRAME_SIZE,
-                                   FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                   FRAME_ALLOCATION_TYPE_BLOCK,
                                    &tss_fa, NULL) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate frames for tss");
 
@@ -271,10 +271,6 @@ int8_t descriptor_build_idt_register(void){
     frame_t idt_frame = {IDT_BASE_ADDRESS, (idt_size + FRAME_SIZE - 1) / FRAME_SIZE, FRAME_TYPE_RESERVED, 0};
 
     PRINTLOG(KERNEL, LOG_DEBUG, "idt frame address: 0x%llx count 0x%llx", idt_frame.frame_address, idt_frame.frame_count);
-
-    if(fa->allocate_frame(fa, &idt_frame) != 0) {
-        return -1;
-    }
 
     if(memory_paging_add_va_for_frame(idt_frame.frame_address, &idt_frame, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         return -1;

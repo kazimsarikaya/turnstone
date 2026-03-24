@@ -36,10 +36,12 @@ extern "C" {
 typedef enum frame_type_t {
     FRAME_TYPE_FREE, ///< free frame
     FRAME_TYPE_USED, ///< frames are allocated
+    FRAME_TYPE_UNDER_2M_RESERVED, ///< frames under 2M reserved for special use such as trampoline codes.
     FRAME_TYPE_RESERVED, ///< frames are for reserved memory
     FRAME_TYPE_ACPI_RECLAIM_MEMORY, ///< frames for acpi area
     FRAME_TYPE_ACPI_CODE, ///< frames for acpi code
     FRAME_TYPE_ACPI_DATA, ///< frames for acpi data
+    FRAME_TYPE_ACPI_NVS, ///< frames for acpi nvs area
 } frame_type_t; ///< short hand for enum frame_type_e
 
 /**
@@ -47,12 +49,11 @@ typedef enum frame_type_t {
  * @brief frame allocation types
  */
 typedef enum frame_allocation_type_t {
-    FRAME_ALLOCATION_TYPE_RELAX = 1 << 1, ///< frames reserved non blockly
-    FRAME_ALLOCATION_TYPE_BLOCK = 1 << 2, ///< frames should be continuous
+    FRAME_ALLOCATION_TYPE_RELAX    = 1 << 1, ///< frames reserved non blockly
+    FRAME_ALLOCATION_TYPE_BLOCK    = 1 << 2, ///< frames should be continuous
     FRAME_ALLOCATION_TYPE_UNDER_4G = 1 << 3, ///< frames should be under 4G
-    FRAME_ALLOCATION_TYPE_USED = 1 << 7, ///< frames for using
+    FRAME_ALLOCATION_TYPE_USED     = 1 << 7, ///< frames for using
     FRAME_ALLOCATION_TYPE_RESERVED = 1 << 8, ///< frames for reserved area
-    FRAME_ALLOCATION_TYPE_OLD_RESERVED = 1 << 15, ///<frames for old reserved area (reserved areas before relinking)
 } frame_allocation_type_t; ///< short hand for enum frame_allocation_type_e
 
 /**
