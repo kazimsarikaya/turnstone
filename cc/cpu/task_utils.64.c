@@ -543,12 +543,14 @@ int8_t task_allocate_frame_and_add_paging(uint64_t count, boolean_t is_reserved,
     }
 
     if(fa->allocate_frame_by_count(fa, count, allocation_type, frame, NULL) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot allocate frame with count 0x%llx for task 0x%llx on cpu 0x%llx", count, current_task->task_id, cpu_state->local_apic_id);
         return -1;
     }
 
     uint64_t va = is_reserved ? MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((*frame)->frame_address) : (*frame)->frame_address;
 
     if(memory_paging_add_va_for_frame(va, *frame, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot add va 0x%llx for frame at 0x%llx with count 0x%llx for task 0x%llx on cpu 0x%llx", va, (*frame)->frame_address, (*frame)->frame_count, current_task->task_id, cpu_state->local_apic_id);
         fa->release_frame(fa, *frame);
         return -1;
     }
@@ -559,6 +561,7 @@ int8_t task_allocate_frame_and_add_paging(uint64_t count, boolean_t is_reserved,
         current_task->allocated_frames = list_create_list_with_heap(current_task->creator_heap);
 
         if(!current_task->allocated_frames) {
+            PRINTLOG(TASKING, LOG_ERROR, "cannot create allocated frames list for task 0x%llx on cpu 0x%llx", current_task->task_id, cpu_state->local_apic_id);
             memory_paging_delete_va_for_frame(va, *frame);
             fa->release_frame(fa, *frame);
             return -1;
@@ -566,6 +569,7 @@ int8_t task_allocate_frame_and_add_paging(uint64_t count, boolean_t is_reserved,
     }
 
     if(list_list_insert(current_task->allocated_frames, *frame) == -1ULL) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot insert allocated frame at 0x%llx with count 0x%llx to list for task 0x%llx on cpu 0x%llx", (*frame)->frame_address, (*frame)->frame_count, current_task->task_id, cpu_state->local_apic_id);
         memory_paging_delete_va_for_frame(va, *frame);
         fa->release_frame(fa, *frame);
         return -1;
