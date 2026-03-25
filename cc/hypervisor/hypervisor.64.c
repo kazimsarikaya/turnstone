@@ -30,7 +30,7 @@
 MODULE("turnstone.hypervisor");
 
 uint64_t hypervisor_next_vm_id = 0;
-lock_t* hypervisor_vm_lock = NULL;
+lock_t* hypervisor_vm_lock     = NULL;
 
 static int32_t hypervisor_vmx_vm_task(uint64_t argc, void** args) {
     if(argc != 3) {
@@ -39,8 +39,8 @@ static int32_t hypervisor_vmx_vm_task(uint64_t argc, void** args) {
     }
 
     const char_t* entry_point_name = (const char_t*)args[0];
-    uint64_t heap_size  = (uint64_t)args[1];
-    uint64_t stack_size = (uint64_t)args[2];
+    uint64_t heap_size             = (uint64_t)args[1];
+    uint64_t stack_size            = (uint64_t)args[2];
 
     if(strlen(entry_point_name) == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid entry point name");
@@ -115,8 +115,8 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
     }
 
     const char_t* entry_point_name = (const char_t*)args[0];
-    uint64_t heap_size  = (uint64_t)args[1];
-    uint64_t stack_size = (uint64_t)args[2];
+    uint64_t heap_size             = (uint64_t)args[1];
+    uint64_t stack_size            = (uint64_t)args[2];
 
     if(strlen(entry_point_name) == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid entry point name");
@@ -370,6 +370,8 @@ int8_t hypervisor_init(void) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot initialize hypervisor vm");
         return -1;
     }
+
+    PRINTLOG(HYPERVISOR, LOG_INFO, "Hypervisor initialized");
 
     return 0;
 }
