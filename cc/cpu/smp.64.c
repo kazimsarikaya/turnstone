@@ -87,21 +87,22 @@ const uint8_t trampoline_code[] = {
     0x48, 0xc7, 0xc3, 0x00, 0x90, 0x00, 0x00, // 80d6: mov $0x9000, %rbx
     0x48, 0x8b, 0x43, 0x08, // 80dd: mov 0x8(%rbx), %rax
     0x48, 0x8b, 0x0b, // 80e1: mov (%rbx), %rcx
-    0x48, 0xf7, 0xe2, // 80e4: mul %rdx
-    0x48, 0x01, 0xc1, // 80e7: add %rax, %rcx
-    0x48, 0x83, 0xe9, 0x10, // 80ea: sub $0x10, %rcx
-    0x48, 0x89, 0xcc, // 80ee: mov %rcx, %rsp
-    0x48, 0x8b, 0x43, 0x10, // 80f1: mov 0x10(%rbx), %rax
-    0x0f, 0x22, 0xc0, // 80f5: mov %rax, %cr0
-    0x48, 0x8b, 0x43, 0x18, // 80f8: mov 0x18(%rbx), %rax
-    0x0f, 0x22, 0xd8, // 80fc: mov %rax, %cr3
-    0x48, 0x8b, 0x43, 0x20, // 80ff: mov 0x20(%rbx), %rax
-    0x0f, 0x22, 0xe0, // 8103: mov %rax, %cr4
-    0x48, 0x8b, 0x43, 0x28, // 8106: mov 0x28(%rbx), %rax
-    0x48, 0xc7, 0xc0, 0x00, 0x00, 0x00, 0x00, // 810a: mov $0x0, %rax
-    0xff, 0xd0, // 8111: callq *%rax
-    0xf4, // 8113: hlt
-    0xeb, 0xfd, // 8114: jmp 0x8113
+    0x48, 0xff, 0xc2, // 80e4: inc %rdx
+    0x48, 0xf7, 0xe2, // 80e7: mul %rdx
+    0x48, 0x01, 0xc1, // 80ea: add %rax, %rcx
+    0x48, 0x83, 0xe9, 0x10, // 80ed: sub $0x10, %rcx
+    0x48, 0x89, 0xcc, // 80f1: mov %rcx, %rsp
+    0x48, 0x8b, 0x43, 0x10, // 80f4: mov 0x10(%rbx), %rax
+    0x0f, 0x22, 0xc0, // 80f8: mov %rax, %cr0
+    0x48, 0x8b, 0x43, 0x18, // 80fb: mov 0x18(%rbx), %rax
+    0x0f, 0x22, 0xd8, // 80ff: mov %rax, %cr3
+    0x48, 0x8b, 0x43, 0x20, // 8102: mov 0x20(%rbx), %rax
+    0x0f, 0x22, 0xe0, // 8106: mov %rax, %cr4
+    0x48, 0x8b, 0x43, 0x28, // 8109: mov 0x28(%rbx), %rax
+    0x48, 0xc7, 0xc0, 0x00, 0x00, 0x00, 0x00, // 810d: mov $0x0, %rax
+    0xff, 0xd0, // 8114: callq *%rax
+    0xf4, // 8116: hlt
+    0xeb, 0xfd, // 8117: jmp 0x8113
 };
 
 
@@ -150,7 +151,7 @@ int8_t smp_init(void) {
 
     memory_memcopy(trampoline_code, trampoline, sizeof(trampoline_code));
 
-    uint32_t* trampoline_call_addr = (uint32_t*)(void*)(trampoline + 0x10d);
+    uint32_t* trampoline_call_addr = (uint32_t*)(void*)(trampoline + 0x110);
 
     *trampoline_call_addr = (uint32_t)((uint64_t)smp_ap_boot);
 
@@ -175,6 +176,9 @@ int8_t smp_init(void) {
     }
 
     memory_memclean((void*)stack_frames_va, stack_frames_cnt * FRAME_SIZE);
+
+    PRINTLOG(APIC, LOG_INFO, "SMP: Stack frames allocated at fa 0x%llx with count 0x%llx", stack_frames->frame_address, stack_frames->frame_count);
+    PRINTLOG(APIC, LOG_INFO, "SMP: Stack frames mapped at va 0x%llx with size 0x%llx", stack_frames_va, stack_size);
 
     uint64_t ap_gs_size = 4 * FRAME_SIZE;
 
@@ -290,6 +294,8 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
         cpu_hlt();
     }
 
+    PRINTLOG(KERNEL, LOG_INFO, "allocated user code frame at fa 0x%llx count 0x%llx type 0x%x", user_code_frames->frame_address, user_code_frames->frame_count, user_code_frames->type);
+
     frame_t* user_stack_frames = NULL;
 
     if(task_allocate_frame_and_add_paging(16, false, &user_stack_frames) != 0) {
@@ -297,6 +303,8 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
         cpu_hlt();
     }
+
+    PRINTLOG(KERNEL, LOG_INFO, "allocated user stack frame at fa 0x%llx count 0x%llx type 0x%x", user_stack_frames->frame_address, user_stack_frames->frame_count, user_stack_frames->type);
 
     uint64_t user_code_fa  = user_code_frames->frame_address;
     uint64_t user_code_va  = user_code_fa;
