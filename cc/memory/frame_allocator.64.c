@@ -461,7 +461,9 @@ static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         return -1;
     }
 
-    PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "releasing frame at 0x%llx with count 0x%llx", f->frame_address, f->frame_count);
+    static boolean_t is_0x1000_busy = false;
+
+    PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "releasing frame at 0x%llx with count 0x%llx is 0x1000 busy? %i", f->frame_address, f->frame_count, is_0x1000_busy);
 
     frame_allocator_context_t* ctx = self->context;
 
@@ -532,10 +534,21 @@ static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         ctx->allocated_frame_count -= new_frm->frame_count;
         ctx->free_frame_count      += new_frm->frame_count;
 
+        uint64_t page_va = 0x1000;
+        if(is_0x1000_busy) {
+            page_va = 0x2000;
+        } else {
+            is_0x1000_busy = true;
+        }
+
         for(uint64_t i = 0; i < f->frame_count; i++) {
-            memory_paging_add_page(0x1000, f->frame_address + i * FRAME_SIZE, MEMORY_PAGING_PAGE_TYPE_4K);
-            memory_memclean((void*)(0x1000), FRAME_SIZE);
-            memory_paging_delete_page(0x1000, NULL);
+            memory_paging_add_page(page_va, f->frame_address + i * FRAME_SIZE, MEMORY_PAGING_PAGE_TYPE_4K);
+            memory_memclean((void*)(page_va), FRAME_SIZE);
+            memory_paging_delete_page(page_va, NULL);
+        }
+
+        if(page_va == 0x1000) {
+            is_0x1000_busy = false;
         }
 
         ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm, NULL);
@@ -614,10 +627,21 @@ static int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         ctx->allocated_frame_count -= new_frm->frame_count;
         ctx->free_frame_count      += new_frm->frame_count;
 
+        uint64_t page_va = 0x1000;
+        if(is_0x1000_busy) {
+            page_va = 0x2000;
+        } else {
+            is_0x1000_busy = true;
+        }
+
         for(uint64_t i = 0; i < f->frame_count; i++) {
-            memory_paging_add_page(0x1000, f->frame_address + i * FRAME_SIZE, MEMORY_PAGING_PAGE_TYPE_4K);
-            memory_memclean((void*)(0x1000), FRAME_SIZE);
-            memory_paging_delete_page(0x1000, NULL);
+            memory_paging_add_page(page_va, f->frame_address + i * FRAME_SIZE, MEMORY_PAGING_PAGE_TYPE_4K);
+            memory_memclean((void*)(page_va), FRAME_SIZE);
+            memory_paging_delete_page(page_va, NULL);
+        }
+
+        if(page_va == 0x1000) {
+            is_0x1000_busy = false;
         }
 
         ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm, NULL);

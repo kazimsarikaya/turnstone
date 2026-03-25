@@ -30,7 +30,7 @@ static void memory_paging_internal_frame_build(memory_page_table_context_t* tabl
 
     if(!fa || fa->allocate_frame_by_count == NULL) {
         PRINTLOG(PAGING, LOG_PANIC, "cannot allocate internal paging frames. frame allocator 0x%p0 is null halting...",
-                 frame_get_allocator());
+                 fa);
         cpu_hlt();
     }
 
@@ -203,6 +203,8 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
         return -1;
     }
 
+    lock_acquire(curr->lock);
+
     memory_page_table_t* p4 = table_context->page_table;
 
     PRINTLOG(PAGING, LOG_TRACE, "for pt 0x%p adding va 0x%llx to fa 0x%llx", p4, virtual_address, frame_address);
@@ -274,6 +276,8 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
 
             t_p3->pages[p3idx].physical_address = (frame_address >> 12) & 0xFFFFFC0000;
 
+            lock_release(curr->lock);
+
             return 0;
         } else {
             p2_addr = memory_paging_get_internal_frame(curr);
@@ -290,6 +294,17 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
         }
     } else {
         if(type & MEMORY_PAGING_PAGE_TYPE_1G) {
+            uint64_t current_fa = t_p3->pages[p3idx].physical_address << 12;
+
+            if(current_fa != (frame_address & 0xFFFFFC0000)) {
+                PRINTLOG(PAGING, LOG_ERROR, "cannot map 1G page for va 0x%llx to fa 0x%llx because there is already a different frame mapped at that address. current fa: 0x%llx",
+                         virtual_address, frame_address, current_fa);
+                lock_release(curr->lock);
+                return -1;
+            }
+
+            lock_release(curr->lock);
+
             return 0;
         }
 
@@ -346,6 +361,8 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
 
             t_p2->pages[p2idx].physical_address = (frame_address >> 12) & 0xFFFFFFFE00;
 
+            lock_release(curr->lock);
+
             return 0;
         } else {
             p1_addr = memory_paging_get_internal_frame(curr);
@@ -362,6 +379,17 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
         }
     } else {
         if(type & MEMORY_PAGING_PAGE_TYPE_2M) {
+            uint64_t current_fa = t_p2->pages[p2idx].physical_address << 12;
+
+            if(current_fa != (frame_address & 0xFFFFFFFE00)) {
+                PRINTLOG(PAGING, LOG_ERROR, "cannot map 2M page for va 0x%llx to fa 0x%llx because there is already a different frame mapped at that address. current fa: 0x%llx",
+                         virtual_address, frame_address, current_fa);
+                lock_release(curr->lock);
+                return -1;
+            }
+
+            lock_release(curr->lock);
+
             return 0;
         }
 
@@ -414,9 +442,20 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
         }
 
         t_p1->pages[p1idx].physical_address = frame_address >> 12;
+    } else {
+        uint64_t current_fa = t_p1->pages[p1idx].physical_address << 12;
+
+        if(current_fa != frame_address) {
+            PRINTLOG(PAGING, LOG_ERROR, "cannot map page for va 0x%llx to fa 0x%llx because there is already a different frame mapped at that address. current fa: 0x%llx",
+                     virtual_address, frame_address, current_fa);
+            lock_release(curr->lock);
+            return -1;
+        }
     }
 
     PRINTLOG(PAGING, LOG_TRACE, "for p4 address: 0x%p va: 0x%llx fa: 0x%llx added", p4, virtual_address, frame_address);
+
+    lock_release(curr->lock);
 
     return 0;
 }
@@ -466,6 +505,14 @@ int8_t memory_paging_reserve_current_page_table_frames(void) {
         return -1;
     }
 
+    table_context->lock = lock_create_with_heap(heap);
+
+    if(!table_context->lock) {
+        PRINTLOG(PAGING, LOG_ERROR, "failed to create lock for page table context");
+
+        return -1;
+    }
+
     old_p4 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(old_p4);
     uint64_t hm_key = (uint64_t)old_p4;
     hm_key >>= 12; // first 12 bits are always 0 because of page alignment, so we can ignore them for hashmap key
@@ -474,13 +521,15 @@ int8_t memory_paging_reserve_current_page_table_frames(void) {
 
     hashmap_put(memory_paging_page_tables, (void*)hm_key, table_context);
 
+    frame_allocator_t* fa = frame_get_allocator();
+
     frame_t frm = {0};
 
     frm.frame_address = table_context->internal_frames_1_start;
     frm.frame_count   = table_context->internal_frames_1_count;
 
 
-    if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &frm) != 0) {
+    if(fa->allocate_frame(fa, &frm) != 0) {
         PRINTLOG(PAGING, LOG_ERROR, "failed to allocate internal frames");
 
         return -1;
@@ -490,7 +539,7 @@ int8_t memory_paging_reserve_current_page_table_frames(void) {
     frm.frame_count   = table_context->internal_frames_2_count;
 
 
-    if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &frm) != 0) {
+    if(fa->allocate_frame(fa, &frm) != 0) {
         PRINTLOG(PAGING, LOG_ERROR, "failed to allocate internal frames");
 
         return -1;
@@ -644,6 +693,10 @@ int8_t memory_paging_destroy_userspace_table(memory_page_table_context_t* table_
 
     memory_heap_t* heap = memory_get_default_heap();
 
+    lock_t* lock = table_context->lock;
+
+    lock_acquire(lock);
+
     hashmap_delete(memory_paging_page_tables, (void*)hm_key);
 
     frame_allocator_t* fa = frame_get_allocator();
@@ -725,6 +778,9 @@ int8_t memory_paging_destroy_userspace_table(memory_page_table_context_t* table_
 
     memory_free_ext(heap, table_context);
 
+    lock_release(lock);
+    lock_destroy(lock);
+
     PRINTLOG(PAGING, LOG_DEBUG, "destroyed page table context for page table: 0x%llx", tc_addr);
 
     return 0;
@@ -752,6 +808,14 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
     table_context->internal_frames_helper_frame = internal_frame_address;
 
 #if ___KERNELBUILD == 1
+    table_context->lock = lock_create_with_heap(heap);
+
+    if(!table_context->lock) {
+        PRINTLOG(PAGING, LOG_ERROR, "failed to create lock for page table context");
+        memory_free_ext(heap, table_context);
+        return NULL;
+    }
+
     memory_page_table_context_t* current_table_context = memory_paging_switch_table(NULL);
 
     uint64_t p4_fa = memory_paging_get_internal_frame(current_table_context);
@@ -814,6 +878,8 @@ int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, 
         table_context = memory_paging_switch_table(NULL);
     }
 
+    lock_acquire(table_context->lock);
+
     memory_page_table_t* p4 = table_context->page_table;
 
     memory_page_table_t* t_p3;
@@ -823,6 +889,8 @@ int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, 
     size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
 
     if(p4->pages[p4_idx].present == 0) {
+        lock_release(table_context->lock);
+
         return -1;
     }
 
@@ -832,6 +900,8 @@ int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, 
     size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
     if(t_p3->pages[p3_idx].present == 0) {
+        lock_release(table_context->lock);
+
         return -1;
     } else {
         if(t_p3->pages[p3_idx].hugepage == 1) {
@@ -853,6 +923,8 @@ int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, 
             size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
             if(t_p2->pages[p2_idx].present == 0) {
+                lock_release(table_context->lock);
+
                 return -1;
             }
 
@@ -876,6 +948,7 @@ int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, 
                 size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
                 if(t_p1->pages[p1_idx].present == 0) {
+                    lock_release(table_context->lock);
                     return -1;
                 }
 
@@ -894,6 +967,10 @@ int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, 
         }
     }
 
+    cpu_tlb_invalidate((void*)virtual_address);
+
+    lock_release(table_context->lock);
+
     return 0;
 }
 #pragma GCC diagnostic pop
@@ -905,6 +982,8 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
         table_context = memory_paging_switch_table(NULL);
     }
 
+    lock_acquire(table_context->lock);
+
     memory_page_table_t* p4 = table_context->page_table;
 
     memory_page_table_t* t_p3;
@@ -914,6 +993,8 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
     size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
 
     if(p4->pages[p4_idx].present == 0) {
+        lock_release(table_context->lock);
+
         return -1;
     }
 
@@ -927,6 +1008,8 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
     size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
     if(t_p3->pages[p3_idx].present == 0) {
+        lock_release(table_context->lock);
+
         return -1;
     } else {
         if(t_p3->pages[p3_idx].hugepage == 1) {
@@ -969,6 +1052,8 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
             size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
             if(t_p2->pages[p2_idx].present == 0) {
+                lock_release(table_context->lock);
+
                 return -1;
             }
 
@@ -1013,6 +1098,8 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
                 size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
                 if(t_p1->pages[p1_idx].present == 0) {
+                    lock_release(table_context->lock);
+
                     return -1;
                 }
 
@@ -1048,6 +1135,8 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
         }
     }
 
+    lock_release(table_context->lock);
+
     return 0;
 }
 #pragma GCC diagnostic pop
@@ -1059,6 +1148,8 @@ int8_t memory_paging_set_user_accessible_ext(memory_page_table_context_t* table_
         table_context = memory_paging_switch_table(NULL);
     }
 
+    lock_acquire(table_context->lock);
+
     memory_page_table_t* p4 = table_context->page_table;
 
     memory_page_table_t* t_p3;
@@ -1068,6 +1159,8 @@ int8_t memory_paging_set_user_accessible_ext(memory_page_table_context_t* table_
     size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
 
     if(p4->pages[p4_idx].present == 0) {
+        lock_release(table_context->lock);
+
         return -1;
     }
 
@@ -1079,6 +1172,8 @@ int8_t memory_paging_set_user_accessible_ext(memory_page_table_context_t* table_
     size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
     if(t_p3->pages[p3_idx].present == 0) {
+        lock_release(table_context->lock);
+
         return -1;
     } else {
         if(t_p3->pages[p3_idx].hugepage == 1) {
@@ -1095,6 +1190,8 @@ int8_t memory_paging_set_user_accessible_ext(memory_page_table_context_t* table_
             size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
             if(t_p2->pages[p2_idx].present == 0) {
+                lock_release(table_context->lock);
+
                 return -1;
             }
 
@@ -1112,6 +1209,8 @@ int8_t memory_paging_set_user_accessible_ext(memory_page_table_context_t* table_
                 size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
                 if(t_p1->pages[p1_idx].present == 0) {
+                    lock_release(table_context->lock);
+
                     return -1;
                 }
 
@@ -1125,6 +1224,9 @@ int8_t memory_paging_set_user_accessible_ext(memory_page_table_context_t* table_
         }
     }
 
+    cpu_tlb_invalidate((void*)virtual_address);
+    lock_release(table_context->lock);
+
     return 0;
 }
 #pragma GCC diagnostic pop
@@ -1137,6 +1239,10 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
         table_context = memory_paging_switch_table(NULL);
     }
 
+    frame_allocator_t* fa = frame_get_allocator();
+
+    lock_acquire(table_context->lock);
+
     memory_page_table_t* p4 = table_context->page_table;
 
     memory_page_table_t* t_p3;
@@ -1148,6 +1254,9 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
     size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
 
     if(p4->pages[p4_idx].present == 0) {
+        lock_release(table_context->lock);
+        PRINTLOG(PAGING, LOG_ERROR, "page not present for virtual address: 0x%llx in p4 0x%p at index: %lli",
+                 virtual_address, p4, p4_idx);
         return -1;
     }
 
@@ -1157,6 +1266,8 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
     size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
     if(t_p3->pages[p3_idx].present == 0) {
+        lock_release(table_context->lock);
+        PRINTLOG(PAGING, LOG_ERROR, "page not present for virtual address: 0x%llx", virtual_address);
         return -1;
     } else {
         if(t_p3->pages[p3_idx].hugepage == 1) {
@@ -1165,6 +1276,8 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
             }
 
             memory_memclean(&t_p3->pages[p3_idx], sizeof(memory_page_entry_t));
+
+            cpu_tlb_invalidate(t_p3);
         } else {
             t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
             t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
@@ -1172,6 +1285,9 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
             size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
             if(t_p2->pages[p2_idx].present == 0) {
+                lock_release(table_context->lock);
+                PRINTLOG(PAGING, LOG_ERROR, "page not present for virtual address: 0x%llx in p2 0x%p at index: %lli",
+                         virtual_address, t_p2, p2_idx);
                 return -1;
             }
 
@@ -1181,6 +1297,8 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
                 }
 
                 memory_memclean(&t_p2->pages[p2_idx], sizeof(memory_page_entry_t));
+
+                cpu_tlb_invalidate(t_p2);
             } else {
                 t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
                 t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
@@ -1188,6 +1306,9 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
                 size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
                 if(t_p1->pages[p1_idx].present == 0) {
+                    lock_release(table_context->lock);
+                    PRINTLOG(PAGING, LOG_ERROR, "page not present for virtual address: 0x%llx in p1 0x%p at index: %lli",
+                             virtual_address, t_p1, p1_idx);
                     return -1;
                 }
 
@@ -1196,6 +1317,8 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
                 }
 
                 memory_memclean(&t_p1->pages[p1_idx], sizeof(memory_page_entry_t));
+
+                cpu_tlb_invalidate(t_p1);
 
                 for(size_t i = 0; i < MEMORY_PAGING_INDEX_COUNT; i++) {
                     if(t_p1->pages[i].present == 1) {
@@ -1206,10 +1329,17 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
                 }
 
                 if(!p1_used) {
+                    PRINTLOG(PAGING, LOG_TRACE, "p1 page table 0x%p is not used anymore, freeing it", t_p1);
                     memory_memclean(&t_p2->pages[p2_idx], sizeof(memory_page_entry_t));
 
+                    cpu_tlb_invalidate(t_p2);
+
+                    if(memory_paging_delete_page_ext(table_context, (uint64_t)t_p1, NULL) != 0) {
+                        PRINTLOG(PAGING, LOG_ERROR, "failed to delete p1 page table page for virtual address: 0x%llx", (uint64_t)t_p1);
+                    }
+
                     frame_t f = {MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)t_p1), 1, 0, 0};
-                    frame_get_allocator()->release_frame(frame_get_allocator(), &f);
+                    fa->release_frame(fa, &f);
                 }
 
             }
@@ -1223,10 +1353,17 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
             }
 
             if(!p2_used) {
+                PRINTLOG(PAGING, LOG_TRACE, "p2 page table 0x%p is not used anymore, freeing it", t_p2);
                 memory_memclean(&t_p3->pages[p3_idx], sizeof(memory_page_entry_t));
 
+                cpu_tlb_invalidate(t_p3);
+
+                if(memory_paging_delete_page_ext(table_context, (uint64_t)t_p2, NULL) != 0) {
+                    PRINTLOG(PAGING, LOG_ERROR, "failed to delete p2 page table page for virtual address: 0x%llx", (uint64_t)t_p2);
+                }
+
                 frame_t f = {MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)t_p2), 1, 0, 0};
-                frame_get_allocator()->release_frame(frame_get_allocator(), &f);
+                fa->release_frame(fa, &f);
             }
         }
 
@@ -1239,12 +1376,24 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
         }
 
         if(!p3_used) {
+            PRINTLOG(PAGING, LOG_TRACE, "p3 page table 0x%p is not used anymore, freeing it", t_p3);
             memory_memclean(&p4->pages[p4_idx], sizeof(memory_page_entry_t));
 
+            cpu_tlb_invalidate(p4);
+
+            if(memory_paging_delete_page_ext(table_context, (uint64_t)t_p3, NULL) != 0) {
+                PRINTLOG(PAGING, LOG_ERROR, "failed to delete p3 page table page for virtual address: 0x%llx", (uint64_t)t_p3);
+            }
+
             frame_t f = {MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)t_p3), 1, 0, 0};
-            frame_get_allocator()->release_frame(frame_get_allocator(), &f);
+            fa->release_frame(fa, &f);
         }
     }
+
+    cpu_tlb_invalidate((void*)virtual_address);
+    lock_release(table_context->lock);
+
+    PRINTLOG(PAGING, LOG_TRACE, "deleted page for virtual address: 0x%llx", virtual_address);
 
     return 0;
 }
@@ -1257,6 +1406,8 @@ int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table
         table_context = memory_paging_switch_table(NULL);
     }
 
+    lock_acquire(table_context->lock);
+
     memory_page_table_t* p4 = table_context->page_table;
 
     memory_page_table_t* t_p3;
@@ -1266,6 +1417,8 @@ int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table
     size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
 
     if(p4->pages[p4_idx].present == 0) {
+        lock_release(table_context->lock);
+        PRINTLOG(PAGING, LOG_ERROR, "page not present for virtual address: 0x%llx", virtual_address);
         return -1;
     }
 
@@ -1275,6 +1428,8 @@ int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table
     size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
     if(t_p3->pages[p3_idx].present == 0) {
+        lock_release(table_context->lock);
+        PRINTLOG(PAGING, LOG_ERROR, "page not present for virtual address: 0x%llx", virtual_address);
         return -1;
     } else {
         if(t_p3->pages[p3_idx].hugepage == 1) {
@@ -1290,6 +1445,8 @@ int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table
             size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
             if(t_p2->pages[p2_idx].present == 0) {
+                lock_release(table_context->lock);
+                PRINTLOG(PAGING, LOG_ERROR, "page not present for virtual address: 0x%llx", virtual_address);
                 return -1;
             }
 
@@ -1305,6 +1462,8 @@ int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table
                 size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
                 if(t_p1->pages[p1_idx].present == 0) {
+                    lock_release(table_context->lock);
+                    PRINTLOG(PAGING, LOG_ERROR, "page not present for virtual address: 0x%llx", virtual_address);
                     return -1;
                 }
 
@@ -1312,6 +1471,8 @@ int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table
             }
         }
     }
+
+    lock_release(table_context->lock);
 
     return 0;
 }
@@ -1350,6 +1511,7 @@ int8_t memory_paging_add_va_for_frame_ext(memory_page_table_context_t* table_con
 
 int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_context_t* table_context, uint64_t va_start, frame_t* frm){
     if(frm == NULL) {
+        PRINTLOG(PAGING, LOG_ERROR, "frame is null");
         return -1;
     }
 
@@ -1359,6 +1521,7 @@ int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_context_t* table_
     while(frm_cnt) {
         if(frm_cnt >= 0x200 && (frm_addr % MEMORY_PAGING_PAGE_LENGTH_2M) == 0 && (va_start % MEMORY_PAGING_PAGE_LENGTH_2M) == 0) {
             if(memory_paging_delete_page_ext(table_context, va_start, NULL) != 0) {
+                PRINTLOG(PAGING, LOG_ERROR, "failed to delete page for va: 0x%llx", va_start);
                 return -1;
             }
 
@@ -1367,6 +1530,7 @@ int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_context_t* table_
             va_start += MEMORY_PAGING_PAGE_LENGTH_2M;
         } else {
             if(memory_paging_delete_page_ext(table_context, va_start, NULL) != 0) {
+                PRINTLOG(PAGING, LOG_ERROR, "failed to delete page for va: 0x%llx", va_start);
                 return -1;
             }
 
