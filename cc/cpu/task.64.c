@@ -231,6 +231,10 @@ static void task_cleanup_task(task_t* task) {
         return;
     }
 
+    uint64_t task_task_id = task->task_id;
+
+    PRINTLOG(TASKING, LOG_DEBUG, "cleaning up task with id 0x%llx", task_task_id);
+
     if(task->vm) {
         hypervisor_vm_destroy(task->vm);
     }
@@ -251,6 +255,8 @@ static void task_cleanup_task(task_t* task) {
 
     frame_t stack_frames = {.frame_address = stack_fa, .frame_count = stack_frames_cnt};
 
+    PRINTLOG(TASKING, LOG_TRACE, "stack frames 0x%llx with count 0x%llx releasing for task %s", stack_fa, stack_frames_cnt, task->task_name);
+
     if(memory_paging_delete_va_for_frame_ext(task->page_table, stack_va, &stack_frames) != 0 ) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", stack_va);
 
@@ -263,6 +269,8 @@ static void task_cleanup_task(task_t* task) {
         cpu_hlt();
     }
 
+    PRINTLOG(TASKING, LOG_TRACE, "stack frames 0x%llx with count 0x%llx released for task %s", stack_fa, stack_frames_cnt, task->task_name);
+
     if(task->heap != memory_get_default_heap() && task->heap != task_map_heap) {
         uint64_t heap_va = (uint64_t)task->heap;
         uint64_t heap_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(heap_va);
@@ -273,6 +281,8 @@ static void task_cleanup_task(task_t* task) {
         memory_memclean(task->heap, heap_size);
 
         frame_t heap_frames = {.frame_address = heap_fa, .frame_count = heap_frames_cnt};
+
+        PRINTLOG(TASKING, LOG_TRACE, "releasing heap frames 0x%llx with count 0x%llx for task %s", heap_fa, heap_frames_cnt, task->task_name);
 
         if(memory_paging_delete_va_for_frame_ext(task->page_table, heap_va, &heap_frames) != 0 ) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for heap at va 0x%llx", heap_va);
@@ -289,19 +299,28 @@ static void task_cleanup_task(task_t* task) {
 
             cpu_hlt();
         }
+
+        PRINTLOG(TASKING, LOG_TRACE, "heap frames 0x%llx with count 0x%llx released for task %s", heap_fa, heap_frames_cnt, task->task_name);
     }
 
     if(task->allocated_frames) {
         for(uint64_t i = 0; i < list_size(task->allocated_frames); i++) {
             frame_t* frm = (frame_t*)list_get_data_at_position(task->allocated_frames, i);
 
-            uint64_t frm_va = frm->frame_address;
-
-            if(frm->type & FRAME_TYPE_RESERVED) {
-                frm_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(frm_va);
-            }
-
             if(frm) {
+                uint64_t frm_va = frm->frame_address;
+
+                if(frm->type == FRAME_TYPE_RESERVED) {
+                    frm_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(frm_va);
+                }
+
+                uint64_t frm_count = frm->frame_count;
+                uint64_t frm_type  = frm->type;
+                uint64_t frm_fa    = frm->frame_address;
+
+                PRINTLOG(TASKING, LOG_TRACE, "allocated frame 0x%llx (0x%llx) with count 0x%llx and type 0x%llx releasing for task %s",
+                         frm_va, frm_fa, frm_count, frm_type, task->task_name);
+
                 if(memory_paging_delete_va_for_frame_ext(task->page_table, frm_va, frm) != 0 ) {
                     PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for allocated frame at va 0x%llx",
                              frm_va);
@@ -320,6 +339,9 @@ static void task_cleanup_task(task_t* task) {
                         cpu_hlt();
                     }
                 }
+
+                PRINTLOG(TASKING, LOG_TRACE, "allocated frame 0x%llx (0x%llx) with count 0x%llx and type 0x%llx released for task %s",
+                         frm_va, frm_fa, frm_count, frm_type, task->task_name);
             }
         }
 
@@ -330,6 +352,8 @@ static void task_cleanup_task(task_t* task) {
 
     memory_free_ext(task->creator_heap, task->registers);
     memory_free_ext(task->creator_heap, task);
+
+    PRINTLOG(TASKING, LOG_DEBUG, "task with id 0x%llx cleaned up", task_task_id);
 }
 
 static int8_t task_cleaner_task(void){
@@ -1100,6 +1124,20 @@ void task_remove_task_after_fault(uint64_t task_id) {
         }  else if(cpu_get_type() == CPU_TYPE_AMD) {
 
         }
+    }
+
+    if(cpu_state->current_task && cpu_state->current_task == task) {
+        // if current task caused the fault, it is obious,
+        // we should push it to cleanup queue
+        // otherwise, it will be dangling.
+
+        if(task->registers) {
+            task->registers->rax = -1; // set return value to -1 to indicate fault
+        }
+
+        task->exit_code = -1;
+
+        list_queue_push(cpu_state->task_cleanup_queue, task);
     }
 
     task_t* current_task = (task_t*)cpu_state->idle_task;
