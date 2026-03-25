@@ -68,7 +68,11 @@ int8_t pci_msix_configure(const pci_generic_device_t* pci_gen_dev, const pci_cap
         }
     }
 
-    memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(PCI, LOG_ERROR, "cannot add va for msix table");
+
+        return -1;
+    }
 
     if(msix_cap->bir != msix_cap->pending_bit_bir) {
         bar_fa   = pci_get_bar_address(pci_gen_dev, msix_cap->pending_bit_bir);
@@ -91,7 +95,11 @@ int8_t pci_msix_configure(const pci_generic_device_t* pci_gen_dev, const pci_cap
             }
         }
 
-        memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        if(memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(PCI, LOG_ERROR, "cannot add va for msix pending bit table");
+
+            return -1;
+        }
     }
 
     return 0;

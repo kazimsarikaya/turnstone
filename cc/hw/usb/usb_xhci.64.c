@@ -346,10 +346,18 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
     uint64_t ep0_trb_fa = ep_ctrl_frame->frame_address;
     uint64_t ep0_trb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ep0_trb_fa);
 
-    memory_paging_add_va_for_frame(ep0_trb_va, ep_ctrl_frame,
-                                   MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                   MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                   MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE);
+    if(memory_paging_add_va_for_frame(ep0_trb_va, ep_ctrl_frame,
+                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC |
+                                      MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
+                                      MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot map frame for ep0 trb");
+        fa->release_frame(fa, ep_ctrl_frame);
+        memory_free(device->controller_context);
+        device->controller_context = NULL;
+        transfer->complete         = true;
+        transfer->success          = false;
+        return -1;
+    }
 
     memory_memclean((void*)ep0_trb_va, FRAME_SIZE);
 
@@ -771,10 +779,17 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
 
     uint64_t ep_trb_fa = ep_trb_frame->frame_address;
     uint64_t ep_trb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ep_trb_fa);
-    memory_paging_add_va_for_frame(ep_trb_va, ep_trb_frame,
-                                   MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                   MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                   MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE);
+    if(memory_paging_add_va_for_frame(ep_trb_va, ep_trb_frame,
+                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC |
+                                      MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
+                                      MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot map frame for ep%d trb", ep_index);
+        fa->release_frame(fa, ep_trb_frame);
+        transfer->complete = true;
+        transfer->success  = false;
+        return -1;
+    }
+
     memory_memclean((void*)ep_trb_va, FRAME_SIZE);
 
     PRINTLOG(USB, LOG_DEBUG, "ep%d trb fa 0x%llx va 0x%llx", ep_index, ep_trb_fa, ep_trb_va);
@@ -812,10 +827,25 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
         }
         uint64_t stream_context_fa = stream_context_frame->frame_address;
         uint64_t stream_context_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stream_context_fa);
-        memory_paging_add_va_for_frame(stream_context_va, stream_context_frame,
-                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                       MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                       MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE);
+        if(memory_paging_add_va_for_frame(stream_context_va, stream_context_frame,
+                                          MEMORY_PAGING_PAGE_TYPE_NOEXEC |
+                                          MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
+                                          MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+            PRINTLOG(USB, LOG_ERROR, "cannot map frame for stream context");
+            fa->release_frame(fa, stream_context_frame);
+            memory_paging_delete_va_for_frame(ep_trb_va, ep_trb_frame);
+            fa->release_frame(fa, ep_trb_frame);
+            context->endpoints[ep_index - 1].ep_trb_frame = NULL;
+            context->endpoints[ep_index - 1].ep_trb_fa    = 0;
+            context->endpoints[ep_index - 1].ep_trb_va    = 0;
+            context->endpoints[ep_index - 1].ep_trb_index = 0;
+            transfer->data                                = NULL;
+            transfer->length                              = 0;
+            transfer->complete                            = true;
+            transfer->success                             = false;
+            return -1;
+        }
+
         memory_memclean((void*)stream_context_va, FRAME_SIZE);
 
         context->endpoints[ep_index - 1].stream_context_fa    = stream_context_fa;
@@ -1007,10 +1037,17 @@ static int8_t usb_xhci_setup_endpoint_pipeline(usb_controller_t* usb_controller,
 
     uint64_t data_buffer_fa = data_buffer_frame->frame_address;
     uint64_t data_buffer_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_buffer_fa);
-    memory_paging_add_va_for_frame(data_buffer_va, data_buffer_frame,
-                                   MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                   MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                   MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE);
+    if(memory_paging_add_va_for_frame(data_buffer_va, data_buffer_frame,
+                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC |
+                                      MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
+                                      MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot map frame for ep%d data buffer", ep_index);
+        fa->release_frame(fa, data_buffer_frame);
+        transfer->complete = true;
+        transfer->success  = false;
+        return -1;
+    }
+
     memory_memclean((void*)data_buffer_va, data_buffer_size);
 
     PRINTLOG(USB, LOG_TRACE, "ep%d,%d data buffer fa 0x%llx va 0x%llx", ep_index, device->slot_id, data_buffer_fa, data_buffer_va);

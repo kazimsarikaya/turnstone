@@ -56,22 +56,22 @@ void vmware_svga2_display_flush(uint32_t scanout, uint64_t offset, uint32_t x, u
     volatile uint32_t* fifo = (volatile uint32_t*) vmware_svga2_active->fifo_bar_addr_va;
 
     uint32_t next_cmd = fifo[VMWARE_SVGA2_FIFO_REG_NEXT_CMD];
-    uint32_t stop = fifo[VMWARE_SVGA2_FIFO_REG_STOP];
-    uint32_t min = fifo[VMWARE_SVGA2_FIFO_REG_MIN];
-    uint32_t max = fifo[VMWARE_SVGA2_FIFO_REG_MAX];
+    uint32_t stop     = fifo[VMWARE_SVGA2_FIFO_REG_STOP];
+    uint32_t min      = fifo[VMWARE_SVGA2_FIFO_REG_MIN];
+    uint32_t max      = fifo[VMWARE_SVGA2_FIFO_REG_MAX];
 
     if(next_cmd + 5 * sizeof(uint32_t) > max) {
         do {
             vmware_svga2_write_reg(vmware_svga2_active, VMWARE_SVGA2_REG_SYNC, true);
-            while(vmware_svga2_read_reg(vmware_svga2_active, VMWARE_SVGA2_REG_BUSY));
+            while(vmware_svga2_read_reg(vmware_svga2_active, VMWARE_SVGA2_REG_BUSY)) {;}
 
             next_cmd = fifo[VMWARE_SVGA2_FIFO_REG_NEXT_CMD];
-            stop = fifo[VMWARE_SVGA2_FIFO_REG_STOP];
+            stop     = fifo[VMWARE_SVGA2_FIFO_REG_STOP];
         } while(next_cmd != stop);
 
         vmware_svga2_write_reg(vmware_svga2_active, VMWARE_SVGA2_REG_ENABLE, false);
         fifo[VMWARE_SVGA2_FIFO_REG_NEXT_CMD] = min;
-        fifo[VMWARE_SVGA2_FIFO_REG_STOP] = min;
+        fifo[VMWARE_SVGA2_FIFO_REG_STOP]     = min;
         vmware_svga2_write_reg(vmware_svga2_active, VMWARE_SVGA2_REG_ENABLE, true);
     }
 
@@ -85,7 +85,7 @@ void vmware_svga2_display_flush(uint32_t scanout, uint64_t offset, uint32_t x, u
     fifo[VMWARE_SVGA2_FIFO_REG_NEXT_CMD] += 5 * sizeof(uint32_t);
 
     vmware_svga2_write_reg(vmware_svga2_active, VMWARE_SVGA2_REG_SYNC, true);
-    while(vmware_svga2_read_reg(vmware_svga2_active, VMWARE_SVGA2_REG_BUSY));
+    while(vmware_svga2_read_reg(vmware_svga2_active, VMWARE_SVGA2_REG_BUSY)) {;}
 }
 
 
@@ -117,32 +117,57 @@ int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
 
     uint64_t fb_bar_addr_fa = pci_get_bar_address(pci_dev, 1);
     uint64_t fb_bar_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fb_bar_addr_fa);
-    uint64_t fb_bar_size = pci_get_bar_size(pci_dev, 1);
+    uint64_t fb_bar_size    = pci_get_bar_size(pci_dev, 1);
     uint64_t fb_bar_frm_cnt = (fb_bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
     uint64_t fifo_bar_addr_fa = pci_get_bar_address(pci_dev, 2);
     uint64_t fifo_bar_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fifo_bar_addr_fa);
-    uint64_t fifo_bar_size = pci_get_bar_size(pci_dev, 2);
+    uint64_t fifo_bar_size    = pci_get_bar_size(pci_dev, 2);
     uint64_t fifo_bar_frm_cnt = (fifo_bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
 
     frame_t fb_bar_frm = {
         .frame_address = fb_bar_addr_fa,
-        .frame_count = fb_bar_frm_cnt,
-        .type = FRAME_TYPE_RESERVED,
+        .frame_count   = fb_bar_frm_cnt,
+        .type          = FRAME_TYPE_RESERVED,
     };
 
-    frame_get_allocator()->allocate_frame(frame_get_allocator(), &fb_bar_frm);
-    memory_paging_add_va_for_frame(fb_bar_addr_va, &fb_bar_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &fb_bar_frm) != 0) {
+        PRINTLOG(VMWARESVGA, LOG_ERROR, "Failed to allocate frames for framebuffer BAR");
+
+        return -1;
+    }
+
+    if(memory_paging_add_va_for_frame(fb_bar_addr_va, &fb_bar_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(VMWARESVGA, LOG_ERROR, "Failed to map framebuffer BAR to virtual address");
+
+        frame_get_allocator()->release_frame(frame_get_allocator(), &fb_bar_frm);
+
+        return -1;
+    }
 
     frame_t fifo_bar_frm = {
         .frame_address = fifo_bar_addr_fa,
-        .frame_count = fifo_bar_frm_cnt,
-        .type = FRAME_TYPE_RESERVED,
+        .frame_count   = fifo_bar_frm_cnt,
+        .type          = FRAME_TYPE_RESERVED,
     };
 
-    frame_get_allocator()->allocate_frame(frame_get_allocator(), &fifo_bar_frm);
-    memory_paging_add_va_for_frame(fifo_bar_addr_va, &fifo_bar_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &fifo_bar_frm) != 0) {
+        PRINTLOG(VMWARESVGA, LOG_ERROR, "Failed to allocate frames for FIFO BAR");
+
+        frame_get_allocator()->release_frame(frame_get_allocator(), &fb_bar_frm);
+
+        return -1;
+    }
+
+    if(memory_paging_add_va_for_frame(fifo_bar_addr_va, &fifo_bar_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(VMWARESVGA, LOG_ERROR, "Failed to map FIFO BAR to virtual address");
+
+        frame_get_allocator()->release_frame(frame_get_allocator(), &fb_bar_frm);
+        frame_get_allocator()->release_frame(frame_get_allocator(), &fifo_bar_frm);
+
+        return -1;
+    }
 
 
     vmware_svga2_t* vmware_svga2 = memory_malloc_ext(heap, sizeof(vmware_svga2_t), 0);
@@ -155,14 +180,14 @@ int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
 
     vmware_svga2_active = vmware_svga2;
 
-    vmware_svga2->io_bar_addr = io_bar_addr;
-    vmware_svga2->fb_bar_addr_fa = fb_bar_addr_fa;
-    vmware_svga2->fb_bar_addr_va = fb_bar_addr_va;
-    vmware_svga2->fb_bar_size = fb_bar_size;
-    vmware_svga2->fb_bar_frm_cnt = fb_bar_frm_cnt;
+    vmware_svga2->io_bar_addr      = io_bar_addr;
+    vmware_svga2->fb_bar_addr_fa   = fb_bar_addr_fa;
+    vmware_svga2->fb_bar_addr_va   = fb_bar_addr_va;
+    vmware_svga2->fb_bar_size      = fb_bar_size;
+    vmware_svga2->fb_bar_frm_cnt   = fb_bar_frm_cnt;
     vmware_svga2->fifo_bar_addr_fa = fifo_bar_addr_fa;
     vmware_svga2->fifo_bar_addr_va = fifo_bar_addr_va;
-    vmware_svga2->fifo_bar_size = fifo_bar_size;
+    vmware_svga2->fifo_bar_size    = fifo_bar_size;
     vmware_svga2->fifo_bar_frm_cnt = fifo_bar_frm_cnt;
 
 
@@ -200,9 +225,9 @@ int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
         video_edid_get_max_resolution(edid_protocol->edid, &vmware_svga2->screen_height, &vmware_svga2->screen_width);
     } else {
         vmware_svga2->screen_height = vmware_svga2_read_reg(vmware_svga2, VMWARE_SVGA2_REG_MAX_HEIGHT);
-        vmware_svga2->screen_width = vmware_svga2_read_reg(vmware_svga2, VMWARE_SVGA2_REG_MAX_WIDTH);
+        vmware_svga2->screen_width  = vmware_svga2_read_reg(vmware_svga2, VMWARE_SVGA2_REG_MAX_WIDTH);
         vmware_svga2->screen_height = vmware_svga2_read_reg(vmware_svga2, VMWARE_SVGA2_REG_HEIGHT);
-        vmware_svga2->screen_width = vmware_svga2_read_reg(vmware_svga2, VMWARE_SVGA2_REG_WIDTH);
+        vmware_svga2->screen_width  = vmware_svga2_read_reg(vmware_svga2, VMWARE_SVGA2_REG_WIDTH);
 
     }
 
@@ -216,10 +241,10 @@ int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
 
     volatile uint32_t* fifo = (volatile uint32_t*) vmware_svga2->fifo_bar_addr_va;
 
-    fifo[VMWARE_SVGA2_FIFO_REG_MIN] = VMWARE_SVGA2_FIFO_REG_NUM_REGS * sizeof(uint32_t);
-    fifo[VMWARE_SVGA2_FIFO_REG_MAX] = vmware_svga2->fifo_bar_size;
+    fifo[VMWARE_SVGA2_FIFO_REG_MIN]      = VMWARE_SVGA2_FIFO_REG_NUM_REGS * sizeof(uint32_t);
+    fifo[VMWARE_SVGA2_FIFO_REG_MAX]      = vmware_svga2->fifo_bar_size;
     fifo[VMWARE_SVGA2_FIFO_REG_NEXT_CMD] = fifo[VMWARE_SVGA2_FIFO_REG_MIN];
-    fifo[VMWARE_SVGA2_FIFO_REG_STOP] = fifo[VMWARE_SVGA2_FIFO_REG_MIN];
+    fifo[VMWARE_SVGA2_FIFO_REG_STOP]     = fifo[VMWARE_SVGA2_FIFO_REG_MIN];
 
     vmware_svga2->fifo_capabilities = fifo[VMWARE_SVGA2_FIFO_REG_CAPABILITIES];
 
@@ -236,7 +261,7 @@ int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
         // send fence
 
         vmware_svga2_write_reg(vmware_svga2, VMWARE_SVGA2_REG_SYNC, true);
-        while(vmware_svga2_read_reg(vmware_svga2, VMWARE_SVGA2_REG_BUSY));
+        while(vmware_svga2_read_reg(vmware_svga2, VMWARE_SVGA2_REG_BUSY)) {;}
 
         vmware_svga2_write_reg(vmware_svga2, VMWARE_SVGA2_REG_IRQMASK, 0);
 

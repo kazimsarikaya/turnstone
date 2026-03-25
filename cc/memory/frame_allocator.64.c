@@ -1178,9 +1178,9 @@ void frame_allocator_print(frame_allocator_t* fa) {
 
 }
 
-void frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t* fa) {
+int8_t frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t* fa) {
     if(fa == NULL) {
-        return;
+        return -1;
     }
 
     frame_allocator_context_t* ctx = fa->context;
@@ -1191,9 +1191,17 @@ void frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t* fa) {
         frame_t* f = (frame_t*)iter->get_item(iter);
 
         if(f->type == FRAME_TYPE_ACPI_CODE) {
-            memory_paging_add_va_for_frame(f->frame_address, f, MEMORY_PAGING_PAGE_TYPE_UNKNOWN);
+            if(memory_paging_add_va_for_frame(f->frame_address, f, MEMORY_PAGING_PAGE_TYPE_UNKNOWN) != 0) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "failed to map acpi code frame at 0x%llx", f->frame_address);
+                iter->destroy(iter);
+                return -1;
+            }
         } else if(f->type == FRAME_TYPE_ACPI_DATA) {
-            memory_paging_add_va_for_frame(f->frame_address, f, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+            if(memory_paging_add_va_for_frame(f->frame_address, f, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "failed to map acpi data frame at 0x%llx", f->frame_address);
+                iter->destroy(iter);
+                return -1;
+            }
         } else {
             PRINTLOG(FRAMEALLOCATOR, LOG_WARNING, "unknown acpi runtime frame type 0x%x", f->type);
         }
@@ -1202,5 +1210,7 @@ void frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t* fa) {
     }
 
     iter->destroy(iter);
+
+    return 0;
 }
 

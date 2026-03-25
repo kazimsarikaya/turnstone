@@ -59,8 +59,11 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
         .type          = FRAME_TYPE_RESERVED,
     };
 
-    memory_paging_add_va_for_frame(fb_bar_addr_va, &fb_bar_frm,
-                                   MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(fb_bar_addr_va, &fb_bar_frm,
+                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(VIDEO, LOG_ERROR, "Failed to map QEMU VGA FB BAR to virtual address");
+        return -1;
+    }
 
     stdbufs_set_postphone_flush(false);
     lock_release(video_lock);
@@ -83,10 +86,13 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
         frame_get_allocator()->allocate_frame(frame_get_allocator(), &mmio_bar_frm);
     }
 
-    memory_paging_add_va_for_frame(mmio_bar_addr_va, &mmio_bar_frm,
-                                   MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                   MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE |
-                                   MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH);
+    if(memory_paging_add_va_for_frame(mmio_bar_addr_va, &mmio_bar_frm,
+                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC |
+                                      MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE |
+                                      MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH) != 0) {
+        PRINTLOG(VIDEO, LOG_ERROR, "Failed to map QEMU VGA MMIO BAR to virtual address");
+        return -1;
+    }
 
 
     qemuvga_device = memory_malloc_ext(heap, sizeof(qemuvga_device_t), 0);

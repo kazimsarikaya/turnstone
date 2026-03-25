@@ -205,9 +205,15 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
 
     uint64_t rx_packet_buffer_fa = rx_packet_buffer_frames->frame_address;
     uint64_t rx_packet_buffer_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(rx_packet_buffer_fa);
-    memory_paging_add_va_for_frame(rx_packet_buffer_va, rx_packet_buffer_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(rx_packet_buffer_va, rx_packet_buffer_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(IGB, LOG_ERROR, "cannot map rx packet buffer frames");
 
-    memory_memset((void*)rx_packet_buffer_va, 0, packet_buffer_size);
+        fa->release_frame(fa, rx_packet_buffer_frames);
+
+        return -1;
+    }
+
+    memory_memclean((void*)rx_packet_buffer_va, packet_buffer_size);
 
     dev->rx_packet_buffer_fa = rx_packet_buffer_fa;
     dev->rx_packet_buffer_va = rx_packet_buffer_va;
@@ -221,6 +227,8 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
     if(fa->allocate_frame_by_count(fa, header_buffer_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &rx_header_buffer_frames, NULL) != 0) {
         PRINTLOG(IGB, LOG_ERROR, "cannot allocate frames for rx header buffer");
 
+        fa->release_frame(fa, rx_packet_buffer_frames);
+
         return -1;
     }
 
@@ -228,9 +236,16 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
 
     uint64_t rx_header_buffer_fa = rx_header_buffer_frames->frame_address;
     uint64_t rx_header_buffer_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(rx_header_buffer_frames->frame_address);
-    memory_paging_add_va_for_frame(rx_header_buffer_va, rx_header_buffer_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(rx_header_buffer_va, rx_header_buffer_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(IGB, LOG_ERROR, "cannot map rx header buffer frames");
 
-    memory_memset((void*)rx_header_buffer_va, 0, header_buffer_size);
+        fa->release_frame(fa, rx_header_buffer_frames);
+        fa->release_frame(fa, rx_packet_buffer_frames);
+
+        return -1;
+    }
+
+    memory_memclean((void*)rx_header_buffer_va, header_buffer_size);
 
     dev->rx_header_buffer_fa = rx_header_buffer_fa;
     dev->rx_header_buffer_va = rx_header_buffer_va;
@@ -243,6 +258,9 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
     if(fa->allocate_frame_by_count(fa, queue_meta_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_meta_frames, NULL) != 0) {
         PRINTLOG(IGB, LOG_ERROR, "cannot allocate frames for rx queue meta");
 
+        fa->release_frame(fa, rx_header_buffer_frames);
+        fa->release_frame(fa, rx_packet_buffer_frames);
+
         return -1;
     }
 
@@ -251,9 +269,17 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
 
     uint64_t queue_meta_fa = queue_meta_frames->frame_address;
     uint64_t queue_meta_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_meta_frames->frame_address);
-    memory_paging_add_va_for_frame(queue_meta_va, queue_meta_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(queue_meta_va, queue_meta_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(IGB, LOG_ERROR, "cannot map rx queue meta frames");
 
-    memory_memset((void*)queue_meta_va, 0, sizeof(network_igb_rx_desc_t) * NETWORK_IGB_NUM_RX_DESCRIPTORS);
+        fa->release_frame(fa, queue_meta_frames);
+        fa->release_frame(fa, rx_header_buffer_frames);
+        fa->release_frame(fa, rx_packet_buffer_frames);
+
+        return -1;
+    }
+
+    memory_memclean((void*)queue_meta_va, sizeof(network_igb_rx_desc_t) * NETWORK_IGB_NUM_RX_DESCRIPTORS);
 
     // this should be first
     network_igb_write_mmio(dev, NETWORK_IGB_REG_SRRCTL, 0x600040A); // 10K packet buffer, 256 byte header format, type 2
@@ -314,11 +340,28 @@ static int8_t network_igb_tx_init(network_igb_dev_t* dev) {
 
     uint64_t queue_fa = queue_frames->frame_address;
     uint64_t queue_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_frames->frame_address);
-    memory_paging_add_va_for_frame(queue_va, queue_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(queue_va, queue_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(IGB, LOG_ERROR, "cannot map tx queue frames");
+
+        frame_get_allocator()->release_frame(frame_get_allocator(), queue_frames);
+        frame_get_allocator()->release_frame(frame_get_allocator(), queue_meta_frames);
+
+        return -1;
+    }
 
     uint64_t queue_meta_fa = queue_meta_frames->frame_address;
     uint64_t queue_meta_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_meta_frames->frame_address);
-    memory_paging_add_va_for_frame(queue_meta_va, queue_meta_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(queue_meta_va, queue_meta_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(IGB, LOG_ERROR, "cannot map tx queue meta frames");
+
+        frame_get_allocator()->release_frame(frame_get_allocator(), queue_frames);
+        frame_get_allocator()->release_frame(frame_get_allocator(), queue_meta_frames);
+
+        return -1;
+    }
+
+    memory_memclean((void*)queue_va, queue_size);
+    memory_memclean((void*)queue_meta_va, sizeof(network_igb_tx_desc_t) * NETWORK_IGB_NUM_TX_DESCRIPTORS);
 
     network_igb_write_mmio(dev, NETWORK_IGB_REG_TDBAL, queue_meta_fa & 0xFFFFFFFF);
     network_igb_write_mmio(dev, NETWORK_IGB_REG_TDBAH, (queue_meta_fa >> 32) & 0xFFFFFFFF);
@@ -694,7 +737,17 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
             }
         }
 
-        memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        if(memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(IGB, LOG_ERROR, "cannot map bar frames");
+
+            if(bar_frames == NULL) {
+                frame_get_allocator()->release_frame(frame_get_allocator(), &bar_req_frm);
+            }
+
+            memory_free(dev);
+
+            return -1;
+        }
     }
 
     if(bar_va == 0) {

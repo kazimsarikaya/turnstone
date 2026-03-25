@@ -86,7 +86,11 @@ int8_t usb_init(void) {
             }
         }
 
-        memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        if(memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(USB, LOG_ERROR, "cannot map bar frames to virtual address");
+
+            return -1;
+        }
 
         if(pci_gen_dev->common_header.status.capabilities_list) {
             pci_capability_t* pci_cap = (pci_capability_t*)(((uint8_t*)pci_gen_dev) + pci_gen_dev->capabilities_pointer);

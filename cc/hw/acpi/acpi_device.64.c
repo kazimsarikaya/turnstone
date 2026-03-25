@@ -315,7 +315,10 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
         if(sym->type == ACPI_AML_OT_OPREGION && sym->opregion.region_space == ACPI_AML_OPREGT_SYSMEM) {
             // TODO: add reserved frames
 
-            frame_t f    = {sym->opregion.region_offset, (sym->opregion.region_len + FRAME_SIZE - 1) / FRAME_SIZE, FRAME_TYPE_RESERVED, 0};
+            uint64_t region_start = sym->opregion.region_offset;
+            uint64_t region_fa    = region_start & ~(FRAME_SIZE - 1);
+
+            frame_t f    = {region_fa, (sym->opregion.region_len + FRAME_SIZE - 1) / FRAME_SIZE, FRAME_TYPE_RESERVED, 0};
             uint64_t fva = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(sym->opregion.region_offset);
 
             if(memory_paging_add_va_for_frame(fva, &f, MEMORY_PAGING_PAGE_TYPE_UNKNOWN) != 0) {

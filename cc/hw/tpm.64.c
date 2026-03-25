@@ -1445,10 +1445,14 @@ int8_t tpm2_init(void) {
         }
     }
 
-    memory_paging_add_va_for_frame(tpm2_base_va, &tpm2_req_frm,
-                                   MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                   MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE |
-                                   MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH);
+    if(memory_paging_add_va_for_frame(tpm2_base_va, &tpm2_req_frm,
+                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC |
+                                      MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE |
+                                      MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH) != 0) {
+        PRINTLOG(TPM, LOG_ERROR, "cannot add paging for tpm2 device");
+
+        return -1;
+    }
 
     tpm2_device = memory_malloc(sizeof(tpm2_device_t));
 

@@ -391,7 +391,11 @@ int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
             }
         }
 
-        memory_paging_add_va_for_frame(abar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        if(memory_paging_add_va_for_frame(abar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(AHCI, LOG_ERROR, "cannot map frame to abar va");
+
+            return -1;
+        }
 
         ahci_hba_mem_t* hba_mem = (ahci_hba_mem_t*)abar_va;
 

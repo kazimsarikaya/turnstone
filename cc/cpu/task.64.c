@@ -1192,7 +1192,11 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         return -1;
     }
 
-    memory_paging_add_va_for_frame(stack_bottom, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(stack_bottom, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_bottom, stack_frames->frame_address, stack_frames->frame_count);
+
+        return -1;
+    }
 
     memory_memclean((void*)stack_bottom, frame_count * FRAME_SIZE);
 
@@ -1231,7 +1235,11 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
         uint64_t task_related_heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(task_related_heap_frames->frame_address);
 
-        memory_paging_add_va_for_frame(task_related_heap_va, task_related_heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        if(memory_paging_add_va_for_frame(task_related_heap_va, task_related_heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot add task related heap va 0x%llx for frame at 0x%llx with count 0x%llx", task_related_heap_va, task_related_heap_frames->frame_address, task_related_heap_frames->frame_count);
+
+            return -1;
+        }
 
         memory_heap_t* task_related_heap = memory_create_heap_simple(task_related_heap_va,
                                                                      task_related_heap_va + 0x1000 * FRAME_SIZE);
@@ -1298,7 +1306,11 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
         uint64_t task_related_heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(task_related_heap_frames->frame_address);
 
-        memory_paging_add_va_for_frame(task_related_heap_va, task_related_heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        if(memory_paging_add_va_for_frame(task_related_heap_va, task_related_heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot add task related heap va 0x%llx for frame at 0x%llx with count 0x%llx", task_related_heap_va, task_related_heap_frames->frame_address, task_related_heap_frames->frame_count);
+
+            return -1;
+        }
 
         memory_heap_t* task_related_heap = memory_create_heap_simple(task_related_heap_va,
                                                                      task_related_heap_va + 0x1000 * FRAME_SIZE);

@@ -39,7 +39,11 @@ static int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc)
                 PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of table 0x%016x", table_addr);
             } else if((acpi_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
                 PRINTLOG(ACPI, LOG_TRACE, "frames of table 0x%016x is 0x%llx 0x%llx", table_addr, acpi_frames->frame_address, acpi_frames->frame_count);
-                memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+                if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                    PRINTLOG(ACPI, LOG_ERROR, "cannot add page mapping for table 0x%016x", table_addr);
+                    return -1;
+                }
+
                 acpi_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
                 char_t* sign = strndup(res->signature, 4);
                 PRINTLOG(ACPI, LOG_TRACE, "table name %s", sign);
@@ -65,7 +69,11 @@ static int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc)
                 PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of table 0x%p", xrsdt->acpi_sdt_header_ptrs[i]);
             } else if((acpi_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
                 PRINTLOG(ACPI, LOG_TRACE, "frames of table 0x%p is 0x%llx 0x%llx", xrsdt->acpi_sdt_header_ptrs[i], acpi_frames->frame_address, acpi_frames->frame_count);
-                memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+                if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                    PRINTLOG(ACPI, LOG_ERROR, "cannot add page mapping for table 0x%p", xrsdt->acpi_sdt_header_ptrs[i]);
+                    return -1;
+                }
+
                 acpi_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
                 char_t* sign = strndup(res->signature, 4);
                 PRINTLOG(ACPI, LOG_TRACE, "table name %s", sign);
@@ -94,7 +102,11 @@ static int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc)
         PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of  dsdt table");
     } else if((acpi_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
         PRINTLOG(ACPI, LOG_TRACE, "frames of dsdt table is 0x%llx 0x%llx", acpi_frames->frame_address, acpi_frames->frame_count);
-        memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(ACPI, LOG_ERROR, "cannot add page mapping for dsdt table");
+            return -1;
+        }
+
         acpi_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
     }
 

@@ -20,7 +20,7 @@
 
 MODULE("turnstone.kernel.hw.drivers.nvme");
 
-hashmap_t* nvme_disks = NULL;
+hashmap_t* nvme_disks        = NULL;
 hashmap_t* nvme_disk_isr_map = NULL;
 
 int8_t    nvme_isr(interrupt_frame_ext_t* frame);
@@ -66,9 +66,9 @@ int8_t nvme_isr(interrupt_frame_ext_t* frame) {
     // uint32_t sqid = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].sqid;
 
     while(nvme_disk->io_s_queue_tail != nvme_disk->io_c_queue_head) {
-        uint32_t cid = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].cid;
+        uint32_t cid         = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].cid;
         uint32_t status_code = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].status_code;
-        boolean_t phase = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].p;
+        boolean_t phase      = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].p;
 
         if(status_code != 0) {
             // TODO: handle error
@@ -108,7 +108,7 @@ int8_t nvme_isr(interrupt_frame_ext_t* frame) {
 static int8_t nvme_find_msix(nvme_disk_t* nvme_disk) {
     pci_generic_device_t* pci_nvme = nvme_disk->pci_device;
 
-    pci_capability_msi_t* msi_cap = NULL;
+    pci_capability_msi_t* msi_cap   = NULL;
     pci_capability_msix_t* msix_cap = NULL;
 
     if(pci_nvme->common_header.status.capabilities_list) {
@@ -119,7 +119,8 @@ static int8_t nvme_find_msix(nvme_disk_t* nvme_disk) {
             if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_MSI) {
                 msi_cap = (pci_capability_msi_t*)pci_cap;
                 PRINTLOG(NVME, LOG_WARNING, "msi cap 0x%02x", msi_cap != NULL);
-            } if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_MSIX) {
+            }
+            if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_MSIX) {
                 msix_cap = (pci_capability_msix_t*)pci_cap;
             }else {
                 PRINTLOG(NVME, LOG_WARNING, "not implemented cap 0x%02x", pci_cap->capability_id);
@@ -158,10 +159,10 @@ static int8_t nvme_configure_bar_va(nvme_disk_t* nvme_disk) {
     PRINTLOG(NVME, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
     frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
-    uint64_t size = pci_get_bar_size(pci_nvme, 0);
+    uint64_t size       = pci_get_bar_size(pci_nvme, 0);
     PRINTLOG(NVME, LOG_TRACE, "bar size 0x%llx", size);
     uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
-    frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+    frame_t bar_req_frm  = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
     uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
 
@@ -175,7 +176,11 @@ static int8_t nvme_configure_bar_va(nvme_disk_t* nvme_disk) {
         }
     }
 
-    memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot add va for bar frame");
+
+        return -1;
+    }
 
     nvme_disk->bar_va = bar_va;
 
@@ -192,25 +197,32 @@ static int8_t nvme_configure_queues_address(nvme_disk_t* nvme_disk, nvme_control
     }
 
     uint64_t queue_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_frames->frame_address);
-    memory_paging_add_va_for_frame(queue_va, queue_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(queue_va, queue_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot add va for queue frames");
+
+        frame_get_allocator()->release_frame(frame_get_allocator(), queue_frames);
+
+        return -1;
+    }
+
     memory_memclean((void*)queue_va, FRAME_SIZE * 4);
 
     nvme_disk->queue_frames_address = queue_frames->frame_address;
 
-    nvme_controller_cap_t nvme_caps = (nvme_controller_cap_t)nvme_regs->capabilities;
+    nvme_controller_cap_t nvme_caps   = (nvme_controller_cap_t)nvme_regs->capabilities;
     nvme_controller_sts_t nvme_status = (nvme_controller_sts_t)nvme_regs->status;
 
     nvme_disk->admin_submission_queue = (nvme_submission_queue_entry_t*)queue_va;
     nvme_disk->admin_completion_queue = (nvme_completion_queue_entry_t*)(queue_va + FRAME_SIZE);
-    nvme_disk->io_submission_queue = (nvme_submission_queue_entry_t*)(queue_va + FRAME_SIZE * 2);
-    nvme_disk->io_completion_queue = (nvme_completion_queue_entry_t*)(queue_va + FRAME_SIZE * 3);
+    nvme_disk->io_submission_queue    = (nvme_submission_queue_entry_t*)(queue_va + FRAME_SIZE * 2);
+    nvme_disk->io_completion_queue    = (nvme_completion_queue_entry_t*)(queue_va + FRAME_SIZE * 3);
 
-    nvme_disk->timeout = nvme_caps.fields.timeout + 1;
+    nvme_disk->timeout        = nvme_caps.fields.timeout + 1;
     nvme_disk->nvme_registers = nvme_regs;
 
     nvme_controller_cfg_t nvme_config = (nvme_controller_cfg_t)nvme_regs->config;
     nvme_config.fields.enable = 0;
-    nvme_regs->config = nvme_config.bits;
+    nvme_regs->config         = nvme_config.bits;
 
     do {
         time_timer_spinsleep(500 * (nvme_caps.fields.timeout + 1));
@@ -230,7 +242,7 @@ static int8_t nvme_configure_queues_address(nvme_disk_t* nvme_disk, nvme_control
 
 
     nvme_disk->admin_queue_size = 64;
-    nvme_disk->io_queue_size = 64;
+    nvme_disk->io_queue_size    = 64;
 
     PRINTLOG(NVME, LOG_TRACE, "nvme asq %llx acq %llx", queue_frames->frame_address, queue_frames->frame_address + FRAME_SIZE);
 
@@ -312,11 +324,18 @@ static int8_t nvme_perform_identifies(nvme_disk_t* nvme_disk) {
     }
 
     uint64_t identify_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(identify_frames->frame_address);
-    memory_paging_add_va_for_frame(identify_va, identify_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(identify_va, identify_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot add va for identify frames");
+
+        frame_get_allocator()->release_frame(frame_get_allocator(), identify_frames);
+
+        return -1;
+    }
+
     memory_memclean((void*)identify_va, 3 * FRAME_SIZE);
 
-    nvme_disk->identify = (nvme_identify_t*)identify_va;
-    nvme_disk->ns_identify = (nvme_ns_identify_t*)(identify_va + 0x1000);
+    nvme_disk->identify       = (nvme_identify_t*)identify_va;
+    nvme_disk->ns_identify    = (nvme_ns_identify_t*)(identify_va + 0x1000);
     nvme_disk->active_ns_list = (uint32_t*)(identify_va + 0x2000);
 
     uint64_t identify_fa = identify_frames->frame_address;
@@ -367,9 +386,9 @@ static int8_t nvme_perform_identifies(nvme_disk_t* nvme_disk) {
                  nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].lbads,
                  nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].rp);
 
-        nvme_disk->ns_id = nvme_disk->active_ns_list[i];
+        nvme_disk->ns_id     = nvme_disk->active_ns_list[i];
         nvme_disk->lba_count = nvme_disk->ns_identify->nsze;
-        nvme_disk->lba_size = 1 << nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].lbads;
+        nvme_disk->lba_size  = 1 << nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].lbads;
 
         PRINTLOG(NVME, LOG_TRACE, "format types");
         for(int32_t j = 0; j <= nvme_disk->ns_identify->nlbaf; j++) {
@@ -406,20 +425,20 @@ static int8_t nvme_configure_queue_configs(nvme_disk_t* nvme_disk) {
     nvme_controller_cfg_t nvme_config = (nvme_controller_cfg_t)nvme_regs->config;
 
     nvme_controller_aqa_t nvme_aqa = (nvme_controller_aqa_t)nvme_regs->aqa;
-    nvme_aqa.bits = (nvme_disk->admin_queue_size - 1) | ((nvme_disk->admin_queue_size - 1) << 16);
+    nvme_aqa.bits  = (nvme_disk->admin_queue_size - 1) | ((nvme_disk->admin_queue_size - 1) << 16);
     nvme_regs->aqa = nvme_aqa.bits;
 
-    nvme_config.fields.css = 0;
+    nvme_config.fields.css    = 0;
     nvme_config.fields.iosqes = 6;
     nvme_config.fields.iocqes = 4;
-    nvme_config.fields.ams = 0;
-    nvme_config.fields.mps = 0;
+    nvme_config.fields.ams    = 0;
+    nvme_config.fields.mps    = 0;
 
     nvme_config.fields.enable = 1;
 
     nvme_regs->config = nvme_config.bits;
 
-    nvme_controller_cap_t nvme_caps = (nvme_controller_cap_t)nvme_regs->capabilities;
+    nvme_controller_cap_t nvme_caps   = (nvme_controller_cap_t)nvme_regs->capabilities;
     nvme_controller_sts_t nvme_status = (nvme_controller_sts_t)nvme_regs->status;
 
     do {
@@ -437,19 +456,19 @@ static int8_t nvme_configure_queue_configs(nvme_disk_t* nvme_disk) {
         return -1;
     }
 
-    uint64_t dstrd = nvme_caps.fields.dstrd;
+    uint64_t dstrd       = nvme_caps.fields.dstrd;
     uint64_t admin_sqtdb = nvme_disk->bar_va + 0x1000 + (2 * 0) * (4 << dstrd);
     uint64_t admin_cqhdb = nvme_disk->bar_va + 0x1000 + (2 * 0 + 1) * (4 << dstrd);
-    uint64_t io_sqtdb = nvme_disk->bar_va + 0x1000 + (2 * 1) * (4 << dstrd);
-    uint64_t io_cqhdb = nvme_disk->bar_va + 0x1000 + (2 * 1 + 1) * (4 << dstrd);
+    uint64_t io_sqtdb    = nvme_disk->bar_va + 0x1000 + (2 * 1) * (4 << dstrd);
+    uint64_t io_cqhdb    = nvme_disk->bar_va + 0x1000 + (2 * 1 + 1) * (4 << dstrd);
 
     PRINTLOG(NVME, LOG_TRACE, "nvme admin sqtdb %llx cqhdb %llx", admin_sqtdb, admin_cqhdb);
     PRINTLOG(NVME, LOG_TRACE, "nvme io sqtdb %llx cqhdb %llx", io_sqtdb, io_cqhdb);
 
     nvme_disk->admin_completion_queue_head_doorbell = (uint32_t*)admin_cqhdb;
     nvme_disk->admin_submission_queue_tail_doorbell = (uint32_t*)admin_sqtdb;
-    nvme_disk->io_completion_queue_head_doorbell = (uint32_t*)io_cqhdb;
-    nvme_disk->io_submission_queue_tail_doorbell = (uint32_t*)io_sqtdb;
+    nvme_disk->io_completion_queue_head_doorbell    = (uint32_t*)io_cqhdb;
+    nvme_disk->io_submission_queue_tail_doorbell    = (uint32_t*)io_sqtdb;
 
     return 0;
 }
@@ -466,7 +485,14 @@ static int8_t nvme_configure_prp_frames(nvme_disk_t* nvme_disk) {
     nvme_disk->prp_frame_fa = prp_frames->frame_address;
     nvme_disk->prp_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(nvme_disk->prp_frame_fa);
 
-    memory_paging_add_va_for_frame(nvme_disk->prp_frame_va, prp_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(nvme_disk->prp_frame_va, prp_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot add va for prp frames");
+
+        frame_get_allocator()->release_frame(frame_get_allocator(), prp_frames);
+
+        return -1;
+    }
+
     memory_memclean((void*)nvme_disk->prp_frame_va, 64 * FRAME_SIZE);
 
     return 0;
@@ -494,9 +520,9 @@ static int8_t nvme_init_disk(memory_heap_t* heap, uint64_t disk_id, const pci_de
         return -1;
     }
 
-    nvme_disk->heap = heap;
-    nvme_disk->disk_id = disk_id;
-    nvme_disk->pci_device = pci_nvme;
+    nvme_disk->heap          = heap;
+    nvme_disk->disk_id       = disk_id;
+    nvme_disk->pci_device    = pci_nvme;
     nvme_disk->current_phase = true; // when nvme controller is reset, phase is 1
 
 
@@ -516,9 +542,9 @@ static int8_t nvme_init_disk(memory_heap_t* heap, uint64_t disk_id, const pci_de
 
     nvme_controller_registers_t* nvme_regs = (nvme_controller_registers_t*)nvme_disk->bar_va;
 
-    nvme_controller_cap_t nvme_caps = (nvme_controller_cap_t)nvme_regs->capabilities;
+    nvme_controller_cap_t nvme_caps        = (nvme_controller_cap_t)nvme_regs->capabilities;
     nvme_controller_version_t nvme_version = (nvme_controller_version_t)nvme_regs->version;
-    nvme_controller_sts_t nvme_status = (nvme_controller_sts_t)nvme_regs->status;
+    nvme_controller_sts_t nvme_status      = (nvme_controller_sts_t)nvme_regs->status;
 
     PRINTLOG(NVME, LOG_TRACE, "nvme controller %lli ready? %i ", disk_id, nvme_status.fields.ready);
     PRINTLOG(NVME, LOG_DEBUG, "nvme version %i.%i.%i", nvme_version.fields.major, nvme_version.fields.minor, nvme_version.fields.reserved_or_ter);
@@ -748,7 +774,7 @@ future_t* nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t
         return NULL;
     }
 
-    uint64_t fcnt = size / nvme_disk->lba_size;
+    uint64_t fcnt   = size / nvme_disk->lba_size;
     uint64_t fa_cnt = fcnt / (0x1000 / nvme_disk->lba_size);
 
     if(fcnt > 512) {
@@ -800,20 +826,20 @@ future_t* nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t
         }
     }
 
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].opc = write?NVME_CMD_WRITE:NVME_CMD_READ;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].fuse = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cid = cid;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].nsid = nvme_disk->ns_id;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].psdt = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].mptr = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].opc               = write?NVME_CMD_WRITE:NVME_CMD_READ;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].fuse              = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cid               = cid;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].nsid              = nvme_disk->ns_id;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].psdt              = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].mptr              = 0;
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].dptr.prplist.prp1 = prp1;
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].dptr.prplist.prp2 = prp2;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw10 = lba & 0xFFFFFFFF;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw11 = (lba >> 32) & 0xFFFFFFFF;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw12 = (fcnt - 1);
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw13 = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw14 = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw15 = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw10             = lba & 0xFFFFFFFF;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw11             = (lba >> 32) & 0xFFFFFFFF;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw12             = (fcnt - 1);
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw13             = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw14             = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw15             = 0;
 
     uint64_t tid = task_get_id();
     lock_t* lock = lock_create_with_heap_for_future(nvme_disk->heap, true, tid);
@@ -835,7 +861,7 @@ future_t* nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t
         return NULL;
     }
 
-    nvme_disk->io_s_queue_tail = (nvme_disk->io_s_queue_tail + 1) % 64;
+    nvme_disk->io_s_queue_tail                    = (nvme_disk->io_s_queue_tail + 1) % 64;
     *nvme_disk->io_submission_queue_tail_doorbell = nvme_disk->io_s_queue_tail;
 
     nvme_disk->active_command_count++;
@@ -874,20 +900,20 @@ future_t* nvme_flush(uint64_t disk_id) {
         cid = nvme_disk->next_cid++;
     }
 
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].opc = NVME_CMD_FLUSH;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].fuse = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cid = cid;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].nsid = 0xFFFFFFFF;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].psdt = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].mptr = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].opc               = NVME_CMD_FLUSH;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].fuse              = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cid               = cid;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].nsid              = 0xFFFFFFFF;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].psdt              = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].mptr              = 0;
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].dptr.prplist.prp1 = 0;
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].dptr.prplist.prp2 = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw10 = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw11 = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw12 = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw13 = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw14 = 0;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw15 = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw10             = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw11             = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw12             = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw13             = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw14             = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw15             = 0;
 
     uint64_t tid = task_get_id();
     lock_t* lock = lock_create_with_heap_for_future(nvme_disk->heap, true, tid);
@@ -909,7 +935,7 @@ future_t* nvme_flush(uint64_t disk_id) {
         return NULL;
     }
 
-    nvme_disk->io_s_queue_tail = (nvme_disk->io_s_queue_tail + 1) % nvme_disk->io_queue_size;
+    nvme_disk->io_s_queue_tail                    = (nvme_disk->io_s_queue_tail + 1) % nvme_disk->io_queue_size;
     *nvme_disk->io_submission_queue_tail_doorbell = nvme_disk->io_s_queue_tail;
 
     nvme_disk->active_command_count++;
@@ -938,22 +964,22 @@ int8_t nvme_send_admin_command(nvme_disk_t* nvme_disk,
 
     PRINTLOG(NVME, LOG_TRACE, "sending admin command %x with cid %x", opcode, cid);
 
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].opc = opcode;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].fuse = fuse;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cid = cid;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].nsid = nsid;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].psdt = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].mptr = mptr;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].opc               = opcode;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].fuse              = fuse;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cid               = cid;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].nsid              = nsid;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].psdt              = 0;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].mptr              = mptr;
     nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp1 = prp1;
     nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp2 = prp2;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw10 = cdw10;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw11 = cdw11;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw12 = cdw12;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw13 = cdw13;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw14 = cdw14;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw15 = cdw15;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw10             = cdw10;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw11             = cdw11;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw12             = cdw12;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw13             = cdw13;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw14             = cdw14;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw15             = cdw15;
 
-    nvme_disk->admin_s_queue_tail = (nvme_disk->admin_s_queue_tail + 1) % nvme_disk->admin_queue_size;
+    nvme_disk->admin_s_queue_tail                    = (nvme_disk->admin_s_queue_tail + 1) % nvme_disk->admin_queue_size;
     *nvme_disk->admin_submission_queue_tail_doorbell = nvme_disk->admin_s_queue_tail;
 
     while(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cid != cid) {
@@ -979,7 +1005,7 @@ int8_t nvme_send_admin_command(nvme_disk_t* nvme_disk,
     }
 
 
-    nvme_disk->admin_c_queue_head = (nvme_disk->admin_c_queue_head + 1) % nvme_disk->admin_queue_size;
+    nvme_disk->admin_c_queue_head                    = (nvme_disk->admin_c_queue_head + 1) % nvme_disk->admin_queue_size;
     *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
 
     PRINTLOG(NVME, LOG_TRACE, "command %x completed with cid %x", opcode, cid);

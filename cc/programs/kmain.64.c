@@ -327,7 +327,10 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_DEBUG, "acpi is initializing");
 
-    frame_allocator_map_page_of_acpi_code_data_frames(frame_get_allocator());
+    if(frame_allocator_map_page_of_acpi_code_data_frames(frame_get_allocator()) != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot map acpi code/data frames. Halting...");
+        cpu_hlt();
+    }
 
     acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
 
