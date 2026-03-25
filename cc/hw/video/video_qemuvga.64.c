@@ -17,6 +17,7 @@
 #include <device/mmio.h>
 #include <systeminfo.h>
 #include <cpu/sync.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.kernel.hw.video.qemuvga");
 
@@ -34,10 +35,8 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
 
     PRINTLOG(VIDEO, LOG_INFO, "Initializing QEMU VGA Device");
 
-    // FIXME: locking video_lock is not enough, opening tracing at frameallocator
-    // causes page faults. find a better way to handle this.
-
     lock_acquire(video_lock);
+    stdbufs_set_postphone_flush(true);
 
     uint64_t fb_bar_addr_fa = pci_get_bar_address(pci_dev, 0);
     uint64_t fb_bar_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fb_bar_addr_fa);
@@ -63,6 +62,7 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
     memory_paging_add_va_for_frame(fb_bar_addr_va, &fb_bar_frm,
                                    MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
+    stdbufs_set_postphone_flush(false);
     lock_release(video_lock);
 
     uint64_t mmio_bar_addr_fa = pci_get_bar_address(pci_dev, 2);

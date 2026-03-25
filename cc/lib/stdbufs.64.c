@@ -171,7 +171,21 @@ int64_t vprintf(const char * format, va_list ap) {
 
 #endif
 
+static boolean_t stdbufs_postphone_flush = false;
+
+void stdbufs_set_postphone_flush(boolean_t postphone_flush) {
+    stdbufs_postphone_flush = postphone_flush;
+}
+
 int64_t stdbufs_flush_buffer(buffer_t* buffer) {
+    if(!buffer) {
+        return -1;
+    }
+
+    if(stdbufs_postphone_flush) {
+        return 0;
+    }
+
     uint64_t new_position = buffer_get_length(buffer);
     uint64_t old_position = buffer_get_mark_position(buffer);
 

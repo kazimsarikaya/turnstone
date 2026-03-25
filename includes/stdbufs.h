@@ -82,6 +82,18 @@ int64_t printf(const char * format, ...) __attribute__((format(printf, 1, 2)));
 int64_t vprintf(const char * format, va_list ap);
 
 /**
+ * @brief Sets the postphone flush behavior for standard I/O buffers.
+ *
+ * This function allows the caller to specify whether the flushing of the
+ * standard output buffer should be postphoned. When `postphone_flush` is set
+ * to `true`, the buffer will not be flushed immediately, and the caller will
+ * need to call `stdbufs_flush_buffer` explicitly to flush the contents.
+ *
+ * @param postphone_flush A boolean value indicating whether to postphone flush (true) or not (false).
+ */
+void stdbufs_set_postphone_flush(boolean_t postphone_flush);
+
+/**
  * @brief Flushes the contents of a specified buffer to its associated output.
  *
  * For the standard output buffer, this function will call the `video_printer`
