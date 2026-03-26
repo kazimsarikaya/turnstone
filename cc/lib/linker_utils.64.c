@@ -25,14 +25,16 @@ MODULE("turnstone.lib.linker");
 hashmap_t* linker_modules_at_memory = NULL;
 
 void linker_build_modules_at_memory(void) {
-    PRINTLOG(LINKER, LOG_DEBUG, "Building linker modules at memory");
+    PRINTLOG(LINKER, LOG_INFO, "Building linker modules at memory");
     if(linker_modules_at_memory) {
+        PRINTLOG(LINKER, LOG_WARNING, "Linker modules at memory already built");
         return;
     }
 
     linker_modules_at_memory = hashmap_integer(128);
 
     if(!linker_modules_at_memory) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create hashmap for linker modules at memory");
         return;
     }
 
