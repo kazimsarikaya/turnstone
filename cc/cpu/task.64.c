@@ -322,7 +322,7 @@ static void task_cleanup_task(task_t* task) {
 
     uint64_t task_task_id = task->task_id;
 
-    PRINTLOG(TASKING, LOG_INFO, "cleaning up task with id 0x%llx", task_task_id);
+    PRINTLOG(TASKING, LOG_INFO, "cleaning up task %s with id 0x%llx", task->task_name, task_task_id);
 
     if(task->vm) {
         hypervisor_vm_destroy(task->vm);
@@ -685,10 +685,10 @@ void task_switch_task(void) {
         }
     }
 
-    while(cpu_state->parked) {
+    if(cpu_state->parked) {
         cpu_state->in_parked_state = true;
         asm volatile ("wbinvd" ::: "memory"); // ensure all memory operations are completed before checking parked state again
-        cpu_hlt();
+        while(cpu_state->in_parked_state) { asm volatile ("hlt" ::: "memory");}
     }
 
     current_task                  = task_find_next_task();
