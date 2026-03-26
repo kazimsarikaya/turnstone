@@ -1575,6 +1575,7 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
     sysinfo->interrupt_handlers_module_id  = ih_module_id;
     sysinfo->gs_page_address_base          = (64ULL << 40) | gs_page_address_base;
     sysinfo->gs_page_size                  = 4 * cpu_count * FRAME_SIZE;
+    sysinfo->cpu_count                     = cpu_count;
 
     memory_page_table_context_t* page_table_ctx = (memory_page_table_context_t*)program_header->page_table_context_address;
 
