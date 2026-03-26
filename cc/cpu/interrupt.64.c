@@ -356,7 +356,8 @@ static int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
 
-    PRINTLOG(KERNEL, LOG_FATAL, "NMI interrupt occured at 0x%x:0x%llx %s task 0x%llx", frame->return_cs, frame->return_rip, return_symbol_name, task_get_id());
+    PRINTLOG(KERNEL, LOG_FATAL, "NMI interrupt occured at 0x%x:0x%llx %s task 0x%llx on cpu 0x%x",
+             frame->return_cs, frame->return_rip, return_symbol_name, task_get_id(), apic_id);
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
 
     stackframe_t* s_frame = (stackframe_t*)frame->rbp;
@@ -368,6 +369,7 @@ static int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
 
     return 0;
 
+#if 0
     uint64_t tid = task_get_id();
 
     if(tid != apic_id + 1) {
@@ -381,6 +383,7 @@ static int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
     cpu_hlt();
 
     return -1;
+#endif
 }
 
 static int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t* frame) {
