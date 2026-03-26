@@ -184,13 +184,15 @@ int8_t smp_init(void) {
 
     uint64_t ap_gs_va = SYSTEM_INFO->gs_page_address_base;
 
-    smp_data->stack_base   = stack_frames_va;
-    smp_data->stack_size   = stack_size;
-    smp_data->cr0          = cpu_read_cr0();
-    smp_data->cr3          = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(memory_paging_get_table()->page_table);
-    smp_data->cr4          = cpu_read_cr4();
-    smp_data->gs_base      = ap_gs_va;
-    smp_data->gs_base_size = ap_gs_size;
+    smp_data->stack_base        = stack_frames_va;
+    smp_data->stack_size        = stack_size;
+    smp_data->cr0               = cpu_read_cr0();
+    smp_data->cr3               = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(memory_paging_get_table()->page_table);
+    smp_data->cr4               = cpu_read_cr4();
+    smp_data->lock              = lock_create_with_heap(memory_get_default_heap());
+    smp_data->running_cpu_count = 1; // we are already running on one cpu, so start with 1.
+    smp_data->gs_base           = ap_gs_va;
+    smp_data->gs_base_size      = ap_gs_size;
 
     for(uint64_t i = 0; i < list_size(apic_entries); i++) {
         const acpi_table_madt_entry_t* e = list_get_data_at_position(apic_entries, i);
@@ -218,16 +220,17 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     smp_data_t* smp_data = (smp_data_t*)0x9000;
 
-    if(smp_data->is_for_wakeup) {
-        GRAPHICS_MODE = false; // we need to set this after init devices.
-    }
-
     uint64_t gs_base = smp_data->gs_base;
     gs_base += cpu_id * smp_data->gs_base_size;
 
     cpu_write_msr(CPU_MSR_IA32_GS_BASE, gs_base);
     asm volatile ("swapgs\n");
     cpu_write_msr(CPU_MSR_IA32_GS_BASE, gs_base);
+
+    if(smp_data->is_for_wakeup && cpu_state->local_apic_id == 0) { // only bsp should set area.
+        GRAPHICS_MODE               = false; // we need to set this after init devices.
+        smp_data->running_cpu_count = 0; // we will set our self soon.
+    }
 
     if(smp_data->is_for_wakeup &&
        cpu_state->current_task &&
@@ -304,24 +307,65 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i init done", cpu_id);
 
-    if(smp_data->is_for_wakeup) {
+    cpu_sti();
+
+    if(smp_data->is_for_wakeup && smp_data->wakeup_task) {
         task_t* wakeup_task = smp_data->wakeup_task;
         smp_data->wakeup_task = NULL;
+        if(task_wake_up(wakeup_task) != 0) {
+            PRINTLOG(KERNEL, LOG_ERROR, "cannot schedule to wake up task with id 0x%llx on cpu %lli by AP %i", wakeup_task->task_id, wakeup_task->cpu_id, cpu_id);
 
-        if(wakeup_task) {
-            if(task_wake_up(wakeup_task) != 0) {
-                PRINTLOG(KERNEL, LOG_ERROR, "cannot schedule to wake up task with id 0x%llx on cpu %lli by AP %i", wakeup_task->task_id, wakeup_task->cpu_id, cpu_id);
-
-                cpu_hlt();
-            }
-
-            PRINTLOG(KERNEL, LOG_INFO, "AP %i woke up task with id 0x%llx on cpu %lli", cpu_id, wakeup_task->task_id, wakeup_task->cpu_id);
+            cpu_hlt();
         }
 
-        // TODO: we need handle ap init properly then set this.
-        smp_data->is_for_wakeup = false;
+        PRINTLOG(KERNEL, LOG_INFO, "AP %i woke up task with id 0x%llx on cpu %lli", cpu_id, wakeup_task->task_id, wakeup_task->cpu_id);
+    }
 
-        cpu_sti();
+    lock_acquire(smp_data->lock);
+    smp_data->running_cpu_count++;
+    lock_release(smp_data->lock);
+
+
+    if(smp_data->is_for_wakeup && cpu_state->local_apic_id == 0) { // only bsp should set area.
+
+        // wake up other cpus.
+        PRINTLOG(KERNEL, LOG_INFO, "AP %i waking up other cpus.", cpu_id);
+        for(uint64_t i = 0; i < SYSTEM_INFO->cpu_count; i++) {
+            if(i == cpu_id) {
+                continue;
+            }
+
+            PRINTLOG(KERNEL, LOG_INFO, "AP %i sending wakeup signal to cpu %lli.", cpu_id, i);
+
+            apic_send_init(i);
+
+            apic_send_sipi(i, 0x08);
+
+            apic_send_sipi(i, 0x08);
+
+            PRINTLOG(KERNEL, LOG_INFO, "AP %i sent wakeup signal to cpu %lli.", cpu_id, i);
+        }
+
+        // wait for other cpus to boot and set running_cpu_count.
+        PRINTLOG(KERNEL, LOG_INFO, "AP %i waiting for other cpus to boot.", cpu_id);
+        while(true) {
+            lock_acquire(smp_data->lock);
+            if(smp_data->running_cpu_count >= SYSTEM_INFO->cpu_count) {
+                lock_release(smp_data->lock);
+
+                break;
+            }
+            lock_release(smp_data->lock);
+
+            task_msleep(10);
+        }
+
+        smp_data->is_for_wakeup = false;
+    }
+
+
+    if(smp_data->is_for_wakeup) {
+        PRINTLOG(KERNEL, LOG_INFO, "AP %i wakeup completed.", cpu_id);
 
         task_exit(0);
 
@@ -330,7 +374,6 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
         return 0;
     }
 
-    cpu_sti();
 
     frame_t* user_code_frames = NULL;
 
