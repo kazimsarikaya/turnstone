@@ -72,7 +72,7 @@ typedef struct descriptor_tss_t {
  * @struct tss_s
  * @brief tss descriptor values
  */
-typedef struct tss_s {
+typedef struct tss_t {
     uint32_t reserved0; ///< at long mode this value not used
     uint64_t rsp0; ///< stack pointer for ring 0
     uint64_t rsp1; ///< stack pointer for ring 1
@@ -113,8 +113,11 @@ typedef enum task_state_t {
  * @brief task attributes
  */
 typedef enum task_attribute_t {
-    TASK_ATTRIBUTE_NONE          = 0x0, ///< no attribute
-    TASK_ATTRIBUTE_INTERRUPTIBLE = 0x1, ///< task is interruptible
+    TASK_ATTRIBUTE_NONE                   = 0x0, ///< no attribute
+    TASK_ATTRIBUTE_INTERRUPTIBLE          = 0x1, ///< task is interruptible
+    TASK_ATTRIBUTE_NO_PREEMPTION          = 0x2, ///< task is not preemptable, scheduler will not preempt this task, but it can be switched by other tasks if it yields or waiting for message or interrupt
+    TASK_ATTRIBUTE_ACPI_SLEEP_TASK        = 0x4, ///< task is acpi sleep task, this task will be used for acpi sleep states, and it has special handling in scheduler
+    TASK_ATTRIBUTE_WAKEUP_FROM_ACPI_SLEEP = 0x8, ///< task is wakeup after system resumed, we should not add this task to task queues.
 } task_attribute_t; ///< short hand for enum
 
 /** @brief function prototype for custom message availability check function
@@ -139,6 +142,7 @@ typedef struct task_t {
     void*                          entry_point; ///< entry point address
     uint64_t                       arguments_count; ///< argument count
     void**                         arguments; ///< argument list
+    boolean_t                      is_stack_protected; ///< is stack protected (don't release stack frames when task is killed or ended)
     void*                          stack; ///< stack pointer
     uint64_t                       stack_size; ///< stack size of task
     list_t*                        message_queues; ///< task's listining queues.
@@ -168,6 +172,9 @@ int8_t task_init_tasking_ext(memory_heap_t* heap);
 
 /*! inits tasking with default heap*/
 #define task_init_tasking() task_init_tasking_ext(NULL)
+
+void task_set_attribute(uint64_t task_id, task_attribute_t attribute);
+void task_clear_attribute(uint64_t task_id, task_attribute_t attribute);
 
 /**
  * @brief sets task switch parameters
@@ -355,6 +362,16 @@ uint32_t task_get_task_mxcsr_mask(void);
 
 void task_sleep(uint64_t secs);
 void task_msleep(uint64_t msecs);
+
+/**
+ * @brief wakes up the task that caused acpi sleep, this function should be called in smp_init by bootstrap processor, because only bootstrap processor can wake up the sleeping processors
+ * @param[in] task task to wake up
+ * @return 0 on success, -1 on failure
+ */
+int8_t task_wake_up(task_t* task);
+
+int8_t task_broadcast_parked_but_not_myself(void);
+int8_t task_wait_for_cpus_in_parked_but_not_myself(void);
 
 int8_t task_allocate_frame_and_add_paging(uint64_t count, boolean_t is_reserved, frame_t** frame);
 

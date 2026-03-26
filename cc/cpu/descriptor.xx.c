@@ -10,6 +10,8 @@
 #include <cpu.h>
 #include <cpu/descriptor.h>
 #include <cpu/task.h>
+#include <cpu/cpu_state.h>
+#include <cpu/smp.h>
 #include <memory.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
@@ -81,6 +83,9 @@ int8_t descriptor_build_gdt_register(void){
 
     PRINTLOG(KERNEL, LOG_DEBUG, "gdt register limit: 0x%04x base: 0x%p", gdtr.limit, (void*)gdtr.base);
 
+    cpu_state->gdt_va   = gdt_va;
+    cpu_state->gdt_size = gdt_size;
+
     asm volatile ("lgdt %0\n"
                   "push $0x08\n"
                   "lea fix_gdt_jmp%=(%%rip),%%rax\n"
@@ -101,6 +106,8 @@ descriptor_register_t descriptor_get_gdt_register(void) {
     return gdtr;
 }
 
+void video_text_print(const char* str);
+
 int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
                                                 uint64_t* out_gdt_size,
                                                 uint64_t* tss_fa_location,
@@ -114,6 +121,77 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
 
         return -1;
     }
+
+    program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
+    uint64_t stack_size      = kernel->program_stack_size;
+
+    smp_data_t* smp_data = (smp_data_t*)0x9000;
+
+    if(smp_data->is_for_wakeup) {
+        uint16_t idt_size = sizeof(descriptor_idt_t) * 256;
+
+        descriptor_register_t idt_register = {
+            .limit = idt_size - 1,
+            .base  = IDT_BASE_ADDRESS
+        };
+
+        asm volatile ("lidt %0\n" : : "m" (idt_register));
+
+        uint64_t gdt_fa_size = cpu_state->gdt_size + (FRAME_SIZE - (cpu_state->gdt_size % FRAME_SIZE));
+        uint64_t gdt_va      = cpu_state->gdt_va;
+
+        *gdt_fa_location = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(gdt_va);
+        *out_gdt_size    = gdt_fa_size;
+
+        *tss_fa_location = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(cpu_state->tss_va);
+        *out_tss_size    = cpu_state->tss_size;
+
+        tss_t* tss = (tss_t*)cpu_state->tss_va;
+
+        uint64_t stack_bottom = tss->ist7 - stack_size + 0x10;
+
+        *stack_bottom_fa_location = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_bottom);
+        *out_stack_size           = stack_size * 10;
+
+        descriptor_register_t gdtr = {
+            .limit = cpu_state->gdt_size - 1,
+            .base  = (size_t)cpu_state->gdt_va
+        };
+
+        asm volatile ("lgdt (%%rax)\n"
+                      "push $0x08\n"
+                      "lea fix_gdt_jmp%=(%%rip),%%rax\n"
+                      "push %%rax\n"
+                      "lretq\n"
+                      "fix_gdt_jmp%=:"
+                      "mov $0x10, %%rax\n"
+                      "mov %%ax, %%ss\n"
+                      : : "a" (&gdtr));
+
+        descriptor_tss_t* d_tss = (descriptor_tss_t*)(cpu_state->gdt_va + 3 * sizeof(descriptor_gdt_t));
+
+        d_tss->type = SYSTEM_SEGMENT_TYPE_TSS_A; // make tss avail, before sleep it was set to busy, so that cpu will not try to use it before we set it up
+
+        uint16_t tss_selector = cpu_state->tss_selector;
+
+        asm volatile (
+            "ltr %0\n"
+            : : "r" (tss_selector)
+            );
+
+        asm volatile ("pause\n" : : : "memory");
+
+        return 0;
+    }
+
+    uint16_t idt_size = sizeof(descriptor_idt_t) * 256;
+
+    descriptor_register_t idt_register = {
+        .limit = idt_size - 1,
+        .base  = IDT_BASE_ADDRESS
+    };
+
+    asm volatile ("lidt %0\n" : : "m" (idt_register));
 
     frame_allocator_t* fa = frame_get_allocator();
 
@@ -168,6 +246,9 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
         .base  = (size_t)gdts
     };
 
+    cpu_state->gdt_va   = gdt_va;
+    cpu_state->gdt_size = gdt_size;
+
     asm volatile ("lgdt (%%rax)\n"
                   "push $0x08\n"
                   "lea fix_gdt_jmp%=(%%rip),%%rax\n"
@@ -177,10 +258,6 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
                   "mov $0x10, %%rax\n"
                   "mov %%ax, %%ss\n"
                   : : "a" (&gdtr));
-
-
-    program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
-    uint64_t stack_size      = kernel->program_stack_size;
 
 
     uint64_t frame_count = 10 * stack_size / FRAME_SIZE;
@@ -267,6 +344,10 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
     uint32_t tss_limit = sizeof(tss_t) - 1;
     DESCRIPTOR_BUILD_TSS_SEG(d_tss, (size_t)tss, tss_limit, DPL_KERNEL);
 
+    cpu_state->tss_va       = tss_va;
+    cpu_state->tss_size     = tss_size;
+    cpu_state->tss_selector = tss_selector;
+
     asm volatile (
         "ltr %0\n"
         : : "r" (tss_selector)
@@ -285,14 +366,6 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
 }
 
 int8_t descriptor_build_idt_register(void){
-    frame_allocator_t* fa = frame_get_allocator();
-
-    if(!fa) {
-        PRINTLOG(KERNEL, LOG_ERROR, "frame allocator is null");
-
-        return -1;
-    }
-
     uint16_t idt_size = sizeof(descriptor_idt_t) * 256;
 
     frame_t idt_frame = {IDT_BASE_ADDRESS, (idt_size + FRAME_SIZE - 1) / FRAME_SIZE, FRAME_TYPE_RESERVED, 0};

@@ -12,6 +12,7 @@
 #include <cpu/task.h>
 #include <cpu/crx.h>
 #include <cpu/sync.h>
+#include <cpu/smp.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <list.h>
@@ -56,8 +57,6 @@ extern buffer_t* stdbufs_default_error_buffer;
 
 hashmap_t* task_map = NULL;
 
-static volatile boolean_t task_tasking_initialized = false;
-
 static uint64_t task_next_task_id     = 0;
 static lock_t* task_next_task_id_lock = NULL;
 
@@ -97,11 +96,74 @@ static int8_t task_sleep_queue_comparator(const void* item1, const void* item2) 
 }
 
 task_t* task_get_current_task(void){
-    if(!task_tasking_initialized) {
-        return NULL;
+    return (task_t*)cpu_state->current_task;
+}
+
+int8_t task_broadcast_parked_but_not_myself(void) {
+    uint64_t cpu_state_size = SYSTEM_INFO->gs_page_size / SYSTEM_INFO->cpu_count;
+
+    for(uint32_t i = 0; i < SYSTEM_INFO->cpu_count; i++) {
+        cpu_state_t* other_cpu_state = (cpu_state_t*)(void*)(SYSTEM_INFO->gs_page_address_base + i * cpu_state_size);
+
+        if(other_cpu_state->local_apic_id == cpu_state->local_apic_id) {
+            continue;
+        }
+
+        other_cpu_state->parked = true;
     }
 
-    return (task_t*)cpu_state->current_task;
+    return 0;
+}
+
+int8_t task_wait_for_cpus_in_parked_but_not_myself(void) {
+    uint64_t cpu_state_size = SYSTEM_INFO->gs_page_size / SYSTEM_INFO->cpu_count;
+
+    while(true) {
+        bool all_parked = true;
+
+        for(uint32_t i = 0; i < SYSTEM_INFO->cpu_count; i++) {
+            cpu_state_t* other_cpu_state = (cpu_state_t*)(void*)(SYSTEM_INFO->gs_page_address_base + i * cpu_state_size);
+
+            if(other_cpu_state->local_apic_id == cpu_state->local_apic_id) {
+                continue;
+            }
+
+            if(!other_cpu_state->in_parked_state) {
+                all_parked = false;
+                break;
+            }
+        }
+
+        if(all_parked) {
+            break;
+        }
+
+        cpu_idle();
+    }
+
+    return 0;
+}
+
+int8_t task_wake_up(task_t* task) {
+    if(task == NULL) {
+        return -1;
+    }
+
+    task->state       = TASK_STATE_SUSPENDED;
+    task->attributes &= ~TASK_ATTRIBUTE_WAKEUP_FROM_ACPI_SLEEP;
+    task->wake_tick   = 0; // immediate wake up
+
+    list_t* task_queue = task_sleep_queues[cpu_state->local_apic_id];
+
+    if(task_queue == NULL) {
+        return -1;
+    }
+
+    if(list_sortedlist_insert(task_queue, task) == -1ULL) {
+        return -1;
+    }
+
+    return 0;
 }
 
 __attribute__((naked, no_stack_protector, noinline))
@@ -245,31 +307,35 @@ static void task_cleanup_task(task_t* task) {
 
     hashmap_delete(task_map, (void*)task->task_id);
 
-    uint64_t stack_va = (uint64_t)task->stack;
-    uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
+    if(!task->is_stack_protected) {
+        uint64_t stack_va = (uint64_t)task->stack;
+        uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
 
-    uint64_t stack_size       = task->stack_size;
-    uint64_t stack_frames_cnt = stack_size / FRAME_SIZE;
+        uint64_t stack_size       = task->stack_size;
+        uint64_t stack_frames_cnt = stack_size / FRAME_SIZE;
 
-    memory_memclean(task->stack, stack_size);
+        memory_memclean(task->stack, stack_size);
 
-    frame_t stack_frames = {.frame_address = stack_fa, .frame_count = stack_frames_cnt};
+        frame_t stack_frames = {.frame_address = stack_fa, .frame_count = stack_frames_cnt};
 
-    PRINTLOG(TASKING, LOG_TRACE, "stack frames 0x%llx with count 0x%llx releasing for task %s", stack_fa, stack_frames_cnt, task->task_name);
+        PRINTLOG(TASKING, LOG_TRACE, "stack frames 0x%llx with count 0x%llx releasing for task %s", stack_fa, stack_frames_cnt, task->task_name);
 
-    if(memory_paging_delete_va_for_frame_ext(task->page_table, stack_va, &stack_frames) != 0 ) {
-        PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", stack_va);
+        if(memory_paging_delete_va_for_frame_ext(task->page_table, stack_va, &stack_frames) != 0 ) {
+            PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", stack_va);
 
-        cpu_hlt();
+            cpu_hlt();
+        }
+
+        if(fa->release_frame(fa, &stack_frames) != 0) {
+            PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx", stack_fa, stack_frames_cnt);
+
+            cpu_hlt();
+        }
+
+        PRINTLOG(TASKING, LOG_TRACE, "stack frames 0x%llx with count 0x%llx released for task %s", stack_fa, stack_frames_cnt, task->task_name);
+    } else {
+        memory_memclean(task->stack, task->stack_size);
     }
-
-    if(fa->release_frame(fa, &stack_frames) != 0) {
-        PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx", stack_fa, stack_frames_cnt);
-
-        cpu_hlt();
-    }
-
-    PRINTLOG(TASKING, LOG_TRACE, "stack frames 0x%llx with count 0x%llx released for task %s", stack_fa, stack_frames_cnt, task->task_name);
 
     if(task->heap != memory_get_default_heap() && task->heap != task_map_heap) {
         uint64_t heap_va = (uint64_t)task->heap;
@@ -295,7 +361,7 @@ static void task_cleanup_task(task_t* task) {
         }
 
         if(fa->release_frame(fa, &heap_frames) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "cannot release heap with frames at 0x%llx with count 0x%llx", stack_fa, heap_frames_cnt);
+            PRINTLOG(TASKING, LOG_ERROR, "cannot release heap with frames at 0x%llx with count 0x%llx", heap_fa, heap_frames_cnt);
 
             cpu_hlt();
         }
@@ -367,13 +433,19 @@ static int8_t task_cleaner_task(void){
         task_yield();
     }
 
+    PRINTLOG(TASKING, LOG_ERROR, "task cleaner task exiting unexpectedly");
+
     return 0;
 }
 
 static task_t* task_find_next_task(void) {
     task_t* tmp_task = NULL;
 
-    if(list_size(cpu_state->task_sleep_queue)) {
+    if(cpu_state->current_task->attributes & TASK_ATTRIBUTE_NO_PREEMPTION) {
+        return cpu_state->current_task;
+    }
+
+    if(!tmp_task && list_size(cpu_state->task_sleep_queue)) {
         for(uint64_t i = 0; i < list_size(cpu_state->task_sleep_queue); i++) {
             task_t* t = (task_t*)list_get_data_at_position(cpu_state->task_sleep_queue, i);
 
@@ -465,12 +537,28 @@ static task_t* task_find_next_task(void) {
         }
     }
 
-    if(!tmp_task && list_size(cpu_state->task_cleanup_queue)) {
-        tmp_task = cpu_state->cleaner_task;
-    }
+    static boolean_t cleaner_task_alternate_flag = false;
 
-    if(!tmp_task && list_size(cpu_state->task_queue)) {
-        tmp_task = (task_t*)list_queue_pop(cpu_state->task_queue);
+    if(cleaner_task_alternate_flag) {
+        cleaner_task_alternate_flag = false;
+
+        if(!tmp_task && list_size(cpu_state->task_queue)) {
+            tmp_task = (task_t*)list_queue_pop(cpu_state->task_queue);
+        }
+
+        if(!tmp_task && list_size(cpu_state->task_cleanup_queue)) {
+            tmp_task = cpu_state->cleaner_task;
+        }
+    } else {
+        cleaner_task_alternate_flag = true;
+
+        if(!tmp_task && list_size(cpu_state->task_cleanup_queue)) {
+            tmp_task = cpu_state->cleaner_task;
+        }
+
+        if(!tmp_task && list_size(cpu_state->task_queue)) {
+            tmp_task = (task_t*)list_queue_pop(cpu_state->task_queue);
+        }
     }
 
     if(!tmp_task) {
@@ -507,13 +595,23 @@ void task_task_switch_exit(void) {
 
 static char_t task_switch_task_id_buf[100] = {0};
 
+__attribute__((noinline))
+static boolean_t task_is_speacial_task(task_t* task) {
+    return task == cpu_state->idle_task ||
+           task == cpu_state->cleaner_task ||
+           task->attributes & TASK_ATTRIBUTE_NO_PREEMPTION ||
+           task->attributes & TASK_ATTRIBUTE_ACPI_SLEEP_TASK ||
+           task->attributes & TASK_ATTRIBUTE_WAKEUP_FROM_ACPI_SLEEP;
+}
+
 __attribute__((no_stack_protector))
 void task_switch_task(void) {
     task_t* current_task = cpu_state->current_task;
 
     uint64_t current_tick = rdtsc();
 
-    if(current_task != cpu_state->idle_task &&
+    if(!cpu_state->parked &&
+       current_task != cpu_state->idle_task &&
        current_task->state == TASK_STATE_RUNNING &&
        (current_tick - current_task->last_tick_count) < task_max_tick_count_limit &&
        current_tick > current_task->last_tick_count) {
@@ -541,7 +639,7 @@ void task_switch_task(void) {
         current_task->state = TASK_STATE_SUSPENDED;
     }
 
-    boolean_t special_task = current_task == cpu_state->idle_task || current_task == cpu_state->cleaner_task;
+    boolean_t special_task = task_is_speacial_task(current_task);
 
     if(!special_task) {
         switch(current_task->state) {
@@ -559,6 +657,12 @@ void task_switch_task(void) {
             list_queue_push(cpu_state->task_wait_queue, current_task);
             break;
         }
+    }
+
+    while(cpu_state->parked) {
+        cpu_state->in_parked_state = true;
+        asm volatile ("wbinvd" ::: "memory"); // ensure all memory operations are completed before checking parked state again
+        cpu_hlt();
     }
 
     current_task                  = task_find_next_task();
@@ -645,7 +749,13 @@ void task_end_task(void) {
         ret = current_task->exit_code;
     }
 
-    PRINTLOG(TASKING, LOG_INFO, "ending task 0x%llx return code 0x%llx on cpu 0x%llx",
+    logging_level_t log_level = LOG_INFO;
+
+    if(ret != 0) {
+        log_level = LOG_ERROR;
+    }
+
+    PRINTLOG(TASKING, log_level, "ending task 0x%llx return code 0x%llx on cpu 0x%llx",
              current_task->task_id, ret, cpu_state->local_apic_id);
 
     current_task->state = TASK_STATE_ENDED;
@@ -1078,7 +1188,7 @@ static int8_t task_create_cleaner_task(void) {
 #pragma GCC diagnostic pop
 
 void task_yield(void) {
-    if(!task_tasking_initialized || !cpu_state->tasking_enabled) {
+    if(!cpu_state->tasking_enabled) {
         return;
     }
 
@@ -1202,8 +1312,6 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     PRINTLOG(TASKING, LOG_TRACE, "tss selector 0x%x",  tss_selector);
 
-
-
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
     uint64_t stack_size      = kernel->program_stack_size;
     uint64_t stack_top       = kernel->program_stack_virtual_address;
@@ -1222,13 +1330,38 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     uint64_t stack_bottom = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
 
-    tss_t* tss = memory_malloc_ext(heap, sizeof(tss_t), 0x1000);
+    uint64_t tss_size = sizeof(tss_t);
+    tss_size += 0x1000 - (tss_size % 0x1000);
 
-    if(tss == NULL) {
-        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for tss");
+    frame_t* tss_fa = NULL;
+
+    if(fa->allocate_frame_by_count(fa,
+                                   tss_size / FRAME_SIZE,
+                                   FRAME_ALLOCATION_TYPE_BLOCK,
+                                   &tss_fa, NULL) != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate frames for tss");
 
         return -1;
     }
+
+    uint64_t tss_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tss_fa->frame_address);
+
+    if(memory_paging_add_va_for_frame(tss_va, tss_fa, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot add va for tss frame");
+
+        fa->release_frame(fa, tss_fa);
+        fa->release_frame(fa, stack_frames);
+
+        return -1;
+    }
+
+    memory_memclean((void*)tss_va, tss_size);
+
+    tss_t* tss = (tss_t*)tss_va;
+
+    cpu_state->tss_va       = tss_va;
+    cpu_state->tss_size     = tss_size;
+    cpu_state->tss_selector = tss_selector;
 
     if(memory_paging_add_va_for_frame(stack_bottom, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_bottom, stack_frames->frame_address, stack_frames->frame_count);
@@ -1482,8 +1615,9 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     future_task_wait_toggler_func = &task_toggle_wait_for_future;
 
-    task_tasking_initialized   = true;
     cpu_state->tasking_enabled = true;
+    cpu_state->parked          = false;
+    cpu_state->in_parked_state = false;
 
     return 0;
 }
@@ -1494,6 +1628,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, uint64_t stack_size) {
     memory_heap_t* heap      = task_map_heap;
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
+    smp_data_t* smp_data     = (smp_data_t*)0x9000;
 
     uint32_t apic_id = cpu_state->local_apic_id;
 
@@ -1524,7 +1659,13 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     current_task->cpu_id = apic_id;
 
-    char_t* tmp_task_name = strprintf("%s-%lli", "kernel-init", current_task->cpu_id);
+    char_t* tmp_task_name = NULL;
+
+    if(!smp_data->is_for_wakeup) {
+        tmp_task_name = strprintf("%s-%d", "kernel-init", apic_id);
+    } else {
+        tmp_task_name = strprintf("%s-%lli-%d", "kernel-wakeup", smp_data->wakeup_count, apic_id);
+    }
 
     current_task->task_name = strdup_at_heap(heap, tmp_task_name);
 
@@ -1559,14 +1700,23 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     spool_add(current_task->task_name, 3, current_task->input_buffer, current_task->output_buffer, current_task->error_buffer);
 
-    current_task->stack      = (void*)stack_base;
-    current_task->stack_size = stack_size;
+    current_task->is_stack_protected = true;
+    current_task->stack              = (void*)stack_base;
+    current_task->stack_size         = stack_size;
 
     task_save_registers(current_task->registers);
 
     cpu_state->current_task = current_task;
 
     hashmap_put(task_map, (void*)current_task->task_id, current_task);
+
+    if(smp_data->is_for_wakeup) {
+        cpu_state->tasking_enabled = true;
+        cpu_state->parked          = false;
+        cpu_state->in_parked_state = false;
+
+        return 0;
+    }
 
     if(task_create_idle_task() != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot create idle task");

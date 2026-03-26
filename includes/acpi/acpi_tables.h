@@ -132,16 +132,45 @@ typedef struct acpi_table_fadt_t {
     acpi_generic_address_structure_t gpe1_block_address_64bit;
 }__attribute__((packed)) acpi_table_fadt_t;
 
-typedef struct acpi_pm1_control_register_t {
-    uint16_t sci_enable   : 1;
-    uint16_t bm_rld       : 1;
-    uint16_t gbl_rls      : 1;
-    uint16_t reserved0    : 6;
-    uint16_t ignored      : 1;
-    uint16_t sleep_type   : 3;
-    uint16_t sleep_enable : 1;
-    uint16_t reserved1    : 2;
+typedef union acpi_pm1_control_register_t {
+    struct {
+        uint16_t sci_enable   : 1;
+        uint16_t bm_rld       : 1;
+        uint16_t gbl_rls      : 1;
+        uint16_t reserved0    : 6;
+        uint16_t ignored      : 1;
+        uint16_t sleep_type   : 3;
+        uint16_t sleep_enable : 1;
+        uint16_t reserved1    : 2;
+
+    }__attribute__((packed));
+    uint16_t value;
 }__attribute__((packed)) acpi_pm1_control_register_t;
+
+_Static_assert(sizeof(acpi_pm1_control_register_t) == sizeof(uint16_t), "acpi_pm1_control_register_t size must be 2 bytes");
+
+typedef enum acpi_facs_feature_flags_t : uint32_t {
+    ACPI_FACS_FEATURE_FLAG_S4BIOS_SUPPORT       = 1 << 0,
+    ACPI_FACS_FEATURE_FLAG_64BIT_WAKE_SUPPORTED = 1 << 1,
+} acpi_facs_feature_flags_t;
+
+typedef enum acpi_facs_ospm_flags_t : uint32_t {
+    ACPI_FACS_OSPM_FLAG_64BIT_WAKE = 1 << 0,
+} acpi_facs_ospm_flags_t;
+
+typedef struct acpi_table_facs_t {
+    char_t                    signature[4];
+    uint32_t                  length;
+    uint32_t                  hardware_signature;
+    uint32_t                  firmware_waking_vector;
+    uint32_t                  global_lock;
+    acpi_facs_feature_flags_t flags;
+    uint64_t                  x_firmware_waking_vector;
+    uint8_t                   version;
+    uint8_t                   reserved1[3];
+    acpi_facs_ospm_flags_t    ospm_flags;
+    uint8_t                   reserved2[24];
+}__attribute__((packed)) acpi_table_facs_t;
 
 typedef enum acpi_madt_entry_type_t {
     ACPI_MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS          = 0xFF,

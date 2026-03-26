@@ -15,6 +15,7 @@
 #include <cpu/crx.h>
 #include <cpu/descriptor.h>
 #include <memory/paging.h>
+#include <cpu/task.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,6 +29,9 @@ typedef struct smp_data_t {
     cpu_reg_cr4_t        cr4;
     uint64_t             gs_base;
     uint64_t             gs_base_size;
+    boolean_t            is_for_wakeup;
+    uint64_t             wakeup_count;
+    task_t*              wakeup_task;
 } smp_data_t;
 
 

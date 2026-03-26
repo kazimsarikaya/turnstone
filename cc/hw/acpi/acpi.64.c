@@ -18,6 +18,9 @@
 #include <systeminfo.h>
 #include <list.h>
 #include <cpu.h>
+#include <cpu/smp.h>
+#include <cpu/task.h>
+#include <cpu/cpu_state.h>
 #include <strings.h>
 #include <pci.h>
 #include <time.h>
@@ -43,6 +46,106 @@ int8_t acpi_reset(void){
     }
 
     return acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, ACPI_CONTEXT->fadt->reset_value, ACPI_RESET_REGISTER);
+}
+
+static int8_t acpi_sleep_task(int64_t argc, void** argv) {
+    UNUSED(argc);
+
+    task_set_attribute(task_get_id(), TASK_ATTRIBUTE_ACPI_SLEEP_TASK | TASK_ATTRIBUTE_NO_PREEMPTION);
+
+    task_broadcast_parked_but_not_myself();
+    task_wait_for_cpus_in_parked_but_not_myself();
+
+    PRINTLOG(ACPI, LOG_INFO, "all cpus parked, going to sleep");
+
+    uint16_t reg_val = (uint16_t)(uintptr_t)argv;
+
+    PRINTLOG(ACPI, LOG_TRACE, "writing pm1a 0x%x", reg_val);
+
+    asm volatile ("wbinvd\n");
+
+    if(acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, reg_val, ACPI_PM1A_CONTROL_REGISTER) != 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "Cannot write pm1a");
+
+        smp_data_t* smp_data = (smp_data_t*)0x9000;
+        smp_data->is_for_wakeup = false;
+        smp_data->wakeup_count--;
+
+        return -1;
+    }
+
+    return -1;
+}
+
+int8_t acpi_sleep(void) {
+    if(ACPI_CONTEXT == NULL) {
+        PRINTLOG(ACPI, LOG_ERROR, "acpi context null");
+        return -1;
+    }
+
+    if(ACPI_CONTEXT->acpi_parser_context == NULL) {
+        PRINTLOG(ACPI, LOG_ERROR, "acpi parser context null");
+        return -1;
+    }
+
+    acpi_aml_object_t* s3 = acpi_aml_symbol_lookup(ACPI_CONTEXT->acpi_parser_context, "\\_S3_");
+
+    if(s3 == NULL) {
+        PRINTLOG(ACPI, LOG_ERROR, "No s3 state");
+        return -1;
+    }
+
+    if(s3->type != ACPI_AML_OT_PACKAGE) {
+        PRINTLOG(ACPI, LOG_ERROR, "s3 wrong object type: %i", s3->type);
+        return -1;
+    }
+
+    const acpi_aml_object_t* slp_type_a = list_get_data_at_position(s3->package.elements, 0);
+
+    if(slp_type_a == NULL) {
+        PRINTLOG(ACPI, LOG_ERROR, "s3 sleep type a is null");
+        return -1;
+    }
+
+    int64_t slp_type_a_val = 0;
+
+    if(acpi_aml_read_as_integer(ACPI_CONTEXT->acpi_parser_context, slp_type_a, &slp_type_a_val) != 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "Cannot obtain s3 sleep type");
+        return -1;
+    }
+
+    acpi_pm1_control_register_t reg = {0};
+
+    reg.sleep_enable = 1;
+    reg.sleep_type   = slp_type_a_val;
+
+    uint16_t reg_val = reg.value;
+
+    smp_data_t* smp_data = (smp_data_t*)0x9000;
+
+    smp_data->is_for_wakeup = true;
+    smp_data->wakeup_count++;
+    smp_data->wakeup_task = task_get_current_task();
+
+    task_set_attribute(task_get_id(), TASK_ATTRIBUTE_WAKEUP_FROM_ACPI_SLEEP);
+
+    memory_heap_t* heap = memory_get_default_heap();
+
+    if(task_create_task(heap, 1 << 20, 64 << 10, acpi_sleep_task, 1, (void**)(uintptr_t)reg_val, "acpi_sleep_task") == -1ULL) {
+        PRINTLOG(ACPI, LOG_ERROR, "cannot create acpi sleep task");
+        smp_data->is_for_wakeup = false;
+        smp_data->wakeup_count--;
+
+        return -1;
+    }
+
+    while(smp_data->is_for_wakeup) {
+        task_msleep(10);
+    }
+
+    PRINTLOG(ACPI, LOG_INFO, "acpi system resumed from sleep");
+
+    return 0;
 }
 
 int8_t acpi_poweroff(void){
@@ -82,32 +185,26 @@ int8_t acpi_poweroff(void){
 
                 PRINTLOG(ACPI, LOG_DEBUG, "acpi poweroff started");
 
-                acpi_pm1_control_register_t* reg = memory_malloc(sizeof(acpi_pm1_control_register_t));
+                acpi_pm1_control_register_t reg = {0};
 
-                if(reg == NULL) {
-                    return -1;
-                }
+                reg.sleep_enable = 1;
+                reg.sleep_type   = slp_type_a_val;
 
-                reg->sleep_enable = 1;
-                reg->sleep_type   = slp_type_a_val;
-
-                uint16_t reg_val = *((uint16_t*)(void*)reg);
+                uint16_t reg_val = reg.value;
 
                 PRINTLOG(ACPI, LOG_TRACE, "writing pm1a 0x%x", reg_val);
 
                 if(acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, reg_val, ACPI_PM1A_CONTROL_REGISTER) != 0) {
                     PRINTLOG(ACPI, LOG_ERROR, "Cannot write pm1a");
-                    memory_free(reg);
                 } else {
                     if(ACPI_PM1B_CONTROL_REGISTER) {
-                        reg->sleep_type = slp_type_b_val;
-                        reg_val         = *((uint16_t*)(void*)reg);
+                        reg.sleep_type = slp_type_b_val;
+                        reg_val        = *((uint16_t*)(void*)&reg);
 
                         PRINTLOG(ACPI, LOG_TRACE, "writing pm1b 0x%x", reg_val);
 
                         if(acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, reg_val, ACPI_PM1B_CONTROL_REGISTER) != 0) {
                             PRINTLOG(ACPI, LOG_ERROR, "Cannot write pm1b");
-                            memory_free(reg);
                         } else {
                             cpu_hlt();
                         }
@@ -237,6 +334,59 @@ static int8_t acpi_pm_configure_timer(void) {
 
 }
 
+static int8_t acpi_configure_sleep(void) {
+    if(ACPI_CONTEXT == NULL) {
+        PRINTLOG(ACPI, LOG_ERROR, "acpi context null");
+        return -1;
+    }
+
+    uintptr_t facs_fa = ACPI_CONTEXT->fadt->firmare_control_address_64bit?(uintptr_t)ACPI_CONTEXT->fadt->firmare_control_address_64bit:ACPI_CONTEXT->fadt->firmare_control_address_32bit;
+    uintptr_t facs_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(facs_fa);
+
+    PRINTLOG(ACPI, LOG_INFO, "facs fa 0x%llx va 0x%llx", facs_fa, facs_va);
+
+    frame_t facs_frame = {.frame_address = facs_fa, .frame_count = 0x1};
+
+    if(memory_paging_add_va_for_frame(facs_va, &facs_frame, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "cannot map facs table");
+        return -1;
+    }
+
+    acpi_table_facs_t* facs = (acpi_table_facs_t*)facs_va;
+
+    if(!facs) {
+        PRINTLOG(ACPI, LOG_ERROR, "facs table not found");
+        return -1;
+    }
+
+    if(strncmp(facs->signature, "FACS", 4) != 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "facs signature invalid");
+        return -1;
+    }
+
+    if(facs->version != 2) {
+        PRINTLOG(ACPI, LOG_WARNING, "facs version is not 2.");
+    }
+
+    if(facs->flags & ACPI_FACS_FEATURE_FLAG_S4BIOS_SUPPORT) {
+        PRINTLOG(ACPI, LOG_DEBUG, "s4bios flag is set.");
+    }
+
+    if(facs->flags & ACPI_FACS_FEATURE_FLAG_64BIT_WAKE_SUPPORTED) {
+        PRINTLOG(ACPI, LOG_DEBUG, "64 bit wakeup supported.");
+    }
+
+    facs->firmware_waking_vector = (uint32_t)0x8000;
+    // NOTE: don't trust this field. Always set it to 0.
+    // and wakeup from real mode.
+    facs->x_firmware_waking_vector = (uint64_t)0;
+
+    PRINTLOG(ACPI, LOG_INFO, "32 bit wakeup vector is set to 0x%x", facs->firmware_waking_vector);
+    PRINTLOG(ACPI, LOG_DEBUG, "64 bit wakeup vector is set to 0x%llx", facs->x_firmware_waking_vector);
+
+    return 0;
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
@@ -325,6 +475,11 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
     if(!acpi_enabled) {
         PRINTLOG(ACPI, LOG_ERROR, "cannot enable acpi");
+        return -1;
+    }
+
+    if(acpi_configure_sleep() != 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "cannot configure sleep");
         return -1;
     }
 

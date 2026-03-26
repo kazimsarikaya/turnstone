@@ -209,12 +209,18 @@ int8_t smp_init(void) {
     return 0;
 }
 
+extern boolean_t GRAPHICS_MODE;
+
 int32_t smp_ap_boot(uint8_t cpu_id) {
     cpu_cli();
 
     cpu_enable_sse();
 
     smp_data_t* smp_data = (smp_data_t*)0x9000;
+
+    if(smp_data->is_for_wakeup) {
+        GRAPHICS_MODE = false; // we need to set this after init devices.
+    }
 
     uint64_t gs_base = smp_data->gs_base;
     gs_base += cpu_id * smp_data->gs_base_size;
@@ -223,8 +229,13 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
     asm volatile ("swapgs\n");
     cpu_write_msr(CPU_MSR_IA32_GS_BASE, gs_base);
 
-    uint64_t stack_base = smp_data->stack_base;
-    stack_base += cpu_id * smp_data->stack_size;
+    if(smp_data->is_for_wakeup &&
+       cpu_state->current_task &&
+       cpu_state->current_task->attributes & TASK_ATTRIBUTE_ACPI_SLEEP_TASK) {
+        cpu_state->current_task->state = TASK_STATE_ENDED;
+        list_queue_push(cpu_state->task_cleanup_queue, cpu_state->current_task);
+        cpu_state->current_task = NULL;
+    }
 
     apic_enable_lapic();
 
@@ -236,6 +247,9 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
         return -1;
     }
+
+    uint64_t stack_base = smp_data->stack_base;
+    stack_base += cpu_id * smp_data->stack_size;
 
     uint64_t gdt_fa_location;
     uint64_t out_gdt_size;
@@ -257,7 +271,8 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     task_set_current_and_idle_task(smp_ap_boot, stack_base, smp_data->stack_size);
 
-    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booting local apic id %i", cpu_id, local_apic_id);
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booting local apic id %i is wakeup? %s",
+             cpu_id, local_apic_id, smp_data->is_for_wakeup ? "yes" : "no");
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Stack Base: 0x%llx Stack Size: 0x%llx", cpu_id, stack_base, smp_data->stack_size);
 
     char_t * test_data = memory_malloc(sizeof(char_t*) * 32);
@@ -276,13 +291,39 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     syscall_init();
 
-    if(hypervisor_init() != 0) {
+    if(hypervisor_init(smp_data->is_for_wakeup) != 0) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor.");
 
         cpu_hlt();
     }
 
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i init done", cpu_id);
+
+    if(smp_data->is_for_wakeup) {
+        task_t* wakeup_task = smp_data->wakeup_task;
+        smp_data->wakeup_task = NULL;
+
+        if(wakeup_task) {
+            if(task_wake_up(wakeup_task) != 0) {
+                PRINTLOG(KERNEL, LOG_ERROR, "cannot schedule to wake up task with id 0x%llx on cpu %lli by AP %i", wakeup_task->task_id, wakeup_task->cpu_id, cpu_id);
+
+                cpu_hlt();
+            }
+
+            PRINTLOG(KERNEL, LOG_INFO, "AP %i woke up task with id 0x%llx on cpu %lli", cpu_id, wakeup_task->task_id, wakeup_task->cpu_id);
+        }
+
+        // TODO: we need handle ap init properly then set this.
+        smp_data->is_for_wakeup = false;
+
+        cpu_sti();
+
+        task_exit(0);
+
+        PRINTLOG(KERNEL, LOG_ERROR, "we should never reach here after task exit");
+
+        return 0;
+    }
 
     cpu_sti();
 

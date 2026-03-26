@@ -20,6 +20,7 @@
 #include <cpu/descriptor.h>
 #include <cpu/task.h>
 #include <cpu/sync.h>
+#include <cpu/cpu_state.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <logging.h>
@@ -191,8 +192,8 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
 
     uint32_t task_mxcsr_mask = task_get_task_mxcsr_mask();
 
-    *(uint16_t*)&registers->avx512f[0]  = 0x37F;
-    *(uint32_t*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
+    *(uint16_t*)(void*)&registers->avx512f[0]  = 0x37F;
+    *(uint32_t*)(void*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcb_frame_fa);
 
@@ -213,7 +214,7 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
     return 0;
 }
 
-static int8_t hypervisor_init_intel(void) {
+static int8_t hypervisor_init_intel(boolean_t is_for_wakeup) {
     cpu_reg_cr4_t cr4;
 
     cr4 = cpu_read_cr4();
@@ -247,13 +248,25 @@ static int8_t hypervisor_init_intel(void) {
 
     cpu_write_cr4(cr4);
 
-    frame_t* vmxon_frame = NULL;
+    uint64_t vmxon_frame_fa;
+    uint64_t vmxon_frame_va;
 
-    uint64_t vmxon_frame_va = hypervisor_allocate_region(&vmxon_frame, FRAME_SIZE);
+    if(!is_for_wakeup) {
+        frame_t* vmxon_frame = NULL;
 
-    if(vmxon_frame_va == 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate vmxon frame");
-        return -1;
+        vmxon_frame_va = hypervisor_allocate_region(&vmxon_frame, FRAME_SIZE);
+
+        if(vmxon_frame_va == 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate vmxon frame");
+            return -1;
+        }
+
+        vmxon_frame_fa = vmxon_frame->frame_address;
+
+        cpu_state->hypervisor_helper_fa = vmxon_frame->frame_address;
+    } else {
+        vmxon_frame_fa = cpu_state->hypervisor_helper_fa;
+        vmxon_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vmxon_frame_fa);
     }
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmxon frame va: 0x%llx", vmxon_frame_va);
@@ -266,7 +279,7 @@ static int8_t hypervisor_init_intel(void) {
 
     uint8_t err = 0;
 
-    err = vmx_vmxon(vmxon_frame->frame_address);
+    err = vmx_vmxon(vmxon_frame_fa);
 
     if(err) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxon failed");
@@ -278,26 +291,38 @@ static int8_t hypervisor_init_intel(void) {
     return 0;
 }
 
-static int8_t hypervisor_init_amd(void) {
+static int8_t hypervisor_init_amd(boolean_t is_for_wakeup) {
     uint64_t msr_efer = cpu_read_msr(CPU_MSR_EFER);
     msr_efer |= 1 << 12;
     cpu_write_msr(CPU_MSR_EFER, msr_efer);
 
-    frame_t* svm_ha_frame = NULL;
+    uint64_t svm_ha_frame_fa;
+    uint64_t svm_ha_frame_va;
 
-    uint64_t svm_ha_frame_va = hypervisor_allocate_region(&svm_ha_frame, FRAME_SIZE);
+    if(!is_for_wakeup) {
+        frame_t* svm_ha_frame = NULL;
 
-    if(svm_ha_frame_va == 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate svm ha frame");
-        return -1;
+        svm_ha_frame_va = hypervisor_allocate_region(&svm_ha_frame, FRAME_SIZE);
+
+        if(svm_ha_frame_va == 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate svm ha frame");
+            return -1;
+        }
+
+        svm_ha_frame_fa = svm_ha_frame->frame_address;
+
+        cpu_state->hypervisor_helper_fa = svm_ha_frame_fa;
+    } else {
+        svm_ha_frame_fa = cpu_state->hypervisor_helper_fa;
+        svm_ha_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(svm_ha_frame_fa);
     }
 
     uint64_t old_ha = cpu_read_msr(SVM_MSR_VM_HSAVE_PA);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "old ha: 0x%llx new ha: 0x%llx", old_ha, svm_ha_frame->frame_address);
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "old ha: 0x%llx new ha: 0x%llx", old_ha, svm_ha_frame_fa);
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "svm ha frame va: 0x%llx", svm_ha_frame_va);
 
-    cpu_write_msr(SVM_MSR_VM_HSAVE_PA, svm_ha_frame->frame_address);
+    cpu_write_msr(SVM_MSR_VM_HSAVE_PA, svm_ha_frame_fa);
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "svm success");
 
@@ -305,7 +330,7 @@ static int8_t hypervisor_init_amd(void) {
 }
 
 
-int8_t hypervisor_init(void) {
+int8_t hypervisor_init(boolean_t is_for_wakeup) {
     logging_set_level(HYPERVISOR, LOG_DEBUG);
     if(hypervisor_vm_lock == NULL) { // thread safe, first creator is main thread, ap threads will soon call
         hypervisor_vm_lock = lock_create();
@@ -337,7 +362,7 @@ int8_t hypervisor_init(void) {
             return -1;
         }
 
-        if(hypervisor_init_intel() != 0) {
+        if(hypervisor_init_intel(is_for_wakeup) != 0) {
             PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot initialize intel hypervisor");
             return -1;
         }
@@ -354,7 +379,7 @@ int8_t hypervisor_init(void) {
             return -1;
         }
 
-        if(hypervisor_init_amd() != 0) {
+        if(hypervisor_init_amd(is_for_wakeup) != 0) {
             PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot initialize amd hypervisor");
             return -1;
         }

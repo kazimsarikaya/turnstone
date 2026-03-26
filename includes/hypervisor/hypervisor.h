@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-int8_t hypervisor_init(void);
+int8_t hypervisor_init(boolean_t is_for_wakeup);
 int8_t hypervisor_stop(void);
 
 int8_t hypervisor_vm_create(const char_t* entry_point_name,

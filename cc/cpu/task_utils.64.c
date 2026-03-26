@@ -49,6 +49,26 @@ uint64_t task_get_cpu_id(void) {
     return cpu_state->local_apic_id;
 }
 
+void task_set_attribute(uint64_t task_id, task_attribute_t attribute) {
+    task_t* task = (task_t*)hashmap_get(task_map, (void*)task_id);
+
+    if(task) {
+        task->attributes |= attribute;
+    } else {
+        PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", task_id);
+    }
+}
+
+void task_clear_attribute(uint64_t task_id, task_attribute_t attribute) {
+    task_t* task = (task_t*)hashmap_get(task_map, (void*)task_id);
+
+    if(task) {
+        task->attributes &= ~attribute;
+    } else {
+        PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", task_id);
+    }
+}
+
 void task_current_task_sleep(uint64_t wake_tick) {
     task_t* current_task = task_get_current_task();
 

@@ -30,6 +30,14 @@ typedef struct cpu_state_t {
     list_t*   task_wait_queue; ///< task wait list
     list_t*   task_cleanup_queue; ///< task cleanup list
     uint64_t  tick_count; ///< tick count
+    size_t    gdt_va;
+    size_t    gdt_size;
+    size_t    tss_va;
+    size_t    tss_size;
+    uint16_t  tss_selector;
+    uint64_t  hypervisor_helper_fa; // intel/amd uses 1 frame for hypervisor init.
+    boolean_t parked; // if cpu is parked, it should not be scheduled for tasks and should not be woken up.
+    boolean_t in_parked_state; // scheduler now parked.
 } cpu_state_t;
 
 extern volatile cpu_state_t __seg_gs * cpu_state;
