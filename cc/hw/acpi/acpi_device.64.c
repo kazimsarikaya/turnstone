@@ -250,7 +250,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
             if(int_no_val) {
                 acpi_aml_interrupt_map_item_t tmp_int_map_item = {addr, int_no_val};
 
-                if(list_contains(ctx->interrupt_map, &tmp_int_map_item) != 0) {
+                if(!list_contains(ctx->interrupt_map, &tmp_int_map_item)) {
                     acpi_aml_interrupt_map_item_t* int_map_item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_interrupt_map_item_t), 0);
 
                     if(int_map_item == NULL) {

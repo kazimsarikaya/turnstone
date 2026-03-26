@@ -32,7 +32,7 @@ typedef enum list_insert_delete_at_t {
     LIST_DELETE_AT_HEAD, ///< delete data from head of list
     LIST_DELETE_AT_TAIL, ///< delete data from tail of list
     LIST_DELETE_AT_FINDBY, ///< delete data from list with searching inside the list
-    LIST_DELETE_AT_POSITION ///< delete data at given position (start at 0) of list
+    LIST_DELETE_AT_POSITION, ///< delete data at given position (start at 0) of list
 }list_insert_delete_at_t;
 
 /*! insert data at anywhere of list (at tail for o(1)) */
@@ -44,13 +44,13 @@ typedef enum list_insert_delete_at_t {
  * used only information
  */
 typedef enum list_type_t {
-    LIST_TYPE_LIST = 1 << 0, ///< normal list
-    LIST_TYPE_SORTEDLIST = 1 << 1, ///< sorted list
-    LIST_TYPE_QUEUE = 1 << 2, ///< queue
-    LIST_TYPE_STACK = 1 << 3, ///< stack
+    LIST_TYPE_LIST        = 1 << 0, ///< normal list
+    LIST_TYPE_SORTEDLIST  = 1 << 1, ///< sorted list
+    LIST_TYPE_QUEUE       = 1 << 2, ///< queue
+    LIST_TYPE_STACK       = 1 << 3, ///< stack
     LIST_TYPE_INDEXEDLIST = 1 << 8, ///< indexed list
-    LIST_TYPE_LINKED = 1 << 9, ///< linked list
-    LIST_TYPE_ARRAY = 1 << 10, ///< array list
+    LIST_TYPE_LINKED      = 1 << 9, ///< linked list
+    LIST_TYPE_ARRAY       = 1 << 10, ///< array list
 }list_type_t;
 
 /**
@@ -58,7 +58,7 @@ typedef enum list_type_t {
  */
 typedef enum list_destroy_type_t {
     LIST_DESTROY_WITHOUT_DATA, ///< destroy linked list without its data
-    LIST_DESTROY_WITH_DATA ///< destroy linked list with its data
+    LIST_DESTROY_WITH_DATA, ///< destroy linked list with its data
 }list_destroy_type_t;
 
 /**
@@ -310,7 +310,7 @@ boolean_t    list_delete_list_item(list_t* list, list_item_t* item);
  */
 int8_t list_get_position(list_t* list, const void* data, size_t* position);
 
-#define list_contains(l, d)  list_get_position(l, d, NULL)
+#define list_contains(l, d)  (list_get_position(l, d, NULL) == 0)
 /**
  * @brief returns position of given data.
  * @param  list list to search

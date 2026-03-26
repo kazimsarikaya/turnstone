@@ -348,7 +348,7 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmx_vmcs_vmexit_info_t* v
 
     }
 
-    if(list_contains(vm->mapped_io_ports, (void*)port) == 0) {
+    if(list_contains(vm->mapped_io_ports, (void*)port)) {
         for(uint64_t i = 0; i < count; i++) {
             if(direction == 0) {
                 if(is_string) {
@@ -357,9 +357,9 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmx_vmcs_vmexit_info_t* v
                     if(size == 1) {
                         data = data_ptr[0];
                     } else if(size == 2) {
-                        data = *((uint16_t*)data_ptr);
+                        data = *((uint16_t*)(void*)data_ptr);
                     } else {
-                        data = *((uint32_t*)data_ptr);
+                        data = *((uint32_t*)(void*)data_ptr);
                     }
 
                     if(decrement) {
@@ -394,9 +394,9 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmx_vmcs_vmexit_info_t* v
                     if(size == 1) {
                         data_ptr[0] = value;
                     } else if(size == 2) {
-                        *((uint16_t*)data_ptr) = value;
+                        *((uint16_t*)(void*)data_ptr) = value;
                     } else {
-                        *((uint32_t*)data_ptr) = value;
+                        *((uint32_t*)(void*)data_ptr) = value;
                     }
 
                     if(decrement) {

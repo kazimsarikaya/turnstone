@@ -631,7 +631,7 @@ static int8_t hypervisor_svm_vmexit_handler_ioio(hypervisor_vm_t* vm) {
         }
     }
 
-    if(list_contains(vm->mapped_io_ports, (void*)(uint64_t)(ioio.fields.port)) == 0) {
+    if(list_contains(vm->mapped_io_ports, (void*)(uint64_t)(ioio.fields.port))) {
         for(uint64_t i = 0; i < count; i++) {
             if(ioio.fields.type == 0) {
                 if(ioio.fields.str) {

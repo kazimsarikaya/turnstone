@@ -203,7 +203,7 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, cons
 
             if(memory_memcompare(res->signature, signature, 4) == 0) {
 
-                if(old_tables && list_contains(old_tables, res) == 0) {
+                if(old_tables && list_contains(old_tables, res)) {
                     continue;
                 }
 
@@ -230,7 +230,7 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, cons
 
             if(memory_memcompare(res->signature, signature, 4) == 0) {
 
-                if(old_tables && list_contains(old_tables, res) == 0) {
+                if(old_tables && list_contains(old_tables, res)) {
                     continue;
                 }
 

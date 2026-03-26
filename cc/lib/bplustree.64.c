@@ -1509,7 +1509,7 @@ boolean_t bplustree_contains(index_t* idx, const void* key){
 
             node = (bplustree_node_internal_t*)list_get_data_at_position(node->childs, position);
         } else { // leaf node
-            if(list_contains(node->keys, key) != 0) {
+            if(!list_contains(node->keys, key)) {
                 return false;
             }
 
