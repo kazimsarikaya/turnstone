@@ -149,6 +149,26 @@ int8_t task_wake_up(task_t* task) {
         return -1;
     }
 
+    if(list_contains(task_queues[cpu_state->local_apic_id], task)) {
+        list_list_delete(task_queues[cpu_state->local_apic_id], task);
+    }
+
+    if(list_contains(task_sleep_queues[cpu_state->local_apic_id], task)) {
+        list_list_delete(task_sleep_queues[cpu_state->local_apic_id], task);
+    }
+
+    if(list_contains(task_wait_queues[cpu_state->local_apic_id], task)) {
+        list_list_delete(task_wait_queues[cpu_state->local_apic_id], task);
+    }
+
+    if(task->state == TASK_STATE_ENDED) {
+        if(!list_contains(task_cleanup_queues[cpu_state->local_apic_id], task)) {
+            list_queue_push(task_cleanup_queues[cpu_state->local_apic_id], task);
+        }
+
+        return 0;
+    }
+
     task->state       = TASK_STATE_SUSPENDED;
     task->attributes &= ~TASK_ATTRIBUTE_WAKEUP_FROM_ACPI_SLEEP;
     task->wake_tick   = 0; // immediate wake up
@@ -295,7 +315,7 @@ static void task_cleanup_task(task_t* task) {
 
     uint64_t task_task_id = task->task_id;
 
-    PRINTLOG(TASKING, LOG_DEBUG, "cleaning up task with id 0x%llx", task_task_id);
+    PRINTLOG(TASKING, LOG_INFO, "cleaning up task with id 0x%llx", task_task_id);
 
     if(task->vm) {
         hypervisor_vm_destroy(task->vm);
@@ -419,7 +439,7 @@ static void task_cleanup_task(task_t* task) {
     memory_free_ext(task->creator_heap, task->registers);
     memory_free_ext(task->creator_heap, task);
 
-    PRINTLOG(TASKING, LOG_DEBUG, "task with id 0x%llx cleaned up", task_task_id);
+    PRINTLOG(TASKING, LOG_INFO, "task with id 0x%llx cleaned up", task_task_id);
 }
 
 static int8_t task_cleaner_task(void){
@@ -600,8 +620,7 @@ static boolean_t task_is_speacial_task(task_t* task) {
     return task == cpu_state->idle_task ||
            task == cpu_state->cleaner_task ||
            task->attributes & TASK_ATTRIBUTE_NO_PREEMPTION ||
-           task->attributes & TASK_ATTRIBUTE_ACPI_SLEEP_TASK ||
-           task->attributes & TASK_ATTRIBUTE_WAKEUP_FROM_ACPI_SLEEP;
+           task->attributes & TASK_ATTRIBUTE_ACPI_SLEEP_TASK;
 }
 
 __attribute__((no_stack_protector))
@@ -918,8 +937,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     PRINTLOG(TASKING, LOG_INFO, "scheduling new task %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]",
              new_task->task_name, new_task->task_id, new_task, registers->rsp, registers->rbp, new_task->heap, new_task->heap_size);
 
-    uint64_t cpu_count    = apic_get_ap_count() + 1;
-    size_t min_queue_size = -1;
+    uint64_t cpu_count    = SYSTEM_INFO->cpu_count;
+    size_t min_queue_size = -1ULL;
     list_t* min_queue     = NULL;
 
     for(uint64_t i = 0; i < cpu_count; i++) {
@@ -932,11 +951,16 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
         }
     }
 
+    if(!min_queue) { // never happens, but just in case.
+        PRINTLOG(TASKING, LOG_ERROR, "no task queue found for new task %s 0x%llx", new_task->task_name, new_task->task_id);
+        cpu_hlt();
+    }
+
     hashmap_put(task_map, (void*)new_task->task_id, new_task);
+
+    PRINTLOG(TASKING, LOG_INFO, "task %s 0x%llx will be added to task queue on cpu 0x%llx", new_task->task_name, new_task->task_id, new_task->cpu_id);
+
     list_stack_push(min_queue, new_task);
-
-
-    PRINTLOG(TASKING, LOG_INFO, "task %s 0x%llx added to task queue on cpu 0x%llx", new_task->task_name, new_task->task_id, new_task->cpu_id);
 
     return new_task->task_id;
 }
