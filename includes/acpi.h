@@ -28,6 +28,7 @@ extern acpi_contex_t* ACPI_CONTEXT;
 int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc);
 
 int8_t acpi_sleep(void);
+int8_t acpi_hibernate(void);
 int8_t acpi_reset(void);
 int8_t acpi_poweroff(void);
 int8_t acpi_setup_events(void);

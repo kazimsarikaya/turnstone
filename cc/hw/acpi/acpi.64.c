@@ -33,6 +33,23 @@ acpi_aml_object_t* ACPI_PM1B_CONTROL_REGISTER = NULL;
 acpi_aml_object_t* ACPI_RESET_REGISTER        = NULL;
 acpi_contex_t* ACPI_CONTEXT                   = NULL;
 
+typedef enum acpi_sleep_type_t {
+    ACPI_SLEEP_TYPE_S0 = 0,
+    ACPI_SLEEP_TYPE_S1 = 1,
+    ACPI_SLEEP_TYPE_S2 = 2,
+    ACPI_SLEEP_TYPE_S3 = 3,
+    ACPI_SLEEP_TYPE_S4 = 4,
+    ACPI_SLEEP_TYPE_S5 = 5,
+} acpi_sleep_type_t;
+
+const char_t*const acpi_sleep_state_type_names[] = {
+    "\\_S0_",
+    "\\_S1_",
+    "\\_S2_",
+    "\\_S3_",
+    "\\_S4_",
+    "\\_S5_",
+};
 
 int8_t acpi_reset(void){
     if(ACPI_CONTEXT == NULL) {
@@ -51,20 +68,34 @@ int8_t acpi_reset(void){
 static int8_t acpi_sleep_task(int64_t argc, void** argv) {
     UNUSED(argc);
 
-    task_set_attribute(task_get_id(), TASK_ATTRIBUTE_ACPI_SLEEP_TASK | TASK_ATTRIBUTE_NO_PREEMPTION);
+    task_t* current_task = task_get_current_task();
+
+    task_set_attribute(current_task->task_id, TASK_ATTRIBUTE_ACPI_SLEEP_TASK | TASK_ATTRIBUTE_NO_PREEMPTION);
 
     task_broadcast_parked_but_not_myself();
     task_wait_for_cpus_in_parked_but_not_myself();
 
-    PRINTLOG(ACPI, LOG_INFO, "all cpus parked, going to sleep");
+    const char_t* sleep_type_str = "unknown";
 
-    uint16_t reg_val = (uint16_t)(uintptr_t)argv;
+    if(strcontains(current_task->task_name, "suspend")) {
+        sleep_type_str = "suspend";
+    } else if(strcontains(current_task->task_name, "hibernate")) {
+        sleep_type_str = "hibernate";
+    } else if(strcontains(current_task->task_name, "poweroff")) {
+        sleep_type_str = "poweroff";
+    }
 
-    PRINTLOG(ACPI, LOG_TRACE, "writing pm1a 0x%x", reg_val);
+    PRINTLOG(ACPI, LOG_INFO, "all cpus parked, going to %s", sleep_type_str);
+
+    uint32_t reg_val_32 = (uint32_t)(uintptr_t)argv;
+
+    uint16_t reg_val_a = (uint16_t)reg_val_32;
+    uint16_t reg_val_b = (uint16_t)(reg_val_32 >> 16);
+
 
     asm volatile ("wbinvd\n");
 
-    if(acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, reg_val, ACPI_PM1A_CONTROL_REGISTER) != 0) {
+    if(acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, reg_val_a, ACPI_PM1A_CONTROL_REGISTER) != 0) {
         PRINTLOG(ACPI, LOG_ERROR, "Cannot write pm1a");
 
         smp_data_t* smp_data = (smp_data_t*)0x9000;
@@ -72,83 +103,24 @@ static int8_t acpi_sleep_task(int64_t argc, void** argv) {
         smp_data->wakeup_count--;
 
         return -1;
+    } else {
+        if(ACPI_PM1B_CONTROL_REGISTER) {
+            if(acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, reg_val_b, ACPI_PM1B_CONTROL_REGISTER) != 0) {
+                PRINTLOG(ACPI, LOG_ERROR, "Cannot write pm1b");
+
+                smp_data_t* smp_data = (smp_data_t*)0x9000;
+                smp_data->is_for_wakeup = false;
+                smp_data->wakeup_count--;
+
+                return -1;
+            }
+        }
     }
 
     return -1;
 }
 
-int8_t acpi_sleep(void) {
-    if(ACPI_CONTEXT == NULL) {
-        PRINTLOG(ACPI, LOG_ERROR, "acpi context null");
-        return -1;
-    }
-
-    if(ACPI_CONTEXT->acpi_parser_context == NULL) {
-        PRINTLOG(ACPI, LOG_ERROR, "acpi parser context null");
-        return -1;
-    }
-
-    acpi_aml_object_t* s3 = acpi_aml_symbol_lookup(ACPI_CONTEXT->acpi_parser_context, "\\_S3_");
-
-    if(s3 == NULL) {
-        PRINTLOG(ACPI, LOG_ERROR, "No s3 state");
-        return -1;
-    }
-
-    if(s3->type != ACPI_AML_OT_PACKAGE) {
-        PRINTLOG(ACPI, LOG_ERROR, "s3 wrong object type: %i", s3->type);
-        return -1;
-    }
-
-    const acpi_aml_object_t* slp_type_a = list_get_data_at_position(s3->package.elements, 0);
-
-    if(slp_type_a == NULL) {
-        PRINTLOG(ACPI, LOG_ERROR, "s3 sleep type a is null");
-        return -1;
-    }
-
-    int64_t slp_type_a_val = 0;
-
-    if(acpi_aml_read_as_integer(ACPI_CONTEXT->acpi_parser_context, slp_type_a, &slp_type_a_val) != 0) {
-        PRINTLOG(ACPI, LOG_ERROR, "Cannot obtain s3 sleep type");
-        return -1;
-    }
-
-    acpi_pm1_control_register_t reg = {0};
-
-    reg.sleep_enable = 1;
-    reg.sleep_type   = slp_type_a_val;
-
-    uint16_t reg_val = reg.value;
-
-    smp_data_t* smp_data = (smp_data_t*)0x9000;
-
-    smp_data->is_for_wakeup = true;
-    smp_data->wakeup_count++;
-    smp_data->wakeup_task = task_get_current_task();
-
-    task_set_attribute(task_get_id(), TASK_ATTRIBUTE_WAKEUP_FROM_ACPI_SLEEP);
-
-    memory_heap_t* heap = memory_get_default_heap();
-
-    if(task_create_task(heap, 1 << 20, 64 << 10, acpi_sleep_task, 1, (void**)(uintptr_t)reg_val, "acpi_sleep_task") == -1ULL) {
-        PRINTLOG(ACPI, LOG_ERROR, "cannot create acpi sleep task");
-        smp_data->is_for_wakeup = false;
-        smp_data->wakeup_count--;
-
-        return -1;
-    }
-
-    while(smp_data->is_for_wakeup) {
-        task_msleep(10);
-    }
-
-    PRINTLOG(ACPI, LOG_INFO, "acpi system resumed from sleep");
-
-    return 0;
-}
-
-int8_t acpi_poweroff(void){
+static int8_t acpi_sleep_generic(acpi_sleep_type_t sleep_type) {
     if(ACPI_CONTEXT == NULL) {
         PRINTLOG(ACPI, LOG_ERROR, "acpi context null");
         return -1;
@@ -164,65 +136,127 @@ int8_t acpi_poweroff(void){
         return -1;
     }
 
-    acpi_aml_object_t* s5 = acpi_aml_symbol_lookup(ACPI_CONTEXT->acpi_parser_context, "\\_S5_");
+    const char_t* sleep_state = acpi_sleep_state_type_names[sleep_type];
 
-    if(s5 == NULL) {
-        PRINTLOG(ACPI, LOG_ERROR, "No s5 state");
-    } else if(s5->type != ACPI_AML_OT_PACKAGE) {
-        PRINTLOG(ACPI, LOG_ERROR, "s5 wrong object type: %i", s5->type);
-    } else {
-        const acpi_aml_object_t* slp_type_a = list_get_data_at_position(s5->package.elements, 0);
-        const acpi_aml_object_t* slp_type_b = list_get_data_at_position(s5->package.elements, 1);
+    acpi_aml_object_t* sleep_state_obj = acpi_aml_symbol_lookup(ACPI_CONTEXT->acpi_parser_context, sleep_state);
 
-        if(slp_type_a == NULL || slp_type_b == NULL) {
-            PRINTLOG(ACPI, LOG_ERROR, "s5 sleep type a 0x%p or b 0x%p is null", slp_type_a, slp_type_b);
-        } else {
-            int64_t slp_type_a_val = 0, slp_type_b_val = 0;
-
-            if(acpi_aml_read_as_integer(ACPI_CONTEXT->acpi_parser_context, slp_type_a, &slp_type_a_val) == 0 &&
-               acpi_aml_read_as_integer(ACPI_CONTEXT->acpi_parser_context, slp_type_b, &slp_type_b_val) == 0) {
-
-
-                PRINTLOG(ACPI, LOG_DEBUG, "acpi poweroff started");
-
-                acpi_pm1_control_register_t reg = {0};
-
-                reg.sleep_enable = 1;
-                reg.sleep_type   = slp_type_a_val;
-
-                uint16_t reg_val = reg.value;
-
-                PRINTLOG(ACPI, LOG_TRACE, "writing pm1a 0x%x", reg_val);
-
-                if(acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, reg_val, ACPI_PM1A_CONTROL_REGISTER) != 0) {
-                    PRINTLOG(ACPI, LOG_ERROR, "Cannot write pm1a");
-                } else {
-                    if(ACPI_PM1B_CONTROL_REGISTER) {
-                        reg.sleep_type = slp_type_b_val;
-                        reg_val        = *((uint16_t*)(void*)&reg);
-
-                        PRINTLOG(ACPI, LOG_TRACE, "writing pm1b 0x%x", reg_val);
-
-                        if(acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, reg_val, ACPI_PM1B_CONTROL_REGISTER) != 0) {
-                            PRINTLOG(ACPI, LOG_ERROR, "Cannot write pm1b");
-                        } else {
-                            cpu_hlt();
-                        }
-                    } else {
-                        cpu_hlt();
-                    }
-                }
-
-            } else {
-                PRINTLOG(ACPI, LOG_ERROR, "Cannot obtain s5 sleep type");
-            }
-
-        }
+    if(sleep_state_obj == NULL) {
+        PRINTLOG(ACPI, LOG_ERROR, "No %s state", sleep_state);
+        return -1;
     }
 
-    PRINTLOG(ACPI, LOG_FATAL, "acpi poweroff failed");
+    if(sleep_state_obj->type != ACPI_AML_OT_PACKAGE) {
+        PRINTLOG(ACPI, LOG_ERROR, "%s wrong object type: %i", sleep_state, sleep_state_obj->type);
+        return -1;
+    }
 
-    return -1;
+    const acpi_aml_object_t* slp_type_a = list_get_data_at_position(sleep_state_obj->package.elements, 0);
+
+    if(slp_type_a == NULL) {
+        PRINTLOG(ACPI, LOG_ERROR, "%s sleep type a is null", sleep_state);
+        return -1;
+    }
+
+    int64_t slp_type_a_val = 0;
+
+    if(acpi_aml_read_as_integer(ACPI_CONTEXT->acpi_parser_context, slp_type_a, &slp_type_a_val) != 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "Cannot obtain %s sleep type a", sleep_state);
+        return -1;
+    }
+
+    const acpi_aml_object_t* slp_type_b = list_get_data_at_position(sleep_state_obj->package.elements, 1);
+
+    if(slp_type_b == NULL) {
+        PRINTLOG(ACPI, LOG_ERROR, "%s sleep type b is null", sleep_state);
+        return -1;
+    }
+
+    int64_t slp_type_b_val = 0;
+
+    if(acpi_aml_read_as_integer(ACPI_CONTEXT->acpi_parser_context, slp_type_b, &slp_type_b_val) != 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "Cannot obtain %s sleep type b", sleep_state);
+        return -1;
+    }
+
+    acpi_pm1_control_register_t reg = {0};
+
+    reg.sleep_enable = 1;
+    reg.sleep_type   = slp_type_a_val;
+
+    uint16_t reg_val_a = reg.value;
+
+    reg.sleep_type = slp_type_b_val;
+
+    uint16_t reg_val_b = reg.value;
+
+    uint32_t reg_val = ((uint32_t)reg_val_b << 16) | reg_val_a;
+
+    smp_data_t* smp_data = (smp_data_t*)0x9000;
+
+    smp_data->is_for_wakeup = true;
+    smp_data->wakeup_count++;
+    smp_data->wakeup_task = task_get_current_task();
+
+    task_set_attribute(task_get_id(), TASK_ATTRIBUTE_WAKEUP_FROM_ACPI_SLEEP);
+
+    memory_heap_t* heap = memory_get_default_heap();
+
+    char_t* task_name = NULL;
+
+    switch(sleep_type) {
+    case ACPI_SLEEP_TYPE_S3:
+        task_name = strprintf("acpi_sleep_suspend_task-%lli", smp_data->wakeup_count);
+        break;
+    case ACPI_SLEEP_TYPE_S4:
+        task_name = strprintf("acpi_sleep_hibernate_task-%lli", smp_data->wakeup_count);
+        break;
+    case ACPI_SLEEP_TYPE_S5:
+        task_name = strprintf("acpi_sleep_poweroff_task-%lli", smp_data->wakeup_count);
+        break;
+    default:
+        task_name = strprintf("acpi_sleep_%s_task-%lli", sleep_state, smp_data->wakeup_count);
+        break;
+    }
+
+    if(task_create_task(heap, 1 << 20, 64 << 10, acpi_sleep_task, 1, (void**)(uintptr_t)reg_val, task_name) == -1ULL) {
+        PRINTLOG(ACPI, LOG_ERROR, "cannot create acpi sleep task");
+        smp_data->is_for_wakeup = false;
+        smp_data->wakeup_count--;
+        memory_free(task_name);
+
+        return -1;
+    }
+
+    memory_free(task_name);
+
+    while(smp_data->is_for_wakeup) {
+        task_msleep(10);
+    }
+
+    PRINTLOG(ACPI, LOG_INFO, "system resumed from acpi sleep");
+
+    return 0;
+}
+
+int8_t acpi_sleep(void) {
+    return acpi_sleep_generic(ACPI_SLEEP_TYPE_S3);
+}
+
+int8_t acpi_hibernate(void) {
+    return acpi_sleep_generic(ACPI_SLEEP_TYPE_S4);
+}
+
+int8_t acpi_poweroff(void){
+    if(acpi_sleep_generic(ACPI_SLEEP_TYPE_S5) != 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "acpi sleep failed");
+        return -1;
+    }
+
+    while(true) {
+        cpu_idle();
+    }
+
+    return 0;
 }
 
 #pragma GCC diagnostic push
