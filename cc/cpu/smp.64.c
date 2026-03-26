@@ -232,8 +232,13 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
     if(smp_data->is_for_wakeup &&
        cpu_state->current_task &&
        cpu_state->current_task->attributes & TASK_ATTRIBUTE_ACPI_SLEEP_TASK) {
+        video_text_print("acpi sleep task found after wakeup, adding cleanup queue\n");
         cpu_state->current_task->state = TASK_STATE_ENDED;
-        list_queue_push(cpu_state->task_cleanup_queue, cpu_state->current_task);
+
+        if(list_queue_push(cpu_state->task_cleanup_queue, cpu_state->current_task) == -1ULL) {
+            video_text_print("failed to push acpi sleep task to cleanup queue\n");
+        }
+
         cpu_state->current_task = NULL;
     }
 

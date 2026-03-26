@@ -150,21 +150,28 @@ int8_t task_wake_up(task_t* task) {
     }
 
     if(list_contains(task_queues[cpu_state->local_apic_id], task)) {
+        video_text_print("task found in task queue, removing before wake up\n");
         list_list_delete(task_queues[cpu_state->local_apic_id], task);
     }
 
     if(list_contains(task_sleep_queues[cpu_state->local_apic_id], task)) {
+        video_text_print("task found in sleep queue, removing before wake up\n");
         list_list_delete(task_sleep_queues[cpu_state->local_apic_id], task);
     }
 
     if(list_contains(task_wait_queues[cpu_state->local_apic_id], task)) {
+        video_text_print("task found in wait queue, removing before wake up\n");
         list_list_delete(task_wait_queues[cpu_state->local_apic_id], task);
     }
 
     if(task->state == TASK_STATE_ENDED) {
+        video_text_print("task state is ended, adding to cleanup queue\n");
         if(!list_contains(task_cleanup_queues[cpu_state->local_apic_id], task)) {
+            video_text_print("task not found in cleanup queue, adding\n");
             list_queue_push(task_cleanup_queues[cpu_state->local_apic_id], task);
         }
+
+        video_text_print("task state is ended, cannot wake up, added to cleanup queue\n");
 
         return 0;
     }
@@ -919,7 +926,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp           += stack_size - 16;
     registers->rbp = rbp;
-    registers->rsp = rbp - 16; // 24 is for last return address, entry point and end task
+    registers->rsp = rbp - 16;
 
 
     uint64_t* stack = (uint64_t*)rbp;
@@ -958,7 +965,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     hashmap_put(task_map, (void*)new_task->task_id, new_task);
 
-    PRINTLOG(TASKING, LOG_INFO, "task %s 0x%llx will be added to task queue on cpu 0x%llx", new_task->task_name, new_task->task_id, new_task->cpu_id);
+    PRINTLOG(TASKING, LOG_INFO, "task %s 0x%llx will be added to task queue on cpu 0x%llx",
+             new_task->task_name, new_task->task_id, new_task->cpu_id);
 
     list_stack_push(min_queue, new_task);
 
