@@ -15,12 +15,9 @@
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>
 #include <logging.h>
-
-void video_text_print(const char_t* text);
+#include <driver/video.h>
 
 MODULE("turnstone.windowmanager");
-
-extern color_t* VIDEO_BASE_ADDRESS;
 
 static windowmanager_t* wndmgr_instance = NULL;
 
@@ -37,7 +34,8 @@ windowmanager_t* windowmanager_get_instance(void) {
 
         PRINTLOG(WINDOWMANAGER, LOG_INFO, "Screen res: %dx%d", screen_info.width, screen_info.height);
 
-        sgfx_context_t* gfx_ctx = sgfx_create_context(screen_info.width, screen_info.height, VIDEO_BASE_ADDRESS);
+        sgfx_context_t* gfx_ctx = sgfx_create_context(screen_info.width, screen_info.height,
+                                                      video_get_frame_buffer_base_address());
 
         if(gfx_ctx == NULL) {
             PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create graphics context");
@@ -547,6 +545,13 @@ list_t* wndmgr_get_input_values(const window_t* window) {
                            MIN(wstrlen(sheet->text), sizeof(input_buffer) - wstrlen(input_buffer) - 1));
         }
 
+        video_text_print("raw input value: ");
+        for(int32_t i = 0; i < w->input_length; i++) {
+            char_t* blabla = strprintf("%02x ", input_buffer[i]);
+            video_text_print(blabla);
+            memory_free(blabla);
+        }
+        video_text_print("\n");
 
         // remove spaces from the beginning and the end of the input buffer
         size_t start = 0, end = wstrlen(input_buffer);

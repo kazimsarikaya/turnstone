@@ -34,6 +34,11 @@ extern "C" {
 #define VIDEO_QEMU_VGA_VBE_DISPI_INDEX_YRES     0x2
 #define VIDEO_QEMU_VGA_VBE_DISPI_INDEX_BPP      0x3
 #define VIDEO_QEMU_VGA_VBE_DISPI_INDEX_ENABLE   0x4
+#define VIDEO_QEMU_VGA_VBE_DISPI_INDEX_BANK     0x5
+#define VIDEO_QEMU_VGA_VBE_DISPI_INDEX_VIRT_WIDTH              0x6
+#define VIDEO_QEMU_VGA_VBE_DISPI_INDEX_VIRT_HEIGHT             0x7
+#define VIDEO_QEMU_VGA_VBE_DISPI_INDEX_X_OFFSET                0x8
+#define VIDEO_QEMU_VGA_VBE_DISPI_INDEX_Y_OFFSET                0x9
 
 /* VBE_DISPI_INDEX_ID */
 #define VIDEO_QEMU_VGA_VBE_DISPI_ID0                   0xB0C0
@@ -52,6 +57,7 @@ extern "C" {
 #define VIDEO_QEMU_VGA_VBE_DISPI_NOCLEARMEM            0x80
 
 int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device);
+int8_t video_qemu_vga_reinit(void);
 
 #ifdef __cplusplus
 }

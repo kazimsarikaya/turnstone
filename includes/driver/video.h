@@ -12,6 +12,7 @@
 #include <types.h>
 #include <memory.h>
 #include <list.h>
+#include <graphics/color.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,9 +35,17 @@ extern "C" {
  * @return 0 if success
  */
 int8_t video_display_init(memory_heap_t* heap, list_t* display_controllers);
+int8_t video_display_reinit(void);
 
 void video_print(const char_t* string);
 void video_text_print(const char_t* string);
+
+void      video_set_graphics_mode(boolean_t enabled);
+boolean_t video_is_graphics_mode(void);
+int8_t    video_configure_lock(void);
+void      video_acquire_lock(void);
+void      video_release_lock(void);
+color_t*  video_get_frame_buffer_base_address(void);
 
 typedef void (*video_graphics_print_f)(const char_t* str);
 

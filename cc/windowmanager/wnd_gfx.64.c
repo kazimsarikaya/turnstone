@@ -22,9 +22,6 @@ MODULE("turnstone.windowmanager");
 
 void video_text_print(const char_t* text);
 
-extern color_t* VIDEO_BASE_ADDRESS;
-
-
 int8_t wndmgr_mouse_init(windowmanager_t* wndmgr) {
     graphics_raw_image_t* wndmgr_mouse_image = mouse_get_image();
 

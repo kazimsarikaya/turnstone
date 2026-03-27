@@ -9,6 +9,7 @@
 #include <driver/video_qemuvga.h>
 #include <driver/video_edid.h>
 #include <driver/video_fb.h>
+#include <driver/video.h>
 #include <logging.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
@@ -25,17 +26,17 @@ typedef struct qemuvga_device_t {
     uint8_t* mmio_data;
     int32_t  max_width;
     int32_t  max_height;
+    uint16_t bpp;
 } qemuvga_device_t;
 
 static qemuvga_device_t* qemuvga_device = NULL;
-extern lock_t* video_lock;
 
 int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
     pci_generic_device_t* pci_dev = (pci_generic_device_t*) device->pci_header;
 
     PRINTLOG(VIDEO, LOG_INFO, "Initializing QEMU VGA Device");
 
-    lock_acquire(video_lock);
+    video_acquire_lock();
     stdbufs_set_postphone_flush(true);
 
     uint64_t fb_bar_addr_fa = pci_get_bar_address(pci_dev, 0);
@@ -66,7 +67,7 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
     }
 
     stdbufs_set_postphone_flush(false);
-    lock_release(video_lock);
+    video_release_lock();
 
     uint64_t mmio_bar_addr_fa = pci_get_bar_address(pci_dev, 2);
     uint64_t mmio_bar_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(mmio_bar_addr_fa);
@@ -124,6 +125,8 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
     uint16_t old_yres = mmio_read(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_YRES * 2, 2);
     uint16_t old_bpp  = mmio_read(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_BPP * 2, 2);
 
+    qemuvga_device->bpp = old_bpp;
+
     PRINTLOG(VIDEO, LOG_INFO, "QEMU VGA current resolution: %dx%d bpp %d", old_xres, old_yres, old_bpp);
 
     PRINTLOG(VIDEO, LOG_INFO, "QEMU VGA setting resolution to: %dx%d bpp %d", qemuvga_device->max_width, qemuvga_device->max_height, old_bpp);
@@ -140,7 +143,7 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
         return -1;
     }
 
-    lock_acquire(video_lock);
+    video_acquire_lock();
 
     video_fb_copy_contents_to_frame_buffer(tmp_new_fb,
                                            qemuvga_device->max_width,
@@ -149,9 +152,9 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
 
 
     mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_ENABLE * 2, VIDEO_QEMU_VGA_VBE_DISPI_DISABLED, 2);
-    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_BPP * 2, old_bpp, 2);
     mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_XRES * 2, (uint16_t)qemuvga_device->max_width, 2);
     mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_YRES * 2, (uint16_t)qemuvga_device->max_height, 2);
+    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_BPP * 2, qemuvga_device->bpp, 2);
     mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_ENABLE * 2,
                VIDEO_QEMU_VGA_VBE_DISPI_ENABLED | VIDEO_QEMU_VGA_VBE_DISPI_LFB_ENABLED, 2);
 
@@ -169,8 +172,37 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
 
     PRINTLOG(VIDEO, LOG_INFO, "QEMU VGA set resolution to: %dx%d bpp %d", qemuvga_device->max_width, qemuvga_device->max_height, old_bpp);
 
-    lock_release(video_lock);
+    video_release_lock();
 
+    return 0;
+}
+
+int8_t video_qemu_vga_reinit(void){
+    if(qemuvga_device == NULL) {
+        PRINTLOG(VIDEO, LOG_ERROR, "QEMU VGA device is not initialized");
+        return -1;
+    }
+
+    video_acquire_lock();
+
+    uint64_t vga_offset = (uint64_t)(qemuvga_device->mmio_data + VIDEO_QEMU_VGA_IOPORT_OFFSET);
+
+    mmio_write(vga_offset + 0, 0x20, 1); // write 0x3c0 to enable vbe extensions. search docs.
+
+    uint64_t dispi_offset = (uint64_t)(qemuvga_device->mmio_data + VIDEO_QEMU_VGA_BOCHS_DISPI_OFFSET);
+    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_ENABLE * 2, VIDEO_QEMU_VGA_VBE_DISPI_DISABLED, 2);
+    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_BANK * 2, 0, 2);
+    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_X_OFFSET * 2, 0, 2);
+    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_Y_OFFSET * 2, 0, 2);
+    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_BPP * 2, qemuvga_device->bpp, 2);
+    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_XRES * 2, (uint16_t)qemuvga_device->max_width, 2);
+    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_VIRT_WIDTH * 2, (uint16_t)qemuvga_device->max_width, 2);
+    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_YRES * 2, (uint16_t)qemuvga_device->max_height, 2);
+    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_VIRT_HEIGHT * 2, (uint16_t)qemuvga_device->max_height, 2);
+    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_ENABLE * 2,
+               VIDEO_QEMU_VGA_VBE_DISPI_ENABLED | VIDEO_QEMU_VGA_VBE_DISPI_LFB_ENABLED, 2);
+
+    video_release_lock();
 
     return 0;
 }

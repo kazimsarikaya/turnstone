@@ -20,10 +20,11 @@
 
 MODULE("turnstone.kernel.hw.video.fb");
 
-color_t* VIDEO_BASE_ADDRESS = NULL;
+static color_t* VIDEO_BASE_ADDRESS = NULL;
 
-extern boolean_t GRAPHICS_MODE;
-extern lock_t* video_lock;
+color_t* video_get_frame_buffer_base_address(void) {
+    return VIDEO_BASE_ADDRESS;
+}
 
 static void video_fb_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
     UNUSED(scanout);
@@ -40,7 +41,7 @@ void video_fb_refresh_frame_buffer_address(void) {
     screen_set_dimensions(SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height, SYSTEM_INFO->frame_buffer->pixels_per_scanline);
 
     if(VIDEO_BASE_ADDRESS) {
-        GRAPHICS_MODE = true;
+        video_set_graphics_mode(true);
     }
 }
 
@@ -233,7 +234,7 @@ static void video_fb_graphics_print(const char_t* string) {
 }
 
 static void video_fb_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background) {
-    if(GRAPHICS_MODE) {
+    if(video_is_graphics_mode()) {
         uint32_t i                = 0;
         uint32_t j                = 0;
         uint32_t line             = 0;
@@ -254,7 +255,7 @@ static void video_fb_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, u
 
 void video_fb_init(void) {
     video_text_print("video init\n");
-    GRAPHICS_MODE = false;
+    video_set_graphics_mode(false);
 
     VIDEO_BASE_ADDRESS = (color_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
 
@@ -280,7 +281,7 @@ void video_fb_init(void) {
 
 
     if(VIDEO_BASE_ADDRESS) {
-        GRAPHICS_MODE                  = true;
+        video_set_graphics_mode(true);
         SCREEN_FLUSH                   = video_fb_display_flush_dummy;
         SCREEN_PRINT_GLYPH_WITH_STRIDE = font_print_glyph_with_stride;
         SCREEN_SCROLL                  = video_fb_graphics_scroll;
@@ -288,16 +289,13 @@ void video_fb_init(void) {
         VIDEO_GRAPHICS_PRINT           = video_fb_graphics_print;
     }
 
-    video_lock = lock_create();
-
-    if(!GRAPHICS_MODE) {
-        video_text_print("graphics mode not active");
+    if(video_configure_lock() != 0) {
+        video_text_print("video lock init failed\n");
     }
 
-    video_text_print("video init done\n");
-    char_t* dbg = strprintf("video lock address: 0x%p\n", video_lock);
-    video_text_print(dbg);
-    memory_free(dbg);
+    if(!video_is_graphics_mode()) {
+        video_text_print("graphics mode not active");
+    }
 }
 
 int8_t video_fb_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_width, uint64_t new_height, uint64_t new_pixels_per_scanline) {
