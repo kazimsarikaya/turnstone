@@ -151,12 +151,18 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
                                            qemuvga_device->max_width);
 
 
-    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_ENABLE * 2, VIDEO_QEMU_VGA_VBE_DISPI_DISABLED, 2);
-    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_XRES * 2, (uint16_t)qemuvga_device->max_width, 2);
-    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_YRES * 2, (uint16_t)qemuvga_device->max_height, 2);
-    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_BPP * 2, qemuvga_device->bpp, 2);
-    mmio_write(dispi_offset + VIDEO_QEMU_VGA_VBE_DISPI_INDEX_ENABLE * 2,
-               VIDEO_QEMU_VGA_VBE_DISPI_ENABLED | VIDEO_QEMU_VGA_VBE_DISPI_LFB_ENABLED, 2);
+    if(video_qemu_vga_reinit() != 0) {
+        video_release_lock();
+
+        memory_free(tmp_new_fb);
+
+        memory_free(qemuvga_device);
+        qemuvga_device = NULL;
+
+        PRINTLOG(VIDEO, LOG_ERROR, "Failed to reinitialize QEMU VGA");
+
+        return -1;
+    }
 
 
     memory_memcopy(tmp_new_fb, (uint8_t*)fb_bar_addr_va, qemuvga_device->max_width * qemuvga_device->max_height * sizeof(color_t));
