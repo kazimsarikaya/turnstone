@@ -75,6 +75,11 @@ static int8_t acpi_sleep_task(int64_t argc, void** argv) {
     task_broadcast_parked_but_not_myself();
     task_wait_for_cpus_in_parked_but_not_myself();
 
+    if(pci_recollect_header_data() != 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "cannot recollect pci header data before sleep");
+        return -1;
+    }
+
     const char_t* sleep_type_str = "unknown";
 
     if(strcontains(current_task->task_name, "suspend")) {

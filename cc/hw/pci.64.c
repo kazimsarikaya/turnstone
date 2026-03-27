@@ -429,6 +429,29 @@ int8_t pci_setup(memory_heap_t* heap) {
 }
 #pragma GCC diagnostic pop
 
+int8_t pci_recollect_header_data(void) {
+    pci_context_t* pci_context = pci_get_context();
+
+    if(pci_context == NULL) {
+        return -1;
+    }
+
+    list_t* all_devs = pci_context->all_devices;
+
+    for(size_t i = 0; i < list_size(all_devs); i++) {
+        const pci_dev_t* p = (pci_dev_t*)list_get_data_at_position(all_devs, i);
+
+        uintptr_t pci_hdr_addr = (uintptr_t)p->pci_header;
+
+        for(size_t j = 0; j < ARRAY_SIZE(p->header_data.u32_data); j++) {
+            uint32_t value = mmio_read(pci_hdr_addr + j * sizeof(uint32_t), sizeof(uint32_t));
+            ((pci_dev_t*)p)->header_data.u32_data[j] = value;
+        }
+    }
+
+    return 0;
+}
+
 int8_t pci_restore_registers(void) {
     pci_context_t* pci_context = pci_get_context();
 
