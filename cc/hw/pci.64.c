@@ -17,6 +17,7 @@
 #include <cpu.h>
 #include <cpu/interrupt.h>
 #include <time/timer.h>
+#include <device/mmio.h>
 
 MODULE("turnstone.kernel.hw.pci");
 
@@ -146,7 +147,7 @@ static const void* pci_iterator_get_item(iterator_t* iterator){
     d->bus_number      = iter_metadata->bus_number;
     d->device_number   = iter_metadata->device_number;
     d->function_number = iter_metadata->function_number;
-    d->pci_header      = (pci_common_header_t*)iter_metadata->pci_mmio_addr_va;
+    d->pci_header      = (pci_device_header_t*)iter_metadata->pci_mmio_addr_va;
 
     return d;
 }
@@ -247,6 +248,7 @@ int8_t pci_setup(memory_heap_t* heap) {
     }
 
     pci_context->heap                = heap;
+    pci_context->all_devices         = list_create_list_with_heap(heap);
     pci_context->sata_controllers    = list_create_list_with_heap(heap);
     pci_context->nvme_controllers    = list_create_list_with_heap(heap);
     pci_context->network_controllers = list_create_list_with_heap(heap);
@@ -278,48 +280,60 @@ int8_t pci_setup(memory_heap_t* heap) {
                 return -1;
             }
 
-            // pci_disable_interrupt((pci_generic_device_t*)p->pci_header);
+
+            uintptr_t pci_hdr_addr = (uintptr_t)p->pci_header;
+
+            for(size_t i = 0; i < ARRAY_SIZE(p->header_data.u32_data); i++) {
+                uint32_t value = mmio_read(pci_hdr_addr + i * sizeof(uint32_t), sizeof(uint32_t));
+                ((pci_dev_t*)p)->header_data.u32_data[i] = value;
+            }
+
+
+            pci_common_header_t* pchdr = &p->pci_header->common;
+
 
             PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x -> %04x:%04x -> %02x:%02x",
                      p->group_number, p->bus_number, p->device_number, p->function_number,
-                     p->pci_header->vendor_id, p->pci_header->device_id,
-                     p->pci_header->class_code, p->pci_header->subclass_code);
+                     pchdr->vendor_id, pchdr->device_id,
+                     pchdr->class_code, pchdr->subclass_code);
 
-            if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
-                p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_SATA_CONTROLLER) {
+            list_queue_push(pci_context->all_devices, p);
+
+            if( pchdr->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
+                pchdr->subclass_code == PCI_DEVICE_SUBCLASS_SATA_CONTROLLER) {
 
                 list_list_insert(pci_context->sata_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as sata controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
-            } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
-                       p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_NVME_CONTROLLER) {
+            } else if( pchdr->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
+                       pchdr->subclass_code == PCI_DEVICE_SUBCLASS_NVME_CONTROLLER) {
 
                 list_list_insert(pci_context->nvme_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as nvme controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
-            } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_NETWORK_CONTROLLER &&
-                       p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_ETHERNET) {
+            } else if( pchdr->class_code == PCI_DEVICE_CLASS_NETWORK_CONTROLLER &&
+                       pchdr->subclass_code == PCI_DEVICE_SUBCLASS_ETHERNET) {
 
                 list_list_insert(pci_context->network_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as network controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
-            } else if(p->pci_header->class_code == PCI_DEVICE_CLASS_DISPLAY_CONTROLLER) {
+            } else if(pchdr->class_code == PCI_DEVICE_CLASS_DISPLAY_CONTROLLER) {
 
                 list_list_insert(pci_context->display_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as display controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
-            } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_SERIAL_BUS &&
-                       p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_USB_CONTROLLER) {
+            } else if( pchdr->class_code == PCI_DEVICE_CLASS_SERIAL_BUS &&
+                       pchdr->subclass_code == PCI_DEVICE_SUBCLASS_USB_CONTROLLER) {
 
                 list_list_insert(pci_context->usb_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as usb controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
-            } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_INPUT_DEVICE) {
+            } else if( pchdr->class_code == PCI_DEVICE_CLASS_INPUT_DEVICE) {
 
                 list_list_insert(pci_context->input_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as input controller",
@@ -328,7 +342,7 @@ int8_t pci_setup(memory_heap_t* heap) {
             } else {
                 PRINTLOG(PCI, LOG_WARNING, "pci dev %02x:%02x:%02x.%02x class %02x:%02x (%02x) is not supported",
                          p->group_number, p->bus_number, p->device_number, p->function_number,
-                         p->pci_header->class_code, p->pci_header->subclass_code, p->pci_header->prog_if);
+                         pchdr->class_code, pchdr->subclass_code, pchdr->prog_if);
 
                 list_list_insert(pci_context->other_devices, p);
 
@@ -336,21 +350,21 @@ int8_t pci_setup(memory_heap_t* heap) {
                          p->group_number, p->bus_number, p->device_number, p->function_number);
             }
 
-            if(p->pci_header->class_code == PCI_DEVICE_CLASS_BRIDGE_CONTROLLER &&
-               p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_BRIDGE_ISA) {
+            if(pchdr->class_code == PCI_DEVICE_CLASS_BRIDGE_CONTROLLER &&
+               pchdr->subclass_code == PCI_DEVICE_SUBCLASS_BRIDGE_ISA) {
 
                 PRINTLOG(PCI, LOG_INFO, "pci dev %02x:%02x:%02x.%02x is isa bridge",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             }
 
-            if(p->pci_header->class_code == PCI_DEVICE_CLASS_BRIDGE_CONTROLLER &&
-               p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_BRIDGE_PCI) {
+            if(pchdr->class_code == PCI_DEVICE_CLASS_BRIDGE_CONTROLLER &&
+               pchdr->subclass_code == PCI_DEVICE_SUBCLASS_BRIDGE_PCI) {
 
                 PRINTLOG(PCI, LOG_INFO, "pci dev %02x:%02x:%02x.%02x is pci bridge",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
-                pci_pci2pci_bridge_t* bridge = (pci_pci2pci_bridge_t*)p->pci_header;
+                pci_pci2pci_bridge_t* bridge = (pci_pci2pci_bridge_t*)pchdr;
 
                 PRINTLOG(PCI, LOG_INFO, "pci bridge %02x:%02x:%02x.%02x -> primary bus %02x secondary bus %02x subordinate bus %02x",
                          p->group_number, p->bus_number, p->device_number, p->function_number,
@@ -359,8 +373,8 @@ int8_t pci_setup(memory_heap_t* heap) {
             }
 
 
-            if(p->pci_header->header_type.header_type == PCI_HEADER_TYPE_GENERIC_DEVICE) {
-                pci_generic_device_t* pg = (pci_generic_device_t*)p->pci_header;
+            if(pchdr->header_type.header_type == PCI_HEADER_TYPE_GENERIC_DEVICE) {
+                pci_generic_device_t* pg = (pci_generic_device_t*)pchdr;
 
                 PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x -> pif %02x int %02x:%02x",
                          p->group_number, p->bus_number, p->device_number, p->function_number,
@@ -400,6 +414,7 @@ int8_t pci_setup(memory_heap_t* heap) {
     list_destroy(old_mcfgs);
 
     PRINTLOG(PCI, LOG_INFO, "pci devices enumeration completed");
+    PRINTLOG(PCI, LOG_INFO, "total pci devices found %lli", list_size(pci_context->all_devices));
     PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli display controllers %lli usb controllers %lli input controllers %lli other devices %lli",
              list_size(pci_context->sata_controllers),
              list_size(pci_context->nvme_controllers),
@@ -414,4 +429,133 @@ int8_t pci_setup(memory_heap_t* heap) {
 }
 #pragma GCC diagnostic pop
 
+int8_t pci_restore_registers(void) {
+    pci_context_t* pci_context = pci_get_context();
 
+    if(pci_context == NULL) {
+        return -1;
+    }
+
+    list_t* all_devs = pci_context->all_devices;
+
+    for(size_t i = 0; i < list_size(all_devs); i++) {
+        const pci_dev_t* p = (pci_dev_t*)list_get_data_at_position(all_devs, i);
+
+        const pci_common_header_t* pchdr = &p->header_data.common;
+        uintptr_t pci_hdr_addr           = (uintptr_t)p->pci_header;
+
+        if(!pci_hdr_addr) {
+            PRINTLOG(PCI, LOG_ERROR, "pci dev %02x:%02x:%02x.%02x has invalid pci header address 0x%p, skipping register restore",
+                     p->group_number, p->bus_number, p->device_number, p->function_number, (void*)pci_hdr_addr);
+            continue;
+        }
+
+        PRINTLOG(PCI, LOG_INFO, "restoring pci dev %02x:%02x:%02x.%02x registers",
+                 p->group_number, p->bus_number, p->device_number, p->function_number);
+
+        uintptr_t command_reg_addr = pci_hdr_addr + offsetof_field(pci_common_header_t, command);
+        mmio_write(command_reg_addr, 0, sizeof(uint16_t));
+
+        if(pchdr->header_type.header_type == PCI_HEADER_TYPE_GENERIC_DEVICE) {
+            const uint32_t* u32_data = p->header_data.u32_data;
+            uintptr_t bar_offset     = offsetof_field(pci_generic_device_t, bar0);
+            size_t bar_u32_idx       = bar_offset / sizeof(uint32_t);
+
+
+            uintptr_t bar_offset_addr = pci_hdr_addr + bar_offset;
+
+            for(size_t j = 0; j < 6; j++) {
+                uint32_t bar_value = u32_data[bar_u32_idx + j];
+                mmio_write(bar_offset_addr + j * sizeof(uint32_t), bar_value, sizeof(uint32_t));
+            }
+
+            uintptr_t expension_rom_bar_offset      = offsetof_field(pci_generic_device_t, expension_rom_base_address);
+            size_t expension_rom_bar_u32_idx        = expension_rom_bar_offset / sizeof(uint32_t);
+            uintptr_t expension_rom_bar_offset_addr = pci_hdr_addr + expension_rom_bar_offset;
+
+            uint32_t expension_rom_bar_value = u32_data[expension_rom_bar_u32_idx];
+            mmio_write(expension_rom_bar_offset_addr, expension_rom_bar_value, sizeof(uint32_t));
+
+            pci_generic_device_t* pg = (pci_generic_device_t*)pchdr;
+
+            uintptr_t interrupt_line_reg_addr = pci_hdr_addr + offsetof_field(pci_generic_device_t, interrupt_line);
+            mmio_write(interrupt_line_reg_addr, pg->interrupt_line, sizeof(uint8_t));
+        }
+
+        if(pchdr->header_type.header_type == PCI_HEADER_TYPE_PCI2PCI_BRIDGE) {
+            const uint32_t* u32_data = p->header_data.u32_data;
+            uintptr_t bar_offset     = offsetof_field(pci_generic_device_t, bar0);
+            size_t bar_u32_idx       = bar_offset / sizeof(uint32_t);
+
+
+            uintptr_t bar_offset_addr = pci_hdr_addr + bar_offset;
+
+            for(size_t j = 0; j < 2; j++) {
+                uint32_t bar_value = u32_data[bar_u32_idx + j];
+                mmio_write(bar_offset_addr + j * sizeof(uint32_t), bar_value, sizeof(uint32_t));
+            }
+
+            const pci_pci2pci_bridge_t* bridge = (const pci_pci2pci_bridge_t*)pchdr;
+
+            uintptr_t primary_bus_reg_addr     = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, primary_bus_number);
+            uintptr_t secondary_bus_reg_addr   = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, secondary_bus_number);
+            uintptr_t subordinate_bus_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, subordinate_bus_number);
+
+            mmio_write(primary_bus_reg_addr, bridge->primary_bus_number, sizeof(uint8_t));
+            mmio_write(secondary_bus_reg_addr, bridge->secondary_bus_number, sizeof(uint8_t));
+            mmio_write(subordinate_bus_reg_addr, bridge->subordinate_bus_number, sizeof(uint8_t));
+
+            uintptr_t io_base_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, io_base);
+            mmio_write(io_base_reg_addr, bridge->io_base, sizeof(uint8_t));
+
+            uintptr_t io_limit_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, io_limit);
+            mmio_write(io_limit_reg_addr, bridge->io_limit, sizeof(uint8_t));
+
+            uintptr_t io_base_upper_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, io_base_upper_16bits);
+            mmio_write(io_base_upper_reg_addr, bridge->io_base_upper_16bits, sizeof(uint16_t));
+
+            uintptr_t io_limit_upper_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, io_limit_upper_16bits);
+            mmio_write(io_limit_upper_reg_addr, bridge->io_limit_upper_16bits, sizeof(uint16_t));
+
+            uintptr_t memory_base_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, memory_base);
+            mmio_write(memory_base_reg_addr, bridge->memory_base, sizeof(uint16_t));
+
+            uintptr_t memory_limit_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, memory_limit);
+            mmio_write(memory_limit_reg_addr, bridge->memory_limit, sizeof(uint16_t));
+
+            uintptr_t prefetchable_memory_base_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, prefetchable_memory_base);
+            mmio_write(prefetchable_memory_base_reg_addr, bridge->prefetchable_memory_base, sizeof(uint16_t));
+
+            uintptr_t prefetchable_memory_limit_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, prefetchable_memory_limit);
+            mmio_write(prefetchable_memory_limit_reg_addr, bridge->prefetchable_memory_limit, sizeof(uint16_t));
+
+            uintptr_t prefetchable_base_upper_32bits_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, prefetchable_base_upper_32bits);
+            mmio_write(prefetchable_base_upper_32bits_reg_addr, bridge->prefetchable_base_upper_32bits, sizeof(uint32_t));
+
+            uintptr_t prefetchable_limit_upper_32bits_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, prefetchable_limit_upper_32bits);
+            mmio_write(prefetchable_limit_upper_32bits_reg_addr, bridge->prefetchable_limit_upper_32bits, sizeof(uint32_t));
+
+            uintptr_t expension_rom_bar_offset      = offsetof_field(pci_pci2pci_bridge_t, expension_rom_base_address);
+            size_t expension_rom_bar_u32_idx        = expension_rom_bar_offset / sizeof(uint32_t);
+            uintptr_t expension_rom_bar_offset_addr = pci_hdr_addr + expension_rom_bar_offset;
+
+            uint32_t expension_rom_bar_value = u32_data[expension_rom_bar_u32_idx];
+            mmio_write(expension_rom_bar_offset_addr, expension_rom_bar_value, sizeof(uint32_t));
+
+            uintptr_t interrupt_line_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, interrupt_line);
+            mmio_write(interrupt_line_reg_addr, bridge->interrupt_line, sizeof(uint8_t));
+
+            uintptr_t bridge_control_reg_addr = pci_hdr_addr + offsetof_field(pci_pci2pci_bridge_t, bridge_control);
+            mmio_write(bridge_control_reg_addr, bridge->bridge_control, sizeof(uint16_t));
+        }
+
+
+        uint16_t command_reg = pchdr->command.value;
+        mmio_write(command_reg_addr, command_reg, sizeof(uint16_t));
+
+        PRINTLOG(PCI, LOG_INFO, "pci dev %02x:%02x:%02x.%02x registers restored",
+                 p->group_number, p->bus_number, p->device_number, p->function_number);
+    }
+
+    return 0;
+}

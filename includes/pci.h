@@ -65,36 +65,46 @@ extern "C" {
 int8_t   pci_io_port_write_data(uint32_t address, uint32_t data, uint8_t bc);
 uint32_t pci_io_port_read_data(uint32_t address, uint8_t bc);
 
-typedef struct pci_command_register_t {
-    uint8_t io_space                           : 1;
-    uint8_t memory_space                       : 1;
-    uint8_t bus_master                         : 1;
-    uint8_t special_cycles                     : 1;
-    uint8_t memory_write_and_invalidate_enable : 1;
-    uint8_t vga_palette_snoop                  : 1;
-    uint8_t parity_error_response              : 1;
-    uint8_t reserved0                          : 1;
-    uint8_t serr_enable                        : 1;
-    uint8_t fast_back2back_enable              : 1;
-    uint8_t interrupt_disable                  : 1;
-    uint8_t reserved1                          : 5;
+typedef union pci_command_register_t {
+    struct {
+        uint16_t io_space                           : 1;
+        uint16_t memory_space                       : 1;
+        uint16_t bus_master                         : 1;
+        uint16_t special_cycles                     : 1;
+        uint16_t memory_write_and_invalidate_enable : 1;
+        uint16_t vga_palette_snoop                  : 1;
+        uint16_t parity_error_response              : 1;
+        uint16_t reserved0                          : 1;
+        uint16_t serr_enable                        : 1;
+        uint16_t fast_back2back_enable              : 1;
+        uint16_t interrupt_disable                  : 1;
+        uint16_t reserved1                          : 5;
+    } __attribute__((packed));
+    uint16_t value;
 } __attribute__((packed)) pci_command_register_t;
 
-typedef struct pci_status_register_t {
-    uint8_t reserved0                : 3;
-    uint8_t interrupt_status         : 1;
-    uint8_t capabilities_list        : 1;
-    uint8_t mhz66_capable            : 1;
-    uint8_t reserved1                : 1;
-    uint8_t fast_back2back_capable   : 1;
-    uint8_t master_data_parity_error : 1;
-    uint8_t devsel_timing            : 2;
-    uint8_t signaled_target_abort    : 1;
-    uint8_t received_target_abort    : 1;
-    uint8_t received_master_abort    : 1;
-    uint8_t signaled_system_error    : 1;
-    uint8_t detected_parity_error    : 1;
+_Static_assert(sizeof(pci_command_register_t) == 2, "pci_command_register_t size should be 2 bytes");
+
+typedef union pci_status_register_t {
+    struct {
+        uint16_t reserved0                : 3;
+        uint16_t interrupt_status         : 1;
+        uint16_t capabilities_list        : 1;
+        uint16_t mhz66_capable            : 1;
+        uint16_t reserved1                : 1;
+        uint16_t fast_back2back_capable   : 1;
+        uint16_t master_data_parity_error : 1;
+        uint16_t devsel_timing            : 2;
+        uint16_t signaled_target_abort    : 1;
+        uint16_t received_target_abort    : 1;
+        uint16_t received_master_abort    : 1;
+        uint16_t signaled_system_error    : 1;
+        uint16_t detected_parity_error    : 1;
+    } __attribute__((packed));
+    uint16_t value;
 } __attribute__((packed)) pci_status_register_t;
+
+_Static_assert(sizeof(pci_status_register_t) == 2, "pci_status_register_t size should be 2 bytes");
 
 /**
  * @struct pci_header_type_register_t
@@ -129,22 +139,27 @@ typedef union pci_bar_register_t {
         uint32_t reserved0    : 1;
         uint32_t base_address : 30;
     } __attribute__((packed)) io_space_bar;
+    uint32_t value;
 } __attribute__((packed)) pci_bar_register_t;
 
+_Static_assert(sizeof(pci_bar_register_t) == 4, "pci_bar_register_t size should be 4 bytes");
+
 typedef struct pci_common_header_t {
-    uint16_t                   vendor_id : 16;
-    uint16_t                   device_id : 16;
+    uint32_t                   vendor_id : 16;
+    uint32_t                   device_id : 16;
     pci_command_register_t     command;
     pci_status_register_t      status;
-    uint8_t                    revsionid       : 8;
-    uint8_t                    prog_if         : 8;
-    uint8_t                    subclass_code   : 8;
-    uint8_t                    class_code      : 8;
-    uint8_t                    cache_line_size : 8;
-    uint8_t                    latency_timer   : 8;
+    uint32_t                   revsionid       : 8;
+    uint32_t                   prog_if         : 8;
+    uint32_t                   subclass_code   : 8;
+    uint32_t                   class_code      : 8;
+    uint32_t                   cache_line_size : 8;
+    uint32_t                   latency_timer   : 8;
     pci_header_type_register_t header_type;
     pci_bist_register_t        bist;
 } __attribute__((packed, aligned(4))) pci_common_header_t;
+
+_Static_assert(sizeof(pci_common_header_t) == 16, "pci_common_header_t size should be 16 bytes");
 
 typedef struct pci_generic_device_t {
     pci_common_header_t common_header;
@@ -154,73 +169,95 @@ typedef struct pci_generic_device_t {
     pci_bar_register_t  bar3;
     pci_bar_register_t  bar4;
     pci_bar_register_t  bar5;
-    uint32_t            cardbus_cis_pointer        : 32;
-    uint16_t            subsystem_vendor_id        : 16;
-    uint16_t            subsystem_id               : 16;
-    uint32_t            expension_rom_base_address : 32;
-    uint8_t             capabilities_pointer       : 8;
-    uint32_t            reserved0                  : 24;
-    uint32_t            reserved1                  : 32;
-    uint8_t             interrupt_line             : 8;
-    uint8_t             interrupt_pin              : 8;
-    uint8_t             min_grant                  : 8;
-    uint8_t             max_latency                : 8;
+    uint32_t            cardbus_cis_pointer : 32;
+    uint32_t            subsystem_vendor_id : 16;
+    uint32_t            subsystem_id        : 16;
+    uint32_t            expension_rom_base_address;
+    uint32_t            capabilities_pointer : 8;
+    uint32_t            reserved0            : 24;
+    uint32_t            reserved1            : 32;
+    uint8_t             interrupt_line;
+    uint32_t            interrupt_pin : 8;
+    uint32_t            min_grant     : 8;
+    uint32_t            max_latency   : 8;
 } __attribute__((packed, aligned(4))) pci_generic_device_t;
 
+_Static_assert(sizeof(pci_generic_device_t) == 64, "pci_generic_device_t size should be 64 bytes");
 
 typedef struct pci_pci2pci_bridge_t {
     pci_common_header_t   common_header;
     pci_bar_register_t    bar0;
     pci_bar_register_t    bar1;
-    uint8_t               primary_bus_number      : 8;
-    uint8_t               secondary_bus_number    : 8;
-    uint8_t               subordinate_bus_number  : 8;
-    uint8_t               secondary_latency_timer : 8;
-    uint8_t               io_base                 : 8;
-    uint8_t               io_limit                : 8;
+    uint8_t               primary_bus_number;
+    uint8_t               secondary_bus_number;
+    uint8_t               subordinate_bus_number;
+    uint32_t              secondary_latency_timer : 8;
+    uint8_t               io_base;
+    uint8_t               io_limit;
     pci_status_register_t secondary_status;
-    uint16_t              memory_base                     : 16;
-    uint16_t              memory_limit                    : 16;
-    uint16_t              prefetchable_memory_base        : 16;
-    uint16_t              prefetchable_memory_limit       : 16;
-    uint32_t              prefetchable_base_upper_32bits  : 32;
-    uint32_t              prefetchable_limit_upper_32bits : 32;
-    uint16_t              io_base_upper_16bits            : 16;
-    uint16_t              io_limit_upper_16bits           : 16;
-    uint8_t               capabilities_pointer            : 8;
-    uint32_t              reserved0                       : 24;
-    uint32_t              expension_rom_base_address      : 32;
-    uint8_t               interrupt_line                  : 8;
-    uint8_t               interrupt_pin                   : 8;
-    uint16_t              bridge_control                  : 16;
+    uint16_t              memory_base;
+    uint16_t              memory_limit;
+    uint16_t              prefetchable_memory_base;
+    uint16_t              prefetchable_memory_limit;
+    uint32_t              prefetchable_base_upper_32bits;
+    uint32_t              prefetchable_limit_upper_32bits;
+    uint16_t              io_base_upper_16bits;
+    uint16_t              io_limit_upper_16bits;
+    uint32_t              capabilities_pointer : 8;
+    uint32_t              reserved0            : 24;
+    uint32_t              expension_rom_base_address;
+    uint8_t               interrupt_line;
+    uint32_t              interrupt_pin : 8;
+    uint16_t              bridge_control;
 } __attribute__((packed, aligned(4))) pci_pci2pci_bridge_t;
 
+_Static_assert(sizeof(pci_pci2pci_bridge_t) == 64, "pci_pci2pci_bridge_t size should be 64 bytes");
 
 typedef struct pci_cardbus_bridge_t {
     pci_common_header_t   common_header;
     uint32_t              cardbus_socket_or_exca_base_address : 32;
-    uint8_t               capabilities_pointer                : 8;
-    uint8_t               reserved0                           : 8;
+    uint32_t              capabilities_pointer                : 8;
+    uint32_t              reserved0                           : 8;
     pci_status_register_t secondary_status;
-    uint8_t               pci_bus_number                        : 8;
-    uint8_t               cardbus_bus_number                    : 8;
-    uint8_t               subordinate_bus_number                : 8;
-    uint8_t               cardbus_latency_timer                 : 8;
-    uint32_t              memory_base_address0                  : 32;
-    uint32_t              memory_limit0                         : 32;
-    uint32_t              memory_base_address1                  : 32;
-    uint32_t              memory_limit1                         : 32;
-    uint32_t              io_base_address0                      : 32;
-    uint32_t              io_limit0                             : 32;
-    uint32_t              io_base_address1                      : 32;
-    uint32_t              io_limit1                             : 32;
-    uint8_t               interrupt_line                        : 8;
-    uint8_t               interrupt_pin                         : 8;
-    uint16_t              bridge_control                        : 16;
-    uint16_t              subsystem_vendor_id                   : 16;
-    uint16_t              subsystem_device_id                   : 16;
+    uint32_t              pci_bus_number         : 8;
+    uint32_t              cardbus_bus_number     : 8;
+    uint32_t              subordinate_bus_number : 8;
+    uint32_t              cardbus_latency_timer  : 8;
+    uint32_t              memory_base_address0   : 32;
+    uint32_t              memory_limit0          : 32;
+    uint32_t              memory_base_address1   : 32;
+    uint32_t              memory_limit1          : 32;
+    uint32_t              io_base_address0       : 32;
+    uint32_t              io_limit0              : 32;
+    uint32_t              io_base_address1       : 32;
+    uint32_t              io_limit1              : 32;
+    uint8_t               interrupt_line;
+    uint32_t              interrupt_pin                         : 8;
+    uint32_t              bridge_control                        : 16;
+    uint32_t              subsystem_vendor_id                   : 16;
+    uint32_t              subsystem_device_id                   : 16;
     uint32_t              pccard_16bit_legacy_mode_base_address : 32;
 } __attribute__((packed, aligned(4))) pci_cardbus_bridge_t;
+
+_Static_assert(sizeof(pci_cardbus_bridge_t) == 72, "pci_cardbus_bridge_t size should be 72 bytes");
+
+typedef union pci_device_header_t {
+    pci_common_header_t  common;
+    pci_generic_device_t generic;
+    pci_pci2pci_bridge_t pci2pci_bridge;
+    pci_cardbus_bridge_t cardbus_bridge;
+} __attribute__((packed, aligned(4))) pci_device_header_t;
+
+typedef union pci_device_header_data_t {
+    uint8_t              u8_data[256];
+    uint16_t             u16_data[128];
+    uint32_t             u32_data[64];
+    uint64_t             u64_data[32];
+    pci_common_header_t  common;
+    pci_generic_device_t generic;
+    pci_pci2pci_bridge_t pci2pci_bridge;
+    pci_cardbus_bridge_t cardbus_bridge;
+} __attribute__((packed, aligned(4))) pci_device_header_data_t;
 
 typedef struct pci_dev_t pci_dev_t; ///< forward declaration for pci_dev_t
 
@@ -229,13 +266,14 @@ typedef struct pci_dev_t pci_dev_t; ///< forward declaration for pci_dev_t
  * @brief the pci device info returned by the iterator
  */
 typedef struct pci_dev_t {
-    pci_dev_t*           parent; ///< parent device if exists, else NULL
-    uint16_t             group_number; ///< device's bus group number.
-    uint8_t              bus_number; ///< bus number of the device
-    uint8_t              device_number; ///< device number
-    uint8_t              function_number; ///< device function number
-    uint64_t             header_size; ///< header size of the device
-    pci_common_header_t* pci_header; ///< pci generic memory area
+    pci_dev_t*               parent; ///< parent device if exists, else NULL
+    uint16_t                 group_number; ///< device's bus group number.
+    uint8_t                  bus_number; ///< bus number of the device
+    uint8_t                  device_number; ///< device number
+    uint8_t                  function_number; ///< device function number
+    uint64_t                 header_size; ///< header size of the device
+    pci_device_header_t*     pci_header; ///< pci generic memory area
+    pci_device_header_data_t header_data; ///< data read from pci header, used for storing capability data and other header data
 } pci_dev_t; ///< short hand for struct
 
 typedef struct pci_capability_t {
@@ -293,6 +331,7 @@ typedef struct pci_capability_msix_table_t {
 
 typedef struct pci_context_t {
     memory_heap_t* heap;
+    list_t*        all_devices;
     list_t*        sata_controllers;
     list_t*        nvme_controllers;
     list_t*        network_controllers;
@@ -318,6 +357,7 @@ void pci_disable_interrupt(const pci_generic_device_t* pci_dev);
 void pci_enable_interrupt(const pci_generic_device_t* pci_dev);
 
 int8_t pci_setup(memory_heap_t* heap);
+int8_t pci_restore_registers(void);
 
 const pci_dev_t* pci_find_device_by_address(uint8_t group_number, uint8_t bus_number, uint8_t device_number, uint8_t function_number);
 

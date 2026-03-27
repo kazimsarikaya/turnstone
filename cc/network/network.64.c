@@ -183,7 +183,7 @@ int8_t network_init(void) {
     while(!iter->end_of_iterator(iter)) {
         const pci_dev_t* pci_netdev = iter->get_item(iter);
 
-        pci_common_header_t* pci_header = pci_netdev->pci_header;
+        pci_common_header_t* pci_header = &pci_netdev->pci_header->common;
 
         if(pci_header->vendor_id == NETWORK_DEVICE_VENDOR_ID_INTEL && pci_header->device_id == NETWORK_DEVICE_DEVICE_ID_IGB) {
             errors += network_igb_init(pci_netdev);

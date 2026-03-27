@@ -1320,7 +1320,7 @@ uint64_t hypervisor_ept_guest_virtual_to_host_physical(hypervisor_vm_t* vm, uint
 }
 
 uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci_dev) {
-    pci_common_header_t* pci_header = pci_dev->pci_header;
+    pci_common_header_t* pci_header = &pci_dev->pci_header->common;
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "pci header: class 0x%x, subclass 0x%x, prog if 0x%x",
              pci_header->class_code, pci_header->subclass_code, pci_header->prog_if);

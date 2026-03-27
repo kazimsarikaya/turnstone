@@ -69,12 +69,24 @@ int8_t video_display_init(memory_heap_t* heap, list_t* display_controllers) {
     while(!iter->end_of_iterator(iter)) {
         const pci_dev_t* device = iter->get_item(iter);
 
-        if(device->pci_header->vendor_id == VIDEO_PCI_DEVICE_VENDOR_VMWARE && device->pci_header->device_id == VIDEO_PCI_DEVICE_ID_VMWARE_SVGA2) {
+        if(device->pci_header->common.vendor_id == VIDEO_PCI_DEVICE_VENDOR_VMWARE &&
+           device->pci_header->common.device_id == VIDEO_PCI_DEVICE_ID_VMWARE_SVGA2) {
             vmware_svga2_init(heap, device);
-        } else if(device->pci_header->vendor_id == VIDEO_PCI_DEVICE_VENDOR_QEMU && device->pci_header->device_id == VIDEO_PCI_DEVICE_ID_QEMU_VGA) {
+        } else if(device->pci_header->common.vendor_id == VIDEO_PCI_DEVICE_VENDOR_QEMU &&
+                  device->pci_header->common.device_id == VIDEO_PCI_DEVICE_ID_QEMU_VGA) {
             video_qemu_vga_init(heap, device);
         } else {
-            PRINTLOG(KERNEL, LOG_WARNING, "Unknown video device: %x:%x", device->pci_header->vendor_id, device->pci_header->device_id);
+            PRINTLOG(KERNEL, LOG_WARNING, "Unknown video device: %x:%x",
+                     device->pci_header->common.vendor_id, device->pci_header->common.device_id);
+        }
+
+        iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    return 0;
+}
         }
 
         iter->next(iter);

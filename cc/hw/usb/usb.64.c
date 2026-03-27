@@ -45,7 +45,7 @@ int8_t usb_init(void) {
 
 
         const pci_dev_t* pci_dev          = it->get_item(it);
-        pci_common_header_t* pci_header   = pci_dev->pci_header;
+        pci_common_header_t* pci_header   = &pci_dev->pci_header->common;
         pci_generic_device_t* pci_gen_dev = (pci_generic_device_t*)pci_header;
 
 

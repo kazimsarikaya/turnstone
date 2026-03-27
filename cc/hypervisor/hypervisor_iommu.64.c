@@ -197,7 +197,7 @@ int8_t hypervisor_iommu_init(void) {
            pci_dev->bus_number == ivhd_type_11->device_id.fields.bus &&
            pci_dev->device_number == ivhd_type_11->device_id.fields.device &&
            pci_dev->function_number == ivhd_type_11->device_id.fields.function  &&
-           pci_dev->pci_header->class_code == 0x08 && pci_dev->pci_header->subclass_code == 0x06
+           pci_dev->pci_header->common.class_code == 0x08 && pci_dev->pci_header->common.subclass_code == 0x06
            ) {
             pci_dev_found = pci_dev;
             PRINTLOG(HYPERVISOR_IOMMU, LOG_TRACE, "Device found: %x:%02x:%02x.%x",
