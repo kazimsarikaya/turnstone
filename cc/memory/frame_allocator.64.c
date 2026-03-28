@@ -1220,7 +1220,7 @@ int8_t frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t* fa) 
                 iter->destroy(iter);
                 return -1;
             }
-        } else if(f->type == FRAME_TYPE_ACPI_DATA) {
+        } else if(f->type == FRAME_TYPE_ACPI_DATA || f->type == FRAME_TYPE_ACPI_NVS) {
             if(memory_paging_add_va_for_frame(f->frame_address, f, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                 PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "failed to map acpi data frame at 0x%llx", f->frame_address);
                 iter->destroy(iter);
