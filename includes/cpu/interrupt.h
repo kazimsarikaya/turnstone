@@ -155,6 +155,7 @@ typedef void (*interrupt_generic_handler_f)(interrupt_frame_ext_t* frame);
 
 void   interrupt_generic_handler(interrupt_frame_ext_t* frame);
 void   interrupt_register_dummy_handlers(descriptor_idt_t* idt);
+void   interrupt_inject_dummy_interrupt_handler(uint8_t int_no);
 void   interrupt_handlers_set_kernel_cr3_value(uint64_t cr3_value);
 void   interrupt_handlers_set_generic_handler(interrupt_generic_handler_f handler);
 int8_t interrupt_handlers_make_readonly(void);

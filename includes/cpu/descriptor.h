@@ -216,7 +216,7 @@ _Static_assert(sizeof(descriptor_idt_t) == 16, "descriptor_idt_t size must be 16
  * @brief  common register value for gdtr, idtr, ldtr, tr
  *
  */
-typedef struct descriptor_register {
+typedef struct descriptor_register_t {
     uint16_t limit; ///< size of table-1
     uint64_t base; ///< where is table?
 }__attribute__((packed, aligned(64))) descriptor_register_t; ///< struct short hand

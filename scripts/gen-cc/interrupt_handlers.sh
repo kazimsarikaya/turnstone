@@ -275,5 +275,22 @@ void interrupt_register_dummy_handlers(descriptor_idt_t* idt) {
   }
 }
 
+__attribute__((naked, no_stack_protector))
+static void interrupt_dummy_handler(void) {
+     while (true) {
+        asm volatile ("hlt");
+    }
+}
+
+void interrupt_inject_dummy_interrupt_handler(uint8_t int_no) {
+    descriptor_register_t int_desc = descriptor_get_idt_register();
+    descriptor_idt_t* idt = (descriptor_idt_t*)int_desc.base;
+    uint64_t fa = (uint64_t)interrupt_dummy_handler;
+    idt[int_no].ist = 0;
+    idt[int_no].offset_1 = (fa & 0xFFFF);
+    idt[int_no].offset_2 = ((fa >> 16) & 0xFFFF);
+    idt[int_no].offset_3 = ((fa >> 32) & 0xFFFFFFFF);
+}
+
 #endif
 EOF

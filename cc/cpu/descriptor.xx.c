@@ -31,6 +31,9 @@ int8_t descriptor_build_gdt_register(void){
         return -1;
     }
 
+    // remove firmware's gdt page mapping.
+    descriptor_register_t old_gdtr = descriptor_get_gdt_register();
+
     uint16_t gdt_size = sizeof(descriptor_gdt_t) * 7;
 
     uint64_t gdt_fa_size = gdt_size + (FRAME_SIZE - (gdt_size % FRAME_SIZE));
@@ -95,6 +98,19 @@ int8_t descriptor_build_gdt_register(void){
                   "mov $0x10, %%rax\n"
                   "mov %%ax, %%ss\n"
                   : : "m" (gdtr));
+
+    old_gdtr.base = old_gdtr.base & ~(FRAME_SIZE - 1); // align to page boundary
+    frame_t old_gdt_frame = {
+        .frame_address = old_gdtr.base,
+        .frame_count   = (old_gdtr.limit + 1 + (FRAME_SIZE - 1)) / FRAME_SIZE
+    };
+
+    if(memory_paging_delete_va_for_frame(old_gdtr.base, &old_gdt_frame) != 0) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot delete va for old gdt frame");
+
+        return -1;
+    }
+
     return 0;
 }
 
@@ -366,6 +382,8 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
 }
 
 int8_t descriptor_build_idt_register(void){
+    descriptor_register_t old_idtr = descriptor_get_idt_register();
+
     uint16_t idt_size = sizeof(descriptor_idt_t) * 256;
 
     frame_t idt_frame = {IDT_BASE_ADDRESS, (idt_size + FRAME_SIZE - 1) / FRAME_SIZE, FRAME_TYPE_RESERVED, 0};
@@ -388,6 +406,22 @@ int8_t descriptor_build_idt_register(void){
     PRINTLOG(KERNEL, LOG_DEBUG, "idt register limit: 0x%04x base: 0x%p", idt_register.limit, (void*)idt_register.base);
 
     asm volatile ("lidt %0\n" : : "m" (idt_register));
+
+    if(old_idtr.base != IDT_BASE_ADDRESS) {
+        // remove firmware's idt page mapping.
+        old_idtr.base &= ~(FRAME_SIZE - 1); // align to page boundary
+
+        frame_t old_idt_frame = {
+            .frame_address = old_idtr.base,
+            .frame_count   = (old_idtr.limit + 1 + (FRAME_SIZE - 1)) / FRAME_SIZE
+        };
+
+        if(memory_paging_delete_va_for_frame(old_idtr.base, &old_idt_frame) != 0) {
+            PRINTLOG(KERNEL, LOG_ERROR, "cannot delete va for old idt frame");
+
+            return -1;
+        }
+    }
 
     return 0;
 }

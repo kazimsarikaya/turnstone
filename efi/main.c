@@ -16,6 +16,7 @@
 #include <cpu/crx.h>
 #include <cpu/sync.h>
 #include <cpu/cpu_state.h>
+#include <cpu/descriptor.h>
 #include <buffer.h>
 #include <data.h>
 #include <zpack.h>
@@ -1671,6 +1672,34 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
         goto catch_efi_error;
     }
 
+    descriptor_register_t idtr;
+    asm volatile ("sidt %0" : "=m" (idtr));
+
+    idtr.base &= ~(FRAME_SIZE - 1);
+
+    frm.frame_address = (uint64_t)idtr.base;
+    frm.frame_count   = (idtr.limit + 1 + (FRAME_SIZE - 1)) / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, idtr.base, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add idt to page table");
+
+        goto catch_efi_error;
+    }
+
+    descriptor_register_t gdtr;
+    asm volatile ("sgdt %0" : "=m" (gdtr));
+
+    gdtr.base &= ~(FRAME_SIZE - 1);
+
+    frm.frame_address = (uint64_t)gdtr.base;
+    frm.frame_count   = (gdtr.limit + 1 + (FRAME_SIZE - 1)) / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, gdtr.base, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add gdt to page table");
+
+        goto catch_efi_error;
+    }
+
     PRINTLOG(EFI, LOG_DEBUG, "page table context virtual address 0x%llx", frm.frame_address);
 
     kernel_start_t kernel_start = (kernel_start_t)requested_program_base;
@@ -1682,6 +1711,7 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
     PRINTLOG(EFI, LOG_DEBUG, "tosdb backend closed");
 
     PRINTLOG(EFI, LOG_INFO, "program entry point 0x%llx", program_header->program_entry);
+    PRINTLOG(EFI, LOG_INFO, "program stack top physical address 0x%llx", program_header->program_stack_physical_address + program_header->program_stack_size);
     PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p, and will switch to 0x%llx", requested_program_base, sysinfo, program_base);
     time_t efi_end_time = time_ns(NULL);
     PRINTLOG(EFI, LOG_INFO, "efi end time %llu took: %llu ms", efi_end_time, (efi_end_time - boot_time) / 1000000ULL);

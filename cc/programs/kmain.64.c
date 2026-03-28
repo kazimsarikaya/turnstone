@@ -90,6 +90,13 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
 
     cpu_cld();
 
+    // inject our dummy handlers to current idt.
+    // we will replace them. however until then
+    // we need to prevent triple fault to reset
+    // machine and examine registers.
+    interrupt_inject_dummy_interrupt_handler(0x0D);
+    interrupt_inject_dummy_interrupt_handler(0x0E);
+
     cpu_write_msr(CPU_MSR_IA32_GS_BASE, SYSTEM_INFO->gs_page_address_base);
     asm volatile ("swapgs\n");
     cpu_write_msr(CPU_MSR_IA32_GS_BASE, SYSTEM_INFO->gs_page_address_base);
@@ -180,6 +187,11 @@ int8_t kmain64(size_t entry_point) {
     SYSTEM_INFO = new_system_info;
 
     PRINTLOG(KERNEL, LOG_DEBUG, "new system info created at 0x%p", SYSTEM_INFO);
+
+    {
+        // uint8_t* td = (uint8_t*)0xdeadbeef;
+        // *td = 0x42; // this will cause page fault and we can check if our dummy handler works.
+    }
 
     if(backtrace_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init backtrace. Halting...");
