@@ -393,7 +393,9 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor iommu.");
     }
 
-    if(hypervisor_init() != 0) {
+    syscall_init();
+
+    if(hypervisor_init(false) != 0) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor.");
     }
 
