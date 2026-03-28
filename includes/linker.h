@@ -210,7 +210,8 @@ typedef struct linker_context_t {
     uint64_t   got_address_virtual;
     uint64_t   entrypoint_address_virtual;
     uint64_t   size_of_sections[LINKER_SECTION_TYPE_NR_SECTIONS];
-    hashmap_t* modules;
+    hashmap_t* modules; // for fast accessing modules by id.
+    list_t*    module_list; // for iterating with nearby modules.
     buffer_t*  got_table_buffer;
     buffer_t*  symbol_table_buffer;
     hashmap_t* got_symbol_index_map;

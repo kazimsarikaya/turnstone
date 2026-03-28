@@ -1335,6 +1335,7 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
     ctx->program_start_physical = program_base;
     ctx->tdb                    = tdb_ctx->tosdb;
     ctx->modules                = hashmap_integer(16);
+    ctx->module_list            = list_create_queue();
     ctx->got_table_buffer       = buffer_new();
     ctx->symbol_table_buffer    = buffer_new();
     ctx->got_symbol_index_map   = hashmap_integer(1024);
@@ -1480,6 +1481,8 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
     PRINTLOG(EFI, LOG_INFO, "link end time %llu", end_link_time);
 
     uint8_t* program_data = (uint8_t*)requested_program_base;
+
+    memory_memclean(program_data, program_total_size);
 
     program_header_t* program_header = (program_header_t*)requested_program_base;
 

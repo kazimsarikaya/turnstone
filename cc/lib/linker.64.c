@@ -88,6 +88,8 @@ static int8_t linker_efi_image_section_header_cmp(const void* a, const void* b) 
 int8_t linker_destroy_context(linker_context_t* ctx) {
     hashmap_destroy(ctx->got_symbol_index_map);
     buffer_destroy(ctx->got_table_buffer);
+    buffer_destroy(ctx->symbol_table_buffer);
+    list_destroy(ctx->module_list);
 
     iterator_t* it = hashmap_iterator_create(ctx->modules);
 
@@ -887,6 +889,7 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
         module->id = module_id;
         hashmap_put(ctx->modules, (void*)module_id, module);
+        list_queue_push(ctx->module_list, module);
     } else {
         if(recursive) {
             return -2;
@@ -1186,7 +1189,13 @@ int8_t linker_bind_linear_addresses(linker_context_t* ctx) {
     uint64_t offset_pyhsical = ctx->program_start_physical;
     uint64_t offset_virtual  = ctx->program_start_virtual;
 
-    iterator_t* it = hashmap_iterator_create(ctx->modules);
+    iterator_t* it = NULL;
+
+    if(ctx->module_list) {
+        it = list_iterator_create(ctx->module_list);
+    } else {
+        it = hashmap_iterator_create(ctx->modules);
+    }
 
     if(!it) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator");
@@ -2333,13 +2342,21 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
     if(dump_type & LINKER_PROGRAM_DUMP_TYPE_CODE) {
 
-        iterator_t* it = hashmap_iterator_create(ctx->modules);
+        iterator_t* it = NULL;
+        if(ctx->module_list) {
+            it = list_iterator_create(ctx->module_list);
+        }  else{
+            it = hashmap_iterator_create(ctx->modules);
+        }
 
         if(!it) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator");
 
             return -1;
         }
+
+        buffer_t* symbol_table_buffer  = ctx->symbol_table_buffer;
+        const char_t* symbol_table_str = (const char_t*)buffer_get_raw_bytes(symbol_table_buffer);
 
         while(!it->end_of_iterator(it)) {
             linker_module_t* module = (linker_module_t*)it->get_item(it);
@@ -2353,8 +2370,14 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
                 uint8_t* section_data = buffer_get_view_at_position(module->sections[i].section_data, 0, section_data_size);
 
-                PRINTLOG(LINKER, LOG_DEBUG, "copying module id 0x%llx section type %lli to 0x%llx with size 0x%llx",
-                         module->id, i, module->sections[i].physical_start - ctx->program_start_physical, section_data_size);
+                // for .bss/.tbss no data to copy, its section_data_size will be 0.
+                // memory_memcopy handle this case correctly, it will just do nothing.
+                PRINTLOG(LINKER, LOG_DEBUG, "copying module id 0x%llx (%s) section %s to 0x%llx with size 0x%llx",
+                         module->id,
+                         symbol_table_str?symbol_table_str + module->module_name_offset:"<unknown>",
+                         linker_section_type_names[i],
+                         program_target_offset + module->sections[i].physical_start - ctx->program_start_physical,
+                         module->sections[i].size);
                 memory_memcopy(section_data,
                                array + program_target_offset + module->sections[i].physical_start - ctx->program_start_physical,
                                section_data_size);
