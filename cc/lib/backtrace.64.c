@@ -235,26 +235,3 @@ void backtrace_print(stackframe_t* frame) {
 void backtrace(void){
     backtrace_print(backtrace_get_stackframe());
 }
-
-stackframe_t* backtrace_print_interrupt_registers(uint64_t rsp) {
-    uint64_t* registers = (uint64_t*)(rsp + 0x18);
-
-    PRINTLOG(KERNEL, LOG_ERROR, "Registers:");
-    PRINTLOG(KERNEL, LOG_ERROR, "\tRAX: 0x%llx", registers[0]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tRDX: 0x%llx", registers[1]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tRCX: 0x%llx", registers[2]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tRBX: 0x%llx", registers[3]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tRSI: 0x%llx", registers[4]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tRDI: 0x%llx", registers[5]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tR8: 0x%llx", registers[6]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tR9: 0x%llx", registers[7]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tR10: 0x%llx", registers[8]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tR11: 0x%llx", registers[9]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tR12: 0x%llx", registers[10]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tR13: 0x%llx", registers[11]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tR14: 0x%llx", registers[12]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tR15: 0x%llx", registers[13]);
-    PRINTLOG(KERNEL, LOG_ERROR, "\tRBP: 0x%llx", registers[14]);
-
-    return (stackframe_t*)registers[14];
-}
