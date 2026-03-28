@@ -15,6 +15,7 @@
 #include <ports.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
+#include <memory/special_frame_addresses.h>
 #include <systeminfo.h>
 #include <list.h>
 #include <cpu.h>
@@ -103,7 +104,7 @@ static int8_t acpi_sleep_task(int64_t argc, void** argv) {
     if(acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, reg_val_a, ACPI_PM1A_CONTROL_REGISTER) != 0) {
         PRINTLOG(ACPI, LOG_ERROR, "Cannot write pm1a");
 
-        smp_data_t* smp_data = (smp_data_t*)0x9000;
+        smp_data_t* smp_data = (smp_data_t*)SMP_TRAMPOLINE_SHARED_DATA;
         smp_data->is_for_wakeup = false;
         smp_data->wakeup_count--;
 
@@ -113,7 +114,7 @@ static int8_t acpi_sleep_task(int64_t argc, void** argv) {
             if(acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, reg_val_b, ACPI_PM1B_CONTROL_REGISTER) != 0) {
                 PRINTLOG(ACPI, LOG_ERROR, "Cannot write pm1b");
 
-                smp_data_t* smp_data = (smp_data_t*)0x9000;
+                smp_data_t* smp_data = (smp_data_t*)SMP_TRAMPOLINE_SHARED_DATA;
                 smp_data->is_for_wakeup = false;
                 smp_data->wakeup_count--;
 
@@ -196,7 +197,7 @@ static int8_t acpi_sleep_generic(acpi_sleep_type_t sleep_type) {
 
     uint32_t reg_val = ((uint32_t)reg_val_b << 16) | reg_val_a;
 
-    smp_data_t* smp_data = (smp_data_t*)0x9000;
+    smp_data_t* smp_data = (smp_data_t*)SMP_TRAMPOLINE_SHARED_DATA;
 
     smp_data->is_for_wakeup = true;
     smp_data->wakeup_count++;

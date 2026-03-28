@@ -15,6 +15,7 @@
 #include <cpu/smp.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
+#include <memory/special_frame_addresses.h>
 #include <list.h>
 #include <time.h>
 #include <time/timer.h>
@@ -1660,7 +1661,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, uint64_t stack_size) {
     memory_heap_t* heap      = task_map_heap;
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
-    smp_data_t* smp_data     = (smp_data_t*)0x9000;
+    smp_data_t* smp_data     = (smp_data_t*)SMP_TRAMPOLINE_SHARED_DATA;
 
     uint32_t apic_id = cpu_state->local_apic_id;
 

@@ -14,6 +14,7 @@
 #include <memory.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
+#include <memory/special_frame_addresses.h>
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <cpu/task.h>
@@ -29,7 +30,7 @@
 
 MODULE("turnstone.kernel.cpu.smp");
 
-const uint8_t trampoline_code[] = {
+const uint8_t smp_trampoline_code[] = {
     0xea, 0x38, 0x80, 0x00, 0x00, // 8000: jmp $0x0:$0x8038
     0x00, 0x00, 0x00, // padding
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 8008: padding
@@ -82,7 +83,7 @@ const uint8_t trampoline_code[] = {
     0x48, 0x81, 0xe3, 0xff, 0x00, 0x00, 0x00, // 80c9: and $0xff, %rbx
     0x48, 0x89, 0xda, // 80d0: mov %rbx, %rdx
     0x48, 0x89, 0xdf, // 80d3: mov %rbx, %rdi
-    0x48, 0xc7, 0xc3, 0x00, 0x90, 0x00, 0x00, // 80d6: mov $0x9000, %rbx
+    0x48, 0xc7, 0xc3, 0x00, 0x00, 0x00, 0x00, // 80d6: mov $0x0, %rbx
     0x48, 0x8b, 0x43, 0x08, // 80dd: mov 0x8(%rbx), %rax
     0x48, 0x8b, 0x0b, // 80e1: mov (%rbx), %rcx
     0x48, 0xff, 0xc2, // 80e4: inc %rdx
@@ -103,6 +104,20 @@ const uint8_t trampoline_code[] = {
     0xeb, 0xfd, // 8117: jmp 0x8113
 };
 
+typedef struct smp_trampoline_code_t {
+    uint8_t  code_part1[0xd9];
+    uint32_t smp_shared_data_address;
+    uint8_t  code_part2[0x33];
+    uint32_t smp_ap_boot;
+    uint8_t  code_part3[0x5];
+} __attribute__((packed)) smp_trampoline_code_t;
+
+_Static_assert(offsetof_field(smp_trampoline_code_t, smp_shared_data_address) == 0xd9, "smp trampoline code shared data address offset mismatch");
+
+_Static_assert(offsetof_field(smp_trampoline_code_t, smp_ap_boot) == 0x110, "smp trampoline code ap boot offset mismatch");
+
+_Static_assert(sizeof(smp_trampoline_code) == sizeof(smp_trampoline_code_t), "smp trampoline code size mismatch");
+
 
 static int8_t smp_init_cpu(uint8_t cpu_id) {
     PRINTLOG(APIC, LOG_INFO, "SMP: Initialising CPU %d", cpu_id);
@@ -121,7 +136,7 @@ static int32_t smp_ap_boot(uint8_t cpu_id) {
 
     cpu_enable_sse();
 
-    smp_data_t* smp_data = (smp_data_t*)0x9000;
+    smp_data_t* smp_data = (smp_data_t*)SMP_TRAMPOLINE_SHARED_DATA;
 
     uint64_t gs_base = smp_data->gs_base;
     gs_base += cpu_id * smp_data->gs_base_size;
@@ -403,19 +418,19 @@ int8_t smp_init(void) {
         return -1;
     }
 
-    memory_paging_add_page(0x8000, 0x8000, MEMORY_PAGING_PAGE_TYPE_4K);
+    memory_paging_add_page(SMP_TRAMPOLINE_CODE, SMP_TRAMPOLINE_CODE, MEMORY_PAGING_PAGE_TYPE_4K);
 
-    uint8_t * trampoline = (uint8_t*)0x8000;
+    uint8_t * trampoline = (uint8_t*)SMP_TRAMPOLINE_CODE;
 
-    memory_paging_add_page(0x9000, 0x9000, MEMORY_PAGING_PAGE_TYPE_4K);
+    memory_paging_add_page(SMP_TRAMPOLINE_SHARED_DATA, SMP_TRAMPOLINE_SHARED_DATA, MEMORY_PAGING_PAGE_TYPE_4K);
 
-    smp_data_t* smp_data = (smp_data_t*)0x9000;
+    smp_data_t* smp_data = (smp_data_t*)SMP_TRAMPOLINE_SHARED_DATA;
 
-    memory_memcopy(trampoline_code, trampoline, sizeof(trampoline_code));
+    memory_memcopy(smp_trampoline_code, trampoline, sizeof(smp_trampoline_code));
 
-    uint32_t* trampoline_call_addr = (uint32_t*)(void*)(trampoline + 0x110);
-
-    *trampoline_call_addr = (uint32_t)((uint64_t)smp_ap_boot);
+    smp_trampoline_code_t* trampoline_struct = (smp_trampoline_code_t*)trampoline;
+    trampoline_struct->smp_shared_data_address = SMP_TRAMPOLINE_SHARED_DATA;
+    trampoline_struct->smp_ap_boot             = (uint32_t)(uintptr_t)smp_ap_boot;
 
     list_t* apic_entries = acpi_get_apic_table_entries(madt);
 

@@ -10,6 +10,7 @@
 #include <memory.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
+#include <memory/special_frame_addresses.h>
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <systeminfo.h>

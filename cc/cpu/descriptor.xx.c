@@ -15,6 +15,7 @@
 #include <memory.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
+#include <memory/special_frame_addresses.h>
 #include <systeminfo.h>
 #include <linker.h>
 #include <systeminfo.h>
@@ -141,7 +142,7 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
     uint64_t stack_size      = kernel->program_stack_size;
 
-    smp_data_t* smp_data = (smp_data_t*)0x9000;
+    smp_data_t* smp_data = (smp_data_t*)SMP_TRAMPOLINE_SHARED_DATA;
 
     if(smp_data->is_for_wakeup) {
         uint16_t idt_size = sizeof(descriptor_idt_t) * 256;
