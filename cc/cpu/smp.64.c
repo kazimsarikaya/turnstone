@@ -223,65 +223,74 @@ static int32_t smp_ap_boot(uint8_t cpu_id) {
         cpu_hlt();
     }
 
-    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i init done", cpu_id);
+    if(smp_data->is_for_wakeup) {
+        if(smp_data->wakeup_task) {
+            task_t* wakeup_task = smp_data->wakeup_task;
+            smp_data->wakeup_task = NULL;
+            if(task_wake_up(wakeup_task) != 0) {
+                PRINTLOG(KERNEL, LOG_ERROR, "cannot schedule to wake up task with id 0x%llx on cpu %lli by AP %i",
+                         wakeup_task->task_id, wakeup_task->cpu_id, cpu_id);
 
-    cpu_sti();
-
-    if(smp_data->is_for_wakeup && smp_data->wakeup_task) {
-        task_t* wakeup_task = smp_data->wakeup_task;
-        smp_data->wakeup_task = NULL;
-        if(task_wake_up(wakeup_task) != 0) {
-            PRINTLOG(KERNEL, LOG_ERROR, "cannot schedule to wake up task with id 0x%llx on cpu %lli by AP %i", wakeup_task->task_id, wakeup_task->cpu_id, cpu_id);
-
-            cpu_hlt();
-        }
-
-        PRINTLOG(KERNEL, LOG_INFO, "AP %i woke up task with id 0x%llx on cpu %lli", cpu_id, wakeup_task->task_id, wakeup_task->cpu_id);
-    }
-
-    if(smp_data->is_for_wakeup && cpu_state->local_apic_id == 0) { // only bsp should set area.
-        if(pci_restore_registers() != 0) {
-            PRINTLOG(KERNEL, LOG_ERROR, "cannot restore pci registers after wakeup");
-
-            cpu_hlt();
-        }
-
-        video_display_reinit();
-        video_set_graphics_mode(true);
-
-
-        // wake up other cpus.
-        PRINTLOG(KERNEL, LOG_INFO, "AP %i waking up other cpus.", cpu_id);
-        for(uint64_t i = 0; i < SYSTEM_INFO->cpu_count; i++) {
-            if(i == cpu_id) {
-                continue;
+                cpu_hlt();
             }
 
-            PRINTLOG(KERNEL, LOG_INFO, "AP %i sending wakeup signal to cpu %lli.", cpu_id, i);
-
-            smp_init_cpu(i);
-
-            PRINTLOG(KERNEL, LOG_INFO, "AP %i sent wakeup signal to cpu %lli.", cpu_id, i);
+            PRINTLOG(KERNEL, LOG_INFO, "AP %i woke up task with id 0x%llx on cpu %lli",
+                     cpu_id, wakeup_task->task_id, wakeup_task->cpu_id);
         }
 
-        // wait for other cpus to boot and set running_cpu_count.
-        PRINTLOG(KERNEL, LOG_INFO, "AP %i waiting for other cpus to boot.", cpu_id);
-        while(true) {
-            lock_acquire(smp_data->lock);
-            if(smp_data->running_cpu_count >= SYSTEM_INFO->cpu_count) {
+        if(cpu_state->local_apic_id == 0) {
+            if(pci_restore_registers() != 0) {
+                PRINTLOG(KERNEL, LOG_ERROR, "cannot restore pci registers after wakeup");
+
+                cpu_hlt();
+            }
+
+            video_display_reinit();
+            video_set_graphics_mode(true);
+
+            cpu_sti();
+
+            // wake up other cpus.
+            PRINTLOG(KERNEL, LOG_INFO, "AP %i waking up other cpus.", cpu_id);
+            for(uint64_t i = 0; i < SYSTEM_INFO->cpu_count; i++) {
+                if(i == cpu_id) {
+                    continue;
+                }
+
+                PRINTLOG(KERNEL, LOG_INFO, "AP %i sending wakeup signal to cpu %lli.", cpu_id, i);
+
+                smp_init_cpu(i);
+
+                PRINTLOG(KERNEL, LOG_INFO, "AP %i sent wakeup signal to cpu %lli.", cpu_id, i);
+            }
+
+            // wait for other cpus to boot and set running_cpu_count.
+            PRINTLOG(KERNEL, LOG_INFO, "AP %i waiting for other cpus to boot.", cpu_id);
+            while(true) {
+                lock_acquire(smp_data->lock);
+                if(smp_data->running_cpu_count >= SYSTEM_INFO->cpu_count) {
+                    lock_release(smp_data->lock);
+
+                    break;
+                }
                 lock_release(smp_data->lock);
 
-                break;
+                task_msleep(10);
             }
+
+            smp_data->is_for_wakeup = false;
+
+            PRINTLOG(KERNEL, LOG_INFO, "AP %i wakeup completed. All %lli cpus are running.", cpu_id, smp_data->running_cpu_count);
+        } else {
+            cpu_sti();
+
+            lock_acquire(smp_data->lock);
+            smp_data->running_cpu_count++;
             lock_release(smp_data->lock);
 
-            task_msleep(10);
+            PRINTLOG(KERNEL, LOG_INFO, "AP %i wakeup completed.", cpu_id);
         }
 
-        smp_data->is_for_wakeup = false;
-
-        PRINTLOG(KERNEL, LOG_INFO, "AP %i wakeup completed. All %lli cpus are running.", cpu_id, smp_data->running_cpu_count);
-
         task_exit(0);
 
         PRINTLOG(KERNEL, LOG_ERROR, "we should never reach here after task exit");
@@ -289,25 +298,13 @@ static int32_t smp_ap_boot(uint8_t cpu_id) {
         return 0;
     }
 
+    lock_acquire(smp_data->lock);
+    smp_data->running_cpu_count++;
+    lock_release(smp_data->lock);
 
-    if(smp_data->is_for_wakeup) {
-        lock_acquire(smp_data->lock);
-        smp_data->running_cpu_count++;
-        lock_release(smp_data->lock);
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i init done", cpu_id);
 
-        PRINTLOG(KERNEL, LOG_INFO, "AP %i wakeup completed.", cpu_id);
-
-        task_exit(0);
-
-        PRINTLOG(KERNEL, LOG_ERROR, "we should never reach here after task exit");
-
-        return 0;
-    } else {
-        lock_acquire(smp_data->lock);
-        smp_data->running_cpu_count++;
-        lock_release(smp_data->lock);
-    }
-
+    // from here it is just a test for userpspace and syscall, we can remove it later.
 
     frame_t* user_code_frames = NULL;
 
