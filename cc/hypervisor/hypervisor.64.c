@@ -452,7 +452,7 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name,
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm name: %s", vm_name);
 
-    if(task_create_task(heap, 2 << 20, 1 << 20, entry_point, 3, args, vm_name) == -1ULL) {
+    if(task_create_task(vm_name, entry_point, 3, args, 2 << 20, 1 << 20) == -1ULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm task");
         memory_free(args);
         memory_free(vm_name);

@@ -71,16 +71,6 @@ static int8_t acpi_sleep_task(int64_t argc, void** argv) {
 
     task_t* current_task = task_get_current_task();
 
-    task_set_attribute(current_task->task_id, TASK_ATTRIBUTE_ACPI_SLEEP_TASK | TASK_ATTRIBUTE_NO_PREEMPTION);
-
-    task_broadcast_parked_but_not_myself();
-    task_wait_for_cpus_in_parked_but_not_myself();
-
-    if(pci_recollect_header_data() != 0) {
-        PRINTLOG(ACPI, LOG_ERROR, "cannot recollect pci header data before sleep");
-        return -1;
-    }
-
     const char_t* sleep_type_str = "unknown";
 
     if(strcontains(current_task->task_name, "suspend")) {
@@ -91,13 +81,23 @@ static int8_t acpi_sleep_task(int64_t argc, void** argv) {
         sleep_type_str = "poweroff";
     }
 
-    PRINTLOG(ACPI, LOG_INFO, "all cpus parked, going to %s", sleep_type_str);
+    PRINTLOG(ACPI, LOG_INFO, "acpi sleep task started for %s", sleep_type_str);
+    task_broadcast_parked_but_not_myself();
+    PRINTLOG(ACPI, LOG_INFO, "waiting for other cpus to park before sleep");
+    task_wait_for_cpus_in_parked_but_not_myself();
+    PRINTLOG(ACPI, LOG_INFO, "all other cpus parked, preparing for %s", sleep_type_str);
+
+    if(pci_recollect_header_data() != 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "cannot recollect pci header data before sleep");
+        return -1;
+    }
 
     uint32_t reg_val_32 = (uint32_t)(uintptr_t)argv;
 
     uint16_t reg_val_a = (uint16_t)reg_val_32;
     uint16_t reg_val_b = (uint16_t)(reg_val_32 >> 16);
 
+    PRINTLOG(ACPI, LOG_INFO, "going to %s with pm1a control value 0x%04x and pm1b control value 0x%04x", sleep_type_str, reg_val_a, reg_val_b);
 
     asm volatile ("wbinvd\n");
 
@@ -121,6 +121,11 @@ static int8_t acpi_sleep_task(int64_t argc, void** argv) {
                 return -1;
             }
         }
+    }
+
+    PRINTLOG(ACPI, LOG_INFO, "write to pm1 control register completed, system should be going to sleep");
+    while(true) {
+        cpu_idle();
     }
 
     return -1;
@@ -205,8 +210,6 @@ static int8_t acpi_sleep_generic(acpi_sleep_type_t sleep_type) {
 
     task_set_attribute(task_get_id(), TASK_ATTRIBUTE_WAKEUP_FROM_ACPI_SLEEP);
 
-    memory_heap_t* heap = memory_get_default_heap();
-
     char_t* task_name = NULL;
 
     switch(sleep_type) {
@@ -224,7 +227,9 @@ static int8_t acpi_sleep_generic(acpi_sleep_type_t sleep_type) {
         break;
     }
 
-    if(task_create_task(heap, 1 << 20, 64 << 10, acpi_sleep_task, 1, (void**)(uintptr_t)reg_val, task_name) == -1ULL) {
+    if(task_create_task(task_name, acpi_sleep_task, 1, (void**)(uintptr_t)reg_val,
+                        1 << 20, 64 << 10,
+                        .attributes = TASK_ATTRIBUTE_ACPI_SLEEP_TASK | TASK_ATTRIBUTE_NO_PREEMPTION) == -1ULL) {
         PRINTLOG(ACPI, LOG_ERROR, "cannot create acpi sleep task");
         smp_data->is_for_wakeup = false;
         smp_data->wakeup_count--;

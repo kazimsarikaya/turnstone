@@ -649,9 +649,7 @@ int8_t tosdb_manager_init(void) {
         return -1;
     }
 
-    memory_heap_t* heap = memory_get_default_heap();
-
-    tosdb_manager_task_id = task_create_task(heap, 256 << 20, 2 << 20, tosdb_manager_main, 0, NULL, "tosdb_manager");
+    tosdb_manager_task_id = task_create_task("tosdb_manager", tosdb_manager_main, .heap_size = 256 << 20, 2 << 20);
     return tosdb_manager_task_id == -1ULL ? -1 : 0;
 }
 

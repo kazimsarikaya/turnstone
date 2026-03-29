@@ -56,9 +56,11 @@ typedef struct system_info_t {
     uint64_t              gs_page_address_base;
     uint64_t              gs_page_size;
     uint64_t              cpu_count; ///< cpu count
+    uint64_t              proximity_domain_count; ///< proximity domain count
+    uint32_t*             cpu_proximity_domain_array; ///< cpu proximity domain array, indexed by local apic id, with size of cpu count
 } system_info_t; ///< struct short hand for system_info_t
 
-_Static_assert(sizeof(system_info_t) == 192, "system_info_t size should be 192 bytes");
+_Static_assert(sizeof(system_info_t) == 208, "system_info_t size should be 208 bytes");
 
 /*! static location of system information */
 extern system_info_t* SYSTEM_INFO;

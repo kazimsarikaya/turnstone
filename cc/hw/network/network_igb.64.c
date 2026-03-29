@@ -121,7 +121,7 @@ static int8_t network_igb_process_tx(void) {
         args[0] = (void*)dev->mac;
         args[1] = dev->return_queue;
 
-        task_create_task(NULL, 2 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, args, dhcp_task_name);
+        task_create_task(dhcp_task_name, network_dhcpv4_send_discover, 2, args, 2 << 20, 64 << 10);
         memory_free(dhcp_task_name);
     }
 
@@ -849,11 +849,12 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
                                      dev->mac[0], dev->mac[1], dev->mac[2],
                                      dev->mac[3], dev->mac[4], dev->mac[5]);
 
-    uint64_t rx_task_id = task_create_task(NULL, 2 << 20, 64 << 10, &network_igb_process_rx, 1, rx_args, rx_task_name);
+    uint64_t rx_task_id = task_create_task(rx_task_name, network_igb_process_rx, 1, rx_args, 2 << 20, 64 << 10);
     dev->rx_task_id = rx_task_id;
+    memory_free(rx_task_name);
 
 
-    uint64_t tx_task_id =    task_create_task(NULL, 2 << 20, 64 << 10, &network_igb_process_tx, 0, NULL, "igb-tx");
+    uint64_t tx_task_id = task_create_task("igb-tx", network_igb_process_tx, .heap_size = 2 << 20, 64 << 10);
     dev->tx_task_id = tx_task_id;
 
     PRINTLOG(IGB, LOG_INFO, "device initialized");

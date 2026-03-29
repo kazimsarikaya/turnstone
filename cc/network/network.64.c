@@ -197,7 +197,7 @@ int8_t network_init(void) {
 
     iter->destroy(iter);
 
-    network_rx_task_id = task_create_task(NULL, 2 << 20, 64 << 10, &network_process_rx, 0, NULL, "network rx task");
+    network_rx_task_id = task_create_task("network rx task", network_process_rx, .heap_size = 2 << 20, 64 << 10);
 
     PRINTLOG(NETWORK, LOG_INFO, "network devices started");
 

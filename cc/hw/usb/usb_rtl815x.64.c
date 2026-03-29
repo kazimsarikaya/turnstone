@@ -1239,7 +1239,7 @@ static int8_t usb_rtl815x_process_tx(uint64_t arg_cnt, void** args) {
     dhcp_args[0] = (void*)drv->mac;
     dhcp_args[1] = drv->return_queue;
 
-    drv->dhcp_task_id = task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, dhcp_args, dhcp_task_name);
+    drv->dhcp_task_id = task_create_task(dhcp_task_name, network_dhcpv4_send_discover, 2, dhcp_args, 1 << 20, 64 << 10);
 
     memory_free(dhcp_task_name);
 
@@ -1477,7 +1477,7 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
         return -1;
     }
 
-    uint64_t tx_task_id =  task_create_task(NULL, 2 << 20, 64 << 10, usb_rtl815x_process_tx, 1, args, task_name);
+    uint64_t tx_task_id =  task_create_task(task_name, usb_rtl815x_process_tx, 1, args, 2 << 20, 64 << 10);
 
     memory_free(task_name);
 

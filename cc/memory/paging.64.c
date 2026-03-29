@@ -546,6 +546,18 @@ int8_t memory_paging_reserve_current_page_table_frames(void) {
         return -1;
     }
 
+    frm.frame_address = SMP_TRAMPOLINE_SHARED_DATA;
+    frm.frame_count   = 1;
+
+    if(memory_paging_add_va_for_frame_ext(table_context,
+                                          SMP_TRAMPOLINE_SHARED_DATA,
+                                          &frm,
+                                          MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(PAGING, LOG_ERROR, "failed to map SMP trampoline shared data frame");
+
+        return -1;
+    }
+
     return 0;
 }
 memory_page_table_context_t* memory_paging_create_empty_userspace_table(

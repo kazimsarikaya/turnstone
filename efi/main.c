@@ -866,6 +866,7 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
 
     uint64_t max_memory_address = 0;
     uint32_t cpu_count          = 0;
+    size_t max_proximity_domain = 0;
 
     if(acpi_xrsdp) {
 
@@ -914,6 +915,10 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
 
                     if(proc_aff_entry->apic_id == local_apic_id) {
                         local_apic_proximity_domain = proximity_domain;
+                    }
+
+                    if(proximity_domain > max_proximity_domain) {
+                        max_proximity_domain = proximity_domain;
                     }
 
                     break;
@@ -976,6 +981,10 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
                         if(mem_end > max_memory_address) {
                             max_memory_address = mem_end;
                         }
+                    }
+
+                    if(mem_aff_entry->proximity_domain > max_proximity_domain) {
+                        max_proximity_domain = mem_aff_entry->proximity_domain;
                     }
 
                     break;
@@ -1041,6 +1050,32 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
     }
 
     efi_print_variable_names();
+
+    uint32_t* cpu_proximity_domains = memory_malloc(sizeof(uint32_t) * (max_proximity_domain + 1));
+
+    if(srat) {
+        int32_t total_length            = srat->header.length;
+        int32_t remaining               = (total_length - sizeof(acpi_table_srat_t));
+        acpi_srat_entry_header_t* entry = (acpi_srat_entry_header_t*)(srat + 1);
+
+        while(remaining > 0) {
+            if(entry->type == ACPI_SRAT_ENTRY_TYPE_APIC_PROCESSOR_AFFINITY) {
+                acpi_srat_apic_processor_affinity_t* proc_aff_entry = (acpi_srat_apic_processor_affinity_t*)entry;
+
+                uint32_t proximity_domain = proc_aff_entry->proximity_domain_high << 24 | proc_aff_entry->proximity_domain_low;
+
+                cpu_proximity_domains[proc_aff_entry->apic_id] = proximity_domain;
+            } else if(entry->type == ACPI_SRAT_ENTRY_TYPE_X2APIC_PROCESSOR_AFFINITY) {
+                acpi_srat_x2apic_processor_affinity_t* x2apic_proc_aff_entry = (acpi_srat_x2apic_processor_affinity_t*)entry;
+
+                cpu_proximity_domains[x2apic_proc_aff_entry->x2apic_id] = x2apic_proc_aff_entry->proximity_domain;
+            }
+
+            remaining -= entry->length;
+
+            entry = (acpi_srat_entry_header_t*)((uint8_t*)entry + entry->length);
+        }
+    }
 
     query  = (cpu_cpuid_regs_t){.eax = 0xd};
     answer = (cpu_cpuid_regs_t){0};
@@ -1575,7 +1610,7 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
     sysinfo->random_seed                   = rand64();
     sysinfo->spool_size                    = spool_size;
     sysinfo->spool_physical_start          = spool_address;
-    sysinfo->spool_virtual_start           = (64UL << 40) | spool_address;
+    sysinfo->spool_virtual_start           = (64ULL << 40) | spool_address;
     sysinfo->interrupt_handlers_module_id  = ih_module_id;
     sysinfo->gs_page_address_base          = (64ULL << 40) | gs_page_address_base;
     sysinfo->gs_page_size                  = 4 * cpu_count * FRAME_SIZE;
@@ -1600,7 +1635,8 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
     for(uint32_t i = 0; i < cpu_count; i++) {
         cpu_state_t* cpu_cpu_state = (cpu_state_t*)(void*)(gs_page + i * 4 * FRAME_SIZE);
 
-        cpu_cpu_state->local_apic_id = i;
+        cpu_cpu_state->local_apic_id    = i;
+        cpu_cpu_state->proximity_domain = cpu_proximity_domains[i];
     }
 
     frm.frame_address = gs_page_address_base;

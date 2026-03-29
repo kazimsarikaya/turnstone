@@ -20,6 +20,7 @@ extern "C" {
 
 typedef struct cpu_state_t {
     uint64_t  local_apic_id; ///< local apic id
+    uint64_t  proximity_domain; ///< proximity domain
     task_t*   current_task; ///< current task
     task_t*   idle_task; ///< idle task
     task_t*   cleaner_task; ///< cleaner task

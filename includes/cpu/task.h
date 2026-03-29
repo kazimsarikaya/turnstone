@@ -132,10 +132,13 @@ typedef struct task_t {
     uint64_t                       heap_size; ///< task's heap size
     uint64_t                       task_id; ///< task's id
     uint64_t                       cpu_id; ///< cpu id which task is running
+    uint64_t                       proximity_domain_id; ///< proximity domain id of cpu which task is running, used for scheduler
     uint64_t                       last_tick_count; ///< tick count when task removes from executing, used for scheduling
     uint64_t                       task_switch_count; ///< task switch count
     task_state_t                   state; ///< task state
     task_attribute_t               attributes; ///< task attributes
+    uint32_t                       cpu_id_hint; ///< cpu id hint for scheduler, scheduler will try to schedule this task to cpu with this id if possible
+    uint32_t                       proximity_domain_hint; ///< proximity domain hint for scheduler, scheduler will try to schedule this task to cpu in this proximity domain if possible
     boolean_t                      interrupt_receive_workaround; ///< interrupt receive workaround flag FIXME: remove this field
     uint64_t                       interrupt_receive_workaround_max_tick_count; ///< max tick count for interrupt receive workaround
     uint64_t                       message_waiting_max_tick_count; ///< max tick count for message waiting
@@ -162,7 +165,7 @@ typedef struct task_t {
     cpu_registers_t*               registers __attribute__((aligned(0x40))); ///< task registers
 } task_t; ///< short hand for struct
 
-_Static_assert(offsetof_field(task_t, registers) == 0x100, "task_t registers offset is at 0x100");
+_Static_assert(offsetof_field(task_t, registers) == 0x140, "task_t registers offset is at 0x140");
 
 /**
  * @brief inits kernel tasking, configures tss and kernel task
@@ -282,17 +285,37 @@ void task_add_message_queue(list_t* queue);
 list_t* task_get_message_queue(uint64_t task_id, uint64_t queue_number);
 #define task_get_current_task_message_queue(queue_number) task_get_message_queue(task_get_id(), queue_number)
 
-/**
- * @brief creates a task and apends it to wait queue
- * @param[in] heap creator heap
- * @param[in] heap_size task's heap size, heap allocated with frame allocator
- * @param[in] stack_size task's stack size, stack allocated with frame allocator
- * @param[in] entry_point task's entry point
- * @param[in] args_cnt argument count
- * @param[in] args argument list
- * @param[in] task_name task's name
- */
-uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args, const char_t* task_name);
+typedef struct task_create_task_args_t {
+    const char_t*    task_name;
+    void*            entry_point;
+    uint64_t         args_cnt;
+    void**           args;
+    uint64_t         heap_size;
+    uint64_t         stack_size;
+    task_attribute_t attributes;
+    uint32_t         proximity_domain_hint;
+    uint32_t         cpu_id_hint;
+} task_create_task_args_t;
+
+uint64_t task_create_task_internal(task_create_task_args_t args);
+
+#define task_create_task(tn, ep, ...) ({ \
+        _Pragma("GCC diagnostic push") \
+        _Pragma("GCC diagnostic ignored \"-Woverride-init\"") \
+        uint64_t __rc = task_create_task_internal((task_create_task_args_t){ \
+        .args_cnt = 0, \
+        .args=NULL, \
+        .heap_size = 128 << 20, \
+        .stack_size = 16 << 10, \
+        .attributes = TASK_ATTRIBUTE_NONE, \
+        .proximity_domain_hint = -1U, \
+        .cpu_id_hint = -1U, \
+        .task_name = (tn), \
+        .entry_point = (ep), \
+        ##__VA_ARGS__}); \
+        _Pragma("GCC diagnostic pop") \
+        __rc; \
+        })
 
 /**
  * @brief idle task checks if there is any task neeeds to run. it speeds up task running

@@ -24,6 +24,7 @@
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <cpu/smp.h>
+#include <cpu/cpu_state.h>
 #include <utils.h>
 #include <device/kbd.h>
 #include <cpu/task.h>
@@ -159,7 +160,7 @@ int8_t kmain64(size_t entry_point) {
 
     video_frame_buffer_t* new_vfb = memory_malloc(sizeof(video_frame_buffer_t));
 
-    if(new_vfb == NULL) {
+    if(!new_vfb) {
         return -1;
     }
 
@@ -167,7 +168,7 @@ int8_t kmain64(size_t entry_point) {
 
     uint8_t* new_mmap_data = memory_malloc(SYSTEM_INFO->mmap_size);
 
-    if(new_mmap_data == NULL) {
+    if(!new_mmap_data) {
         return -1;
     }
 
@@ -175,7 +176,7 @@ int8_t kmain64(size_t entry_point) {
 
     system_info_t* new_system_info = memory_malloc(sizeof(system_info_t));
 
-    if(new_system_info == NULL) {
+    if(!new_system_info) {
         return -1;
     }
 
@@ -185,6 +186,21 @@ int8_t kmain64(size_t entry_point) {
     new_system_info->mmap_data    = new_mmap_data;
 
     SYSTEM_INFO = new_system_info;
+
+    {
+        SYSTEM_INFO->cpu_proximity_domain_array = memory_malloc(sizeof(uint32_t) * SYSTEM_INFO->cpu_count);
+        uint64_t cpu_state_size = SYSTEM_INFO->gs_page_size / SYSTEM_INFO->cpu_count;
+
+        if(!SYSTEM_INFO->cpu_proximity_domain_array) {
+            PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate cpu proximity domain array");
+            return -1;
+        }
+        for(uint64_t i = 0; i < SYSTEM_INFO->cpu_count; i++) {
+            cpu_state_t* cpu_cpu_state = (cpu_state_t*)(SYSTEM_INFO->gs_page_address_base + i * cpu_state_size);
+            SYSTEM_INFO->cpu_proximity_domain_array[i] = cpu_cpu_state->proximity_domain;
+        }
+
+    }
 
     PRINTLOG(KERNEL, LOG_DEBUG, "new system info created at 0x%p", SYSTEM_INFO);
 
@@ -333,7 +349,7 @@ int8_t kmain64(size_t entry_point) {
 
     frame_get_allocator()->cleanup(frame_get_allocator());
 
-    LOGBLOCK(FRAMEALLOCATOR, LOG_DEBUG){
+    LOGBLOCK(FRAMEALLOCATOR, LOG_TRACE) {
         frame_allocator_print(frame_get_allocator());
     }
 

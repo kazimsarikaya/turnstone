@@ -2345,9 +2345,9 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
         return -1;
     }
 
-    metadata->port_status_listener_tid = task_create_task(NULL, 2 << 20, 128 << 10,
-                                                          usb_xhci_port_status_listener_task, 1, pslt_args,
-                                                          pslt_task_name);
+    metadata->port_status_listener_tid = task_create_task(pslt_task_name, usb_xhci_port_status_listener_task,
+                                                          1, pslt_args,
+                                                          2 << 20, 128 << 10);
 
     memory_free(pslt_task_name);
 
@@ -2384,9 +2384,9 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
         return -1;
     }
 
-    metadata->interrupter_tid = task_create_task(NULL, 128 << 10, 64 << 10,
-                                                 usb_xhci_interrupter_task, 1, plt_args,
-                                                 task_name);
+    metadata->interrupter_tid = task_create_task(task_name, usb_xhci_interrupter_task,
+                                                 1, plt_args,
+                                                 128 << 10, 64 << 10);
 
     memory_free(task_name);
 

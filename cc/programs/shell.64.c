@@ -499,6 +499,6 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 uint64_t shell_task_id = 0;
 
 int8_t shell_init(void) {
-    shell_task_id = task_create_task(NULL, 32 << 20, 64 << 10, shell_main, 0, NULL, "shell");
+    shell_task_id = task_create_task("shell", shell_main, .heap_size = 32 << 20, 64 << 10);
     return shell_task_id == -1ULL ? -1 : 0;
 }

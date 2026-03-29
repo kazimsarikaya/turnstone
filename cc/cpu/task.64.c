@@ -139,7 +139,7 @@ int8_t task_wait_for_cpus_in_parked_but_not_myself(void) {
             break;
         }
 
-        cpu_idle();
+        asm volatile ("pause\n" ::: "memory");
     }
 
     return 0;
@@ -812,8 +812,61 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
     task->state = TASK_STATE_ENDED;
 }
 
-uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args, const char_t* task_name) {
-    heap = task_map_heap; // override heap
+uint64_t task_create_task_internal(task_create_task_args_t args) {
+    memory_heap_t* heap = task_map_heap; // override heap
+
+    uint32_t selected_cpu_id              = 0;
+    uint32_t selected_proximity_domain_id = 0;
+
+    uint64_t cpu_count              = SYSTEM_INFO->cpu_count;
+    uint64_t proximity_domain_count = SYSTEM_INFO->proximity_domain_count;
+    size_t min_queue_size           = -1ULL;
+    list_t* min_queue               = NULL;
+
+    if(args.cpu_id_hint >= cpu_count) {
+        args.cpu_id_hint = -1U;
+    }
+
+    if(args.proximity_domain_hint >= proximity_domain_count) {
+        args.proximity_domain_hint = -1U;
+    }
+
+    if(args.cpu_id_hint != -1U) {
+        if(selected_proximity_domain_id != -1U) {
+            if(SYSTEM_INFO->cpu_proximity_domain_array[args.cpu_id_hint] != selected_proximity_domain_id) {
+                PRINTLOG(TASKING, LOG_WARNING, "cpu id hint %u proximity domain %u does not match with provided proximity domain hint %u, ignoring cpu id hint",
+                         args.cpu_id_hint, SYSTEM_INFO->cpu_proximity_domain_array[args.cpu_id_hint], selected_proximity_domain_id);
+                args.cpu_id_hint = -1U;
+            }
+        } else{
+            selected_cpu_id              = args.cpu_id_hint;
+            selected_proximity_domain_id = SYSTEM_INFO->cpu_proximity_domain_array[selected_cpu_id];
+            min_queue                    = task_queues[selected_cpu_id];
+        }
+    }
+
+    if(!min_queue) { // if cpu_id_hint is provided but invalid, then find the cpu with least tasks in its queues.
+        for(uint64_t i = 0; i < cpu_count; i++) {
+            if(args.proximity_domain_hint != -1U && SYSTEM_INFO->cpu_proximity_domain_array[i] != args.proximity_domain_hint) {
+                continue;
+            }
+
+            size_t task_count = list_size(task_queues[i]) + list_size(task_sleep_queues[i]) + list_size(task_wait_queues[i]);
+
+            if(task_count < min_queue_size) {
+                min_queue_size               = task_count;
+                min_queue                    = task_queues[i];
+                selected_cpu_id              = i;
+                selected_proximity_domain_id = SYSTEM_INFO->cpu_proximity_domain_array[i];
+            }
+        }
+    }
+
+
+    if(!min_queue) { // never happens, but just in case.
+        PRINTLOG(TASKING, LOG_ERROR, "no task queue found for new task");
+        cpu_hlt();
+    }
 
     task_t* new_task = memory_malloc_ext(heap, sizeof(task_t), 0x40);
 
@@ -834,8 +887,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     frame_allocator_t* fa = frame_get_allocator();
 
     frame_t* stack_frames;
-    uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
-    stack_size = stack_frames_cnt * FRAME_SIZE;
+    uint64_t stack_frames_cnt = (args.stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
+    args.stack_size = stack_frames_cnt * FRAME_SIZE;
 
     if(fa->allocate_frame_by_count(fa, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
@@ -846,8 +899,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     }
 
     frame_t* heap_frames;
-    uint64_t heap_frames_cnt = (heap_size + FRAME_SIZE - 1) / FRAME_SIZE;
-    heap_size = heap_frames_cnt * FRAME_SIZE;
+    uint64_t heap_frames_cnt = (args.heap_size + FRAME_SIZE - 1) / FRAME_SIZE;
+    args.heap_size = heap_frames_cnt * FRAME_SIZE;
 
     if(fa->allocate_frame_by_count(fa, heap_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &heap_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate heap with frame count 0x%llx", heap_frames_cnt);
@@ -872,7 +925,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
         cpu_hlt();
     }
 
-    memory_memclean((void*)stack_va, stack_size);
+    memory_memclean((void*)stack_va, args.stack_size);
 
     uint64_t heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(heap_frames->frame_address);
 
@@ -884,10 +937,10 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     memory_heap_t* task_heap = NULL;
 
-    if(heap_size >= (16 << 20)) {
-        task_heap = memory_create_heap_hash(heap_va, heap_va + heap_size);
+    if(args.heap_size >= (16 << 20)) {
+        task_heap = memory_create_heap_hash(heap_va, heap_va + args.heap_size);
     } else {
-        task_heap = memory_create_heap_simple(heap_va, heap_va + heap_size);
+        task_heap = memory_create_heap_simple(heap_va, heap_va + args.heap_size);
     }
 
 
@@ -897,19 +950,23 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     task_heap->task_id = new_task_id;
 
-    new_task->heap        = task_heap;
-    new_task->heap_size   = heap_size;
-    new_task->task_id     = new_task_id;
-    new_task->state       = TASK_STATE_CREATED;
-    new_task->entry_point = entry_point;
-    new_task->page_table  = memory_paging_get_table();
-    new_task->registers   = registers;
-    new_task->stack_size  = stack_size;
-    new_task->stack       = (void*)stack_va;
-    new_task->task_name   = strdup_at_heap(task_map_heap, task_name);
-
-    new_task->arguments_count = args_cnt;
-    new_task->arguments       = args;
+    new_task->heap                  = task_heap;
+    new_task->heap_size             = args.heap_size;
+    new_task->task_id               = new_task_id;
+    new_task->state                 = TASK_STATE_CREATED;
+    new_task->entry_point           = args.entry_point;
+    new_task->page_table            = memory_paging_get_table();
+    new_task->registers             = registers;
+    new_task->stack_size            = args.stack_size;
+    new_task->stack                 = (void*)stack_va;
+    new_task->task_name             = strdup_at_heap(task_map_heap, args.task_name);
+    new_task->arguments_count       = args.args_cnt;
+    new_task->arguments             = args.args;
+    new_task->attributes            = args.attributes;
+    new_task->cpu_id                = selected_cpu_id;
+    new_task->proximity_domain_id   = selected_proximity_domain_id;
+    new_task->cpu_id_hint           = args.cpu_id_hint;
+    new_task->proximity_domain_hint = args.proximity_domain_hint;
 
     registers->rflags = 0x002;
 
@@ -925,7 +982,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     *(uint32_t*)(void*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)new_task->stack;
-    rbp           += stack_size - 16;
+    rbp           += args.stack_size - 16;
     registers->rbp = rbp;
     registers->rsp = rbp - 16;
 
@@ -944,31 +1001,12 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     PRINTLOG(TASKING, LOG_INFO, "scheduling new task %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]",
              new_task->task_name, new_task->task_id, new_task, registers->rsp, registers->rbp, new_task->heap, new_task->heap_size);
-
-    uint64_t cpu_count    = SYSTEM_INFO->cpu_count;
-    size_t min_queue_size = -1ULL;
-    list_t* min_queue     = NULL;
-
-    for(uint64_t i = 0; i < cpu_count; i++) {
-        size_t task_count = list_size(task_queues[i]) + list_size(task_sleep_queues[i]) + list_size(task_wait_queues[i]);
-
-        if(task_count < min_queue_size) {
-            min_queue_size   = task_count;
-            min_queue        = task_queues[i];
-            new_task->cpu_id = i;
-        }
-    }
-
-    if(!min_queue) { // never happens, but just in case.
-        PRINTLOG(TASKING, LOG_ERROR, "no task queue found for new task %s 0x%llx", new_task->task_name, new_task->task_id);
-        cpu_hlt();
-    }
-
-    hashmap_put(task_map, (void*)new_task->task_id, new_task);
-
     PRINTLOG(TASKING, LOG_INFO, "task %s 0x%llx will be added to task queue on cpu 0x%llx",
              new_task->task_name, new_task->task_id, new_task->cpu_id);
 
+
+
+    hashmap_put(task_map, (void*)new_task->task_id, new_task);
     list_stack_push(min_queue, new_task);
 
     return new_task->task_id;
@@ -1064,8 +1102,9 @@ static int8_t task_create_idle_task(void) {
 
         cpu_hlt();
     }
-    new_task->task_id = cpu_state->local_apic_id + 1;
-    new_task->cpu_id  = cpu_state->local_apic_id;
+    new_task->task_id             = cpu_state->local_apic_id + 1;
+    new_task->cpu_id              = cpu_state->local_apic_id;
+    new_task->proximity_domain_id = cpu_state->proximity_domain;
 
     new_task->state       = TASK_STATE_CREATED;
     new_task->entry_point = task_idle_task;
@@ -1165,8 +1204,9 @@ static int8_t task_create_cleaner_task(void) {
 
         cpu_hlt();
     }
-    new_task->task_id = cpu_state->local_apic_id + 1 + apic_get_ap_count() + 1;
-    new_task->cpu_id  = cpu_state->local_apic_id;
+    new_task->task_id             = cpu_state->local_apic_id + 1 + apic_get_ap_count() + 1;
+    new_task->cpu_id              = cpu_state->local_apic_id;
+    new_task->proximity_domain_id = cpu_state->proximity_domain;
 
     new_task->state       = TASK_STATE_CREATED;
     new_task->entry_point = task_cleaner_task;

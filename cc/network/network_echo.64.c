@@ -75,7 +75,7 @@ int8_t network_echo_init(const network_info_t* ni) {
 
     network_echo_server_args[0] = (void*)ni;
 
-    if(task_create_task(NULL, 2 << 20, 64 << 10, network_echo_server, 1, network_echo_server_args, "echo server") == -1ULL) {
+    if(task_create_task("echo server", network_echo_server, 1, network_echo_server_args, 2 << 20, 64 << 10) == -1ULL) {
         PRINTLOG(NETWORK, LOG_ERROR, "failed to create network echo server task");
         return -1;
     }

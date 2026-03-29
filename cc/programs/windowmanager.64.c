@@ -219,6 +219,65 @@ static int8_t windowmanager_main(void) {
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to initialize font\n");
     }
 
+#if 0
+    float32_t virtual_w = 1920.0f;
+    float32_t virtual_h = 1080.0f;
+
+    // Real screen resolution
+    float32_t real_w = (float32_t)wndmgr->screen_width;
+    float32_t real_h = (float32_t)wndmgr->screen_height;
+
+    // Compute scale only if real screen is smaller
+    float32_t scale_x = 1.0f;
+    float32_t scale_y = 1.0f;
+
+    if(real_w < virtual_w) {
+        scale_x = real_w / virtual_w;
+    } else {
+        virtual_w = real_w;
+    }
+
+    if(real_h < virtual_h) {
+        scale_y = real_h / virtual_h;
+    } else {
+        virtual_h = real_h;
+    }
+
+    // Use the smaller scale to preserve aspect ratio
+    float32_t scale = math_min_f32(scale_x, scale_y);
+
+    // Update "virtual screen" for window manager
+    wndmgr->screen_width  = virtual_w;
+    wndmgr->screen_height = virtual_h;
+
+    // Save scale for SGFX
+    wndmgr->scale_x = scale;
+    wndmgr->scale_y = scale;
+
+    screen_set_dimensions(virtual_w, virtual_h, virtual_w);
+
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Screen: real: %ux%u, virtual: %ux%u, scale: %f",
+             (uint32_t)real_w, (uint32_t)real_h,
+             wndmgr->screen_width, wndmgr->screen_height,
+             scale);
+#endif
+
+    wndmgr->scale_x = 1.0f;
+    wndmgr->scale_y = 1.0f;
+    wndmgr->scale_z = 1.0f;
+
+    wndmgr->font_width  *= wndmgr->scale_x;
+    wndmgr->font_height *= wndmgr->scale_y;
+
+    wndmgr->translate_x = 0.0f;
+    wndmgr->translate_y = 0.0f;
+    wndmgr->translate_z = 0.0f;
+
+    wndmgr->rotate_angle = 0.0f;
+    wndmgr->rotate_x     = 0.0f;
+    wndmgr->rotate_y     = 0.0f;
+    wndmgr->rotate_z     = 0.0f;
+
     wndmgr->current_window = windowmanager_create_greater_window();
 
     if(wndmgr->current_window == NULL) {
@@ -232,6 +291,19 @@ static int8_t windowmanager_main(void) {
 
     sgfx_clear(gfx_ctx, 0.0f, 0.0f, 0.0f, 1.0f);
     sgfx_swap_buffers(gfx_ctx);
+
+    sgfx_matrix_mode(gfx_ctx, SGFX_MATRIX_MODE_PROJECTION);
+    sgfx_load_identity(gfx_ctx);
+    sgfx_ortho_f32(gfx_ctx,
+                   0.0f, (float32_t)wndmgr->screen_width,
+                   (float32_t)wndmgr->screen_height, 0.0f,
+                   -1.0f, 1.0f);
+
+    sgfx_matrix_mode(gfx_ctx, SGFX_MATRIX_MODE_MODELVIEW);
+    sgfx_load_identity(gfx_ctx);
+    sgfx_scale_f32(gfx_ctx, wndmgr->scale_x, wndmgr->scale_y, wndmgr->scale_z);
+    sgfx_translate_f32(gfx_ctx, wndmgr->translate_x, wndmgr->translate_y, wndmgr->translate_z);
+    sgfx_rotate_f32(gfx_ctx, wndmgr->rotate_angle, wndmgr->rotate_x, wndmgr->rotate_y, wndmgr->rotate_z);
 
     float32_t angle = 0.0f;
 
@@ -333,9 +405,7 @@ static int8_t windowmanager_main(void) {
 uint64_t windowmanager_task_id = 0;
 
 int8_t windowmanager_init(void) {
-    memory_heap_t* heap = memory_get_default_heap();
-
-    windowmanager_task_id = task_create_task(heap, 64 << 20, 2 << 20, windowmanager_main, 0, NULL, "windowmanager");
+    windowmanager_task_id = task_create_task("windowmanager", windowmanager_main, .heap_size = 64 << 20, 2 << 20);
 
     if(windowmanager_task_id == -1ULL) {
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create windowmanager task\n");
