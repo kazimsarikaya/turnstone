@@ -318,6 +318,7 @@ struct acpi_aml_parser_context_t {
     index_t*           symbols;
     index_t*           local_symbols;
     list_t*            devices;
+    list_t*            pci_roots;
     list_t*            interrupt_map;
     acpi_aml_object_t* pic;
     struct {
@@ -384,6 +385,10 @@ int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t * ctx, int64_t val, a
 char_t* acpi_aml_parse_eisaid(acpi_aml_parser_context_t* ctx, uint64_t eisaid_num);
 
 int8_t acpi_aml_execute(acpi_aml_parser_context_t*, acpi_aml_object_t * mth, acpi_aml_object_t ** return_obj, ...);
+
+boolean_t                acpi_aml_is_pci_root(const acpi_aml_device_t* dev);
+const acpi_aml_device_t* acpi_aml_get_pci_root(const acpi_aml_device_t* dev);
+uint64_t                 acpi_aml_get_device_pci_address(const acpi_aml_device_t* dev);
 
 int8_t acpi_device_build(acpi_aml_parser_context_t* ctx);
 int8_t acpi_device_init(acpi_aml_parser_context_t* ctx);

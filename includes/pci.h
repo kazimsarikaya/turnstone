@@ -261,12 +261,17 @@ typedef union pci_device_header_data_t {
 
 typedef struct pci_dev_t pci_dev_t; ///< forward declaration for pci_dev_t
 
+typedef struct acpi_aml_device_t acpi_aml_device_t; ///< forward declaration for acpi_aml_device_t
+
 /**
  * @struct pci_dev_t
  * @brief the pci device info returned by the iterator
  */
 typedef struct pci_dev_t {
     pci_dev_t*               parent; ///< parent device if exists, else NULL
+    const acpi_aml_device_t* pci_root_bridge_aml_device; ///< acpi aml device of the root bridge of this pci device, can be NULL if no aml device is associated
+    const acpi_aml_device_t* aml_device; ///< acpi aml device associated with this pci device, can be NULL if no aml device is associated
+    uint32_t                 proximity_domain; ///< device's proximity domain, used for NUMA
     uint16_t                 group_number; ///< device's bus group number.
     uint8_t                  bus_number; ///< bus number of the device
     uint8_t                  device_number; ///< device number
@@ -332,6 +337,7 @@ typedef struct pci_capability_msix_table_t {
 typedef struct pci_context_t {
     memory_heap_t* heap;
     list_t*        all_devices;
+    list_t*        bridge_controllers;
     list_t*        sata_controllers;
     list_t*        nvme_controllers;
     list_t*        network_controllers;

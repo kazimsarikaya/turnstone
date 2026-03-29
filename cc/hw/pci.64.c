@@ -11,6 +11,7 @@
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <acpi.h>
+#include <acpi/aml.h>
 #include <utils.h>
 #include <logging.h>
 #include <ports.h>
@@ -21,13 +22,17 @@
 
 MODULE("turnstone.kernel.hw.pci");
 
-typedef struct {
+typedef struct pci_iterator_internal_t {
     memory_heap_t*     heap;
     acpi_table_mcfg_t* mcfg;
     uint16_t           group_number_count;
     uint16_t           group_number;
     uint8_t            bus_number;
+    int32_t            old_bus_number;
+    pci_dev_t*         bus_parent;
     uint8_t            device_number;
+    int32_t            old_device_number;
+    pci_dev_t*         device_parent;
     uint8_t            function_number;
     uint64_t           pci_mmio_addr_fa;
     uint64_t           pci_mmio_addr_va;
@@ -149,6 +154,27 @@ static const void* pci_iterator_get_item(iterator_t* iterator){
     d->function_number = iter_metadata->function_number;
     d->pci_header      = (pci_device_header_t*)iter_metadata->pci_mmio_addr_va;
 
+    if(iter_metadata->old_bus_number != d->bus_number) {
+        iter_metadata->old_bus_number    = d->bus_number;
+        iter_metadata->bus_parent        = d;
+        iter_metadata->old_device_number = -1; // reset device number for new bus
+        iter_metadata->device_parent     = NULL; // reset device parent for new bus
+        d->parent                        = NULL;
+    } else {
+        d->parent = iter_metadata->bus_parent;
+    }
+
+    if(iter_metadata->old_device_number != d->device_number) {
+        iter_metadata->old_device_number = d->device_number;
+        iter_metadata->device_parent     = d;
+    } else {
+        if(d->function_number == 0) {
+            d->parent = iter_metadata->bus_parent;
+        } else {
+            d->parent = iter_metadata->device_parent;
+        }
+    }
+
     return d;
 }
 
@@ -171,6 +197,9 @@ static iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table
     iter_metadata->mcfg = mcfg;
 
     iter_metadata->group_number_count = ACPI_MCFG_PCI_SEGMENT_GROUP_CONFIG_COUNT(mcfg);
+
+    iter_metadata->old_bus_number    = -1;
+    iter_metadata->old_device_number = -1;
 
     boolean_t dev_found = false;
 
@@ -249,6 +278,7 @@ int8_t pci_setup(memory_heap_t* heap) {
 
     pci_context->heap                = heap;
     pci_context->all_devices         = list_create_list_with_heap(heap);
+    pci_context->bridge_controllers  = list_create_list_with_heap(heap);
     pci_context->sata_controllers    = list_create_list_with_heap(heap);
     pci_context->nvme_controllers    = list_create_list_with_heap(heap);
     pci_context->network_controllers = list_create_list_with_heap(heap);
@@ -280,24 +310,86 @@ int8_t pci_setup(memory_heap_t* heap) {
                 return -1;
             }
 
+            if(acpi_device_associate_pci_dev_links((pci_dev_t*)p) != 0) {
+                PRINTLOG(PCI, LOG_ERROR, "cannot associate pci device with acpi aml device");
+
+                iter->destroy(iter);
+
+                return -1;
+            }
+
+            pci_common_header_t* pchdr = &p->pci_header->common;
+
+
+            PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x -> %04x:%04x -> %02x:%02x",
+                     p->group_number, p->bus_number, p->device_number, p->function_number,
+                     pchdr->vendor_id, pchdr->device_id,
+                     pchdr->class_code, pchdr->subclass_code);
+
+            if(p->parent) {
+                PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x parent is %02x:%02x:%02x.%02x",
+                         p->group_number, p->bus_number, p->device_number, p->function_number,
+                         p->parent->group_number, p->parent->bus_number, p->parent->device_number, p->parent->function_number);
+            } else {
+                PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x has no parent",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
+            }
+
+            if(p->aml_device) {
+                PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x has aml device %s",
+                         p->group_number, p->bus_number, p->device_number, p->function_number,
+                         p->aml_device->name);
+                LOGBLOCK(PCI, LOG_TRACE) {
+                    acpi_device_print(ACPI_CONTEXT->acpi_parser_context, p->aml_device);
+                }
+            } else {
+                PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x has no aml device",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
+            }
+
+            if(p->pci_root_bridge_aml_device) {
+                PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x has pci root bridge aml device %s",
+                         p->group_number, p->bus_number, p->device_number, p->function_number,
+                         p->pci_root_bridge_aml_device->name);
+                LOGBLOCK(PCI, LOG_TRACE) {
+                    acpi_device_print(ACPI_CONTEXT->acpi_parser_context, p->pci_root_bridge_aml_device);
+                }
+            } else {
+                PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x has no pci root bridge aml device",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
+            }
 
             uintptr_t pci_hdr_addr = (uintptr_t)p->pci_header;
+
 
             for(size_t i = 0; i < ARRAY_SIZE(p->header_data.u32_data); i++) {
                 uint32_t value = mmio_read(pci_hdr_addr + i * sizeof(uint32_t), sizeof(uint32_t));
                 ((pci_dev_t*)p)->header_data.u32_data[i] = value;
             }
 
-
-            pci_common_header_t* pchdr = &p->pci_header->common;
-
-
-            PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x -> %04x:%04x -> %02x:%02x",
-                     p->group_number, p->bus_number, p->device_number, p->function_number,
-                     pchdr->vendor_id, pchdr->device_id,
-                     pchdr->class_code, pchdr->subclass_code);
-
             list_queue_push(pci_context->all_devices, p);
+
+            if(pchdr->class_code == PCI_DEVICE_CLASS_BRIDGE_CONTROLLER &&
+               pchdr->subclass_code == PCI_DEVICE_SUBCLASS_BRIDGE_ISA) {
+
+                PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x is isa bridge",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
+
+            }
+
+            if(pchdr->class_code == PCI_DEVICE_CLASS_BRIDGE_CONTROLLER &&
+               pchdr->subclass_code == PCI_DEVICE_SUBCLASS_BRIDGE_PCI) {
+
+                PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x is pci bridge",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
+
+                pci_pci2pci_bridge_t* bridge = (pci_pci2pci_bridge_t*)pchdr;
+
+                PRINTLOG(PCI, LOG_TRACE, "pci bridge %02x:%02x:%02x.%02x -> primary bus %02x secondary bus %02x subordinate bus %02x",
+                         p->group_number, p->bus_number, p->device_number, p->function_number,
+                         bridge->primary_bus_number, bridge->secondary_bus_number, bridge->subordinate_bus_number);
+
+            }
 
             if( pchdr->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
                 pchdr->subclass_code == PCI_DEVICE_SUBCLASS_SATA_CONTROLLER) {
@@ -339,8 +431,13 @@ int8_t pci_setup(memory_heap_t* heap) {
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as input controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
+            } else if( pchdr->class_code == PCI_DEVICE_CLASS_BRIDGE_CONTROLLER) {
+
+                list_list_insert(pci_context->bridge_controllers, p);
+                PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as bridge controller",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
             } else {
-                PRINTLOG(PCI, LOG_WARNING, "pci dev %02x:%02x:%02x.%02x class %02x:%02x (%02x) is not supported",
+                PRINTLOG(PCI, LOG_WARNING, "pci dev %02x:%02x:%02x.%02x class %02x:%02x (%02x) has no specific handler. Inserting as other device",
                          p->group_number, p->bus_number, p->device_number, p->function_number,
                          pchdr->class_code, pchdr->subclass_code, pchdr->prog_if);
 
@@ -349,29 +446,6 @@ int8_t pci_setup(memory_heap_t* heap) {
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as other device",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
             }
-
-            if(pchdr->class_code == PCI_DEVICE_CLASS_BRIDGE_CONTROLLER &&
-               pchdr->subclass_code == PCI_DEVICE_SUBCLASS_BRIDGE_ISA) {
-
-                PRINTLOG(PCI, LOG_INFO, "pci dev %02x:%02x:%02x.%02x is isa bridge",
-                         p->group_number, p->bus_number, p->device_number, p->function_number);
-
-            }
-
-            if(pchdr->class_code == PCI_DEVICE_CLASS_BRIDGE_CONTROLLER &&
-               pchdr->subclass_code == PCI_DEVICE_SUBCLASS_BRIDGE_PCI) {
-
-                PRINTLOG(PCI, LOG_INFO, "pci dev %02x:%02x:%02x.%02x is pci bridge",
-                         p->group_number, p->bus_number, p->device_number, p->function_number);
-
-                pci_pci2pci_bridge_t* bridge = (pci_pci2pci_bridge_t*)pchdr;
-
-                PRINTLOG(PCI, LOG_INFO, "pci bridge %02x:%02x:%02x.%02x -> primary bus %02x secondary bus %02x subordinate bus %02x",
-                         p->group_number, p->bus_number, p->device_number, p->function_number,
-                         bridge->primary_bus_number, bridge->secondary_bus_number, bridge->subordinate_bus_number);
-
-            }
-
 
             if(pchdr->header_type.header_type == PCI_HEADER_TYPE_GENERIC_DEVICE) {
                 pci_generic_device_t* pg = (pci_generic_device_t*)pchdr;
@@ -413,17 +487,105 @@ int8_t pci_setup(memory_heap_t* heap) {
 
     list_destroy(old_mcfgs);
 
+    // find missing parents for devices
+    {
+        iterator_t* all_devs_iter = list_iterator_create(pci_context->all_devices);
+
+        while(!all_devs_iter->end_of_iterator(all_devs_iter)) {
+            const pci_dev_t* p = (pci_dev_t*)all_devs_iter->get_item(all_devs_iter);
+
+            if(p->parent) {
+                all_devs_iter = all_devs_iter->next(all_devs_iter);
+                continue;
+            }
+
+            if(p->aml_device && p->pci_root_bridge_aml_device && p->aml_device == p->pci_root_bridge_aml_device) {
+                all_devs_iter = all_devs_iter->next(all_devs_iter);
+                continue;
+            }
+
+            if(p->bus_number == 0 && p->device_number == 0 && p->function_number == 0) {
+                all_devs_iter = all_devs_iter->next(all_devs_iter);
+                continue;
+            }
+
+            iterator_t* bridge_iter = list_iterator_create(pci_context->bridge_controllers);
+
+            while(!bridge_iter->end_of_iterator(bridge_iter)) {
+                const pci_dev_t* bridge = (pci_dev_t*)bridge_iter->get_item(bridge_iter);
+
+                if(bridge->aml_device && bridge->pci_root_bridge_aml_device
+                   && bridge->aml_device != bridge->pci_root_bridge_aml_device) {
+                    bridge_iter = bridge_iter->next(bridge_iter);
+                    continue;
+                }
+
+                if(bridge->bus_number > p->bus_number) {
+                    bridge_iter = bridge_iter->next(bridge_iter);
+                    continue;
+                }
+
+                pci_pci2pci_bridge_t* bridge_hdr = (pci_pci2pci_bridge_t*)bridge->pci_header;
+
+                if(p->bus_number >= bridge_hdr->secondary_bus_number && p->bus_number <= bridge_hdr->subordinate_bus_number) {
+                    ((pci_dev_t*)p)->parent = (pci_dev_t*)bridge;
+                    break;
+                }
+
+                bridge_iter = bridge_iter->next(bridge_iter);
+            }
+
+            bridge_iter->destroy(bridge_iter);
+
+            if(!p->parent) {
+                PRINTLOG(PCI, LOG_WARNING, "pci dev %02x:%02x:%02x.%02x has no parent and is not pci root bridge. This device might be inaccessible",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
+            } else {
+                PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x parent is %02x:%02x:%02x.%02x",
+                         p->group_number, p->bus_number, p->device_number, p->function_number,
+                         p->parent->group_number, p->parent->bus_number, p->parent->device_number, p->parent->function_number);
+            }
+
+            all_devs_iter = all_devs_iter->next(all_devs_iter);
+        }
+
+        all_devs_iter->destroy(all_devs_iter);
+    }
+
+    // set proximity domain for devices
+    {
+        iterator_t* all_devs_iter = list_iterator_create(pci_context->all_devices);
+
+        while(!all_devs_iter->end_of_iterator(all_devs_iter)) {
+            const pci_dev_t* p = (pci_dev_t*)all_devs_iter->get_item(all_devs_iter);
+
+            if(acpi_device_set_proximity_domain((pci_dev_t*)p) != 0) {
+                PRINTLOG(PCI, LOG_ERROR, "cannot set proximity domain for pci dev %02x:%02x:%02x.%02x",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
+                all_devs_iter->destroy(all_devs_iter);
+                return -1;
+            }
+
+            PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x proximity domain is %u",
+                     p->group_number, p->bus_number, p->device_number, p->function_number,
+                     p->proximity_domain);
+
+            all_devs_iter = all_devs_iter->next(all_devs_iter);
+        }
+
+        all_devs_iter->destroy(all_devs_iter);
+    }
+
     PRINTLOG(PCI, LOG_INFO, "pci devices enumeration completed");
     PRINTLOG(PCI, LOG_INFO, "total pci devices found %lli", list_size(pci_context->all_devices));
-    PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli display controllers %lli usb controllers %lli input controllers %lli other devices %lli",
-             list_size(pci_context->sata_controllers),
-             list_size(pci_context->nvme_controllers),
-             list_size(pci_context->network_controllers),
-             list_size(pci_context->display_controllers),
-             list_size(pci_context->usb_controllers),
-             list_size(pci_context->input_controllers),
-             list_size(pci_context->other_devices)
-             );
+    PRINTLOG(PCI, LOG_INFO, "total pci bridge controllers %lli", list_size(pci_context->bridge_controllers));
+    PRINTLOG(PCI, LOG_INFO, "total sata controllers %lli", list_size(pci_context->sata_controllers));
+    PRINTLOG(PCI, LOG_INFO, "total nvme controllers %lli", list_size(pci_context->nvme_controllers));
+    PRINTLOG(PCI, LOG_INFO, "total network controllers %lli", list_size(pci_context->network_controllers));
+    PRINTLOG(PCI, LOG_INFO, "total display controllers %lli", list_size(pci_context->display_controllers));
+    PRINTLOG(PCI, LOG_INFO, "total usb controllers %lli", list_size(pci_context->usb_controllers));
+    PRINTLOG(PCI, LOG_INFO, "total input controllers %lli", list_size(pci_context->input_controllers));
+    PRINTLOG(PCI, LOG_INFO, "total other devices %lli", list_size(pci_context->other_devices));
 
     return 0;
 }

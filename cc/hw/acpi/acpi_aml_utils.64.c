@@ -31,55 +31,77 @@ boolean_t acpi_aml_is_null_target(acpi_aml_object_t* obj) {
     return false;
 }
 
-static uint64_t acpi_aml_get_device_pci_address(acpi_aml_parser_context_t* ctx, const acpi_aml_device_t* dev) {
+boolean_t acpi_aml_is_pci_root(const acpi_aml_device_t* dev) {
     if(!dev) {
-        return 0;
+        return false;
     }
 
+    acpi_aml_object_t* hid_or_cid_obj = dev->hid ? dev->hid : dev->cid;
+
+    if(!hid_or_cid_obj) {
+        return false;
+    }
+
+    if(hid_or_cid_obj->type == ACPI_AML_OT_STRING) {
+        const char_t* hid_str = hid_or_cid_obj->string;
+
+        if(strncmp(hid_str, "PNP0A03", 7) == 0) {
+            return true;
+        }
+
+        if(strncmp(hid_str, "PNP0A08", 7) == 0) {
+            return true;
+        }
+    }
+
+    if(hid_or_cid_obj->type == ACPI_AML_OT_NUMBER) {
+        if(hid_or_cid_obj->number.value == 0x030AD041) { // PNP0A03
+            return true;
+        }
+
+        if(hid_or_cid_obj->number.value == 0x080AD041) { // PNP0A08
+            return true;
+        }
+    }
+
+    return false;
+}
+
+const acpi_aml_device_t* acpi_aml_get_pci_root(const acpi_aml_device_t* dev) {
     const acpi_aml_device_t* pci_root = NULL;
 
     const acpi_aml_device_t* dev_iter = dev;
 
     while(dev_iter) {
         PRINTLOG(ACPIAML, LOG_TRACE, "checking device %s for pci root", dev_iter->name);
-        acpi_aml_object_t* hid_or_cid_obj = dev_iter->hid ? dev_iter->hid : dev_iter->cid;
-
-        if(!hid_or_cid_obj) {
-            PRINTLOG(ACPIAML, LOG_TRACE, "device %s has no hid or cid, skipping", dev_iter->name);
-            dev_iter = dev_iter->parent;
-
-            continue;
-        }
-        if(hid_or_cid_obj->type == ACPI_AML_OT_STRING) {
-            const char_t* hid_str = hid_or_cid_obj->string;
-            PRINTLOG(ACPIAML, LOG_TRACE, "device %s hid/cid is string %s", dev_iter->name, hid_str);
-
-            if(strncmp(hid_str, "PNP0A03", 7) == 0) {
-                pci_root = dev;
-                break;
-            }
-
-            if(strncmp(hid_str, "PNP0A08", 7) == 0) {
-                pci_root = dev;
-                break;
-            }
-        }
-
-        if(hid_or_cid_obj->type == ACPI_AML_OT_NUMBER) {
-            PRINTLOG(ACPIAML, LOG_TRACE, "device %s hid/cid is number 0x%llx", dev_iter->name, hid_or_cid_obj->number.value);
-            if(hid_or_cid_obj->number.value == 0x030AD041) { // PNP0A03
-                pci_root = dev;
-                break;
-            }
-
-            if(hid_or_cid_obj->number.value == 0x080AD041) { // PNP0A08
-                pci_root = dev;
-                break;
-            }
+        if(acpi_aml_is_pci_root(dev_iter)) {
+            pci_root = dev_iter;
+            break;
         }
 
         dev_iter = dev_iter->parent;
     }
+
+    if(!dev) {
+        PRINTLOG(ACPIAML, LOG_TRACE, "device is null");
+        return NULL;
+    }
+
+    if(pci_root) {
+        PRINTLOG(ACPIAML, LOG_TRACE, "pci root for device %s is %s", dev->name, pci_root->name);
+    } else {
+        PRINTLOG(ACPIAML, LOG_TRACE, "cannot find pci root for device %s", dev->name);
+    }
+
+    return pci_root;
+}
+
+static uint64_t acpi_aml_get_device_pci_address_internal(acpi_aml_parser_context_t* ctx, const acpi_aml_device_t* dev) {
+    if(!ctx || !dev) {
+        return 0;
+    }
+
+    const acpi_aml_device_t* pci_root = acpi_aml_get_pci_root(dev);
 
     if(!pci_root) {
         PRINTLOG(ACPIAML, LOG_ERROR, "cannot find pci root for device %s", dev->name);
@@ -98,15 +120,21 @@ static uint64_t acpi_aml_get_device_pci_address(acpi_aml_parser_context_t* ctx, 
                 return 0;
             }
         }
+    } else {
+        PRINTLOG(ACPIAML, LOG_TRACE, "pci root %s has no properties, using 0 as default for segment", pci_root->name);
+    }
 
-        const acpi_aml_object_t* bus_obj = pci_root->bbn;
+    const acpi_aml_object_t* bus_obj = pci_root->bbn;
 
-        if(bus_obj) {
-            if(acpi_aml_read_as_integer(ctx, bus_obj, &bus_num) != 0) {
-                PRINTLOG(ACPIAML, LOG_ERROR, "cannot read pci root _BBN");
-                return 0;
-            }
+    if(bus_obj) {
+        if(acpi_aml_read_as_integer(ctx, bus_obj, &bus_num) != 0) {
+            PRINTLOG(ACPIAML, LOG_ERROR, "cannot read pci root _BBN");
+            return 0;
+        } else {
+            PRINTLOG(ACPIAML, LOG_TRACE, "pci root %s bus number is %02llx", dev->name, bus_num);
         }
+    } else {
+        PRINTLOG(ACPIAML, LOG_TRACE, "pci root %s has no bus number, using 0 as default", pci_root->name);
     }
 
     const acpi_table_mcfg_t* mcfg = ACPI_CONTEXT->mcfg;
@@ -117,18 +145,27 @@ static uint64_t acpi_aml_get_device_pci_address(acpi_aml_parser_context_t* ctx, 
             pci_base_address = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_base_address);
             int64_t adr = 0;
 
-            if(acpi_aml_read_as_integer(ctx, dev->adr, &adr) != 0) {
+            // not every pci root device has _ADR, but if it has _ADR we can use it to get bus number and device/function number.
+            if(dev->adr && acpi_aml_read_as_integer(ctx, dev->adr, &adr) != 0) {
                 PRINTLOG(ACPIAML, LOG_ERROR, "cannot read device address");
                 return 0;
             }
 
-            return pci_base_address + (bus_num << 20) + (((adr >> 16) & 0x1f) << 15) + ((adr & 0x7) << 12);
+            uint64_t pci_address = pci_base_address + (bus_num << 20) + (((adr >> 16) & 0x1f) << 15) + ((adr & 0x7) << 12);
+
+            PRINTLOG(ACPIAML, LOG_TRACE, "pci address for device %s is 0x%llx", dev->name, pci_address);
+
+            return pci_address;
         }
     }
 
     PRINTLOG(ACPIAML, LOG_ERROR, "cannot find pci address for device %s", dev->name);
 
     return 0;
+}
+
+uint64_t acpi_aml_get_device_pci_address(const acpi_aml_device_t* dev) {
+    return acpi_aml_get_device_pci_address_internal(ACPI_CONTEXT->acpi_parser_context, dev);
 }
 
 acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, boolean_t write, boolean_t copy) {
@@ -403,7 +440,7 @@ static int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int6
         return -1;
     }
 
-    uint64_t pci_address = acpi_aml_get_device_pci_address(ctx, dev);
+    uint64_t pci_address = acpi_aml_get_device_pci_address_internal(ctx, dev);
 
     if(!pci_address) {
         PRINTLOG(ACPIAML, LOG_ERROR, "cannot get pci address");
@@ -734,7 +771,7 @@ static int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, const
         return -1;
     }
 
-    uint64_t pci_address = acpi_aml_get_device_pci_address(ctx, dev);
+    uint64_t pci_address = acpi_aml_get_device_pci_address_internal(ctx, dev);
 
     if(!pci_address) {
         PRINTLOG(ACPIAML, LOG_ERROR, "cannot get pci address");

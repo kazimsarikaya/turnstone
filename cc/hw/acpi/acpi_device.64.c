@@ -16,6 +16,7 @@
 #include <memory/paging.h>
 #include <list.h>
 #include <stdbufs.h>
+#include <pci.h>
 
 MODULE("turnstone.kernel.hw.acpi");
 
@@ -29,6 +30,14 @@ static int8_t acpi_aml_device_name_comparator(const void* data1, const void* dat
 static int8_t acpi_aml_intmap_addr_sorter(const void* data1, const void* data2){
     acpi_aml_interrupt_map_item_t* item1 = (acpi_aml_interrupt_map_item_t*)data1;
     acpi_aml_interrupt_map_item_t* item2 = (acpi_aml_interrupt_map_item_t*)data2;
+
+    if(item1->bus_source < item2->bus_source) {
+        return -1;
+    }
+
+    if(item1->bus_source > item2->bus_source) {
+        return 1;
+    }
 
     if(item1->address < item2->address) {
         return -1;
@@ -45,7 +54,9 @@ static int8_t acpi_aml_intmap_eq(const void* data1, const void* data2){
     acpi_aml_interrupt_map_item_t* item1 = (acpi_aml_interrupt_map_item_t*)data1;
     acpi_aml_interrupt_map_item_t* item2 = (acpi_aml_interrupt_map_item_t*)data2;
 
-    if(item1->address == item2->address && item1->interrupt_no == item2->interrupt_no) {
+    if(item1->bus_source == item2->bus_source &&
+       item1->address == item2->address &&
+       item1->interrupt_no == item2->interrupt_no) {
         return 0;
     }
 
@@ -160,6 +171,33 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
             continue;
         }
 
+        int64_t bbn                       = 0;
+        const acpi_aml_device_t* pci_root = acpi_aml_get_pci_root(d);
+
+        if(d->bbn) {
+            if(acpi_aml_read_as_integer(ctx, d->bbn, &bbn) != 0) {
+                PRINTLOG(ACPI, LOG_ERROR, "cannot read bbn value");
+                err_cnt += -1;
+            } else {
+                PRINTLOG(ACPI, LOG_TRACE, "device %s bus number %02llx", d->name, bbn);
+            }
+        } else if(pci_root && pci_root->bbn) {
+            if(acpi_aml_read_as_integer(ctx, pci_root->bbn, &bbn) != 0) {
+                PRINTLOG(ACPI, LOG_ERROR, "cannot read bbn value");
+                err_cnt += -1;
+            } else {
+                PRINTLOG(ACPI, LOG_TRACE, "device %s pci root bus number %02llx", d->name, bbn);
+            }
+        } else {
+            if(strends(d->name, "_SB_") == 0 || strends(d->name, "PCI0") == 0) {
+                PRINTLOG(ACPI, LOG_TRACE, "device %s is system bus or pci root without bbn, using 0 as bus number", d->name);
+                bbn = 0;
+            } else {
+                PRINTLOG(ACPI, LOG_ERROR, "device %s has no bus number", d->name);
+                err_cnt += -1;
+            }
+        }
+
         iterator_t* prt_iter = list_iterator_create(prt_table->package.elements);
 
         while(!prt_iter->end_of_iterator(prt_iter)) {
@@ -248,7 +286,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
             }
 
             if(int_no_val) {
-                acpi_aml_interrupt_map_item_t tmp_int_map_item = {addr, int_no_val};
+                acpi_aml_interrupt_map_item_t tmp_int_map_item = {bbn, addr, int_no_val};
 
                 if(!list_contains(ctx->interrupt_map, &tmp_int_map_item)) {
                     acpi_aml_interrupt_map_item_t* int_map_item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_interrupt_map_item_t), 0);
@@ -257,6 +295,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
                         break;
                     }
 
+                    int_map_item->bus_source   = bbn;
                     int_map_item->address      = addr;
                     int_map_item->interrupt_no = int_no_val;
 
@@ -292,7 +331,8 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
     uint64_t item_count = 0;
 
-    ctx->devices = list_create_sortedlist_with_heap(ctx->heap, acpi_aml_device_name_comparator);
+    ctx->devices   = list_create_sortedlist_with_heap(ctx->heap, acpi_aml_device_name_comparator);
+    ctx->pci_roots = list_create_list_with_heap(ctx->heap);
     acpi_aml_device_t* curr_device = NULL;
 
 
@@ -447,6 +487,32 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
 
     iter->destroy(iter);
 
+    iter = list_iterator_create(ctx->devices);
+
+    if(iter == NULL) {
+        PRINTLOG(ACPI, LOG_FATAL, "cannot create device iterator");
+        return -1;
+    }
+
+    while(!iter->end_of_iterator(iter)) {
+        acpi_aml_device_t* d = (acpi_aml_device_t*)iter->get_item(iter);
+
+        d->pci_root = acpi_aml_get_pci_root(d);
+
+        if(acpi_aml_is_pci_root(d)) {
+            if(list_list_insert(ctx->pci_roots, d) == -1ULL) {
+                PRINTLOG(ACPI, LOG_ERROR, "cannot insert pci root device %s to list", d->name);
+                return -1;
+            } else {
+                PRINTLOG(ACPI, LOG_DEBUG, "pci root device %s found", d->name);
+            }
+        }
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
     PRINTLOG(ACPI, LOG_INFO, "device builded with %lli items", item_count);
 
     return 0;
@@ -494,6 +560,92 @@ const acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, cons
 
 
     return res;
+}
+
+int8_t acpi_device_associate_pci_dev_links(pci_dev_t* pci_dev) {
+    if(!pci_dev) {
+        return -1;
+    }
+
+    uint64_t address = ((uint64_t)pci_dev->bus_number << 20) |
+                       ((uint64_t)pci_dev->device_number << 15) |
+                       ((uint64_t)pci_dev->function_number << 12);
+
+    acpi_aml_parser_context_t* ctx = ACPI_CONTEXT->acpi_parser_context;
+
+    const acpi_aml_device_t* dev = acpi_device_lookup(ctx, NULL, address);
+
+    pci_dev->aml_device = dev;
+
+    const acpi_aml_device_t* pci_root = acpi_aml_get_pci_root(dev);
+
+    if(!pci_root) {
+        uintptr_t root_addr = (uintptr_t)pci_dev->pci_header;
+        for(size_t i = 0; i < list_size(ctx->pci_roots); i++) {
+            PRINTLOG(ACPI, LOG_TRACE, "pci device address is 0x%llx", root_addr);
+
+            const acpi_aml_device_t* root = list_get_data_at_position(ctx->pci_roots, i);
+            uint64_t aml_root_addr        = acpi_aml_get_device_pci_address(root);
+
+            PRINTLOG(ACPI, LOG_TRACE, "aml pci root %s addr is 0x%llx", root->name, aml_root_addr);
+
+            if(root_addr == aml_root_addr) {
+                PRINTLOG(ACPI, LOG_DEBUG, "pci root for device %s found by address: %s", dev?dev->name:"(null)", root->name);
+                pci_root = root;
+                break;
+            }
+        }
+    }
+
+    pci_dev->pci_root_bridge_aml_device = pci_root;
+
+    if(!pci_dev->aml_device && pci_dev->pci_root_bridge_aml_device) {
+        pci_dev->aml_device = pci_dev->pci_root_bridge_aml_device;
+    }
+
+    return 0;
+}
+
+int8_t acpi_device_set_proximity_domain(pci_dev_t* pci_dev) {
+    if(!pci_dev) {
+        return -1;
+    }
+
+    acpi_aml_parser_context_t* ctx = ACPI_CONTEXT->acpi_parser_context;
+
+    const acpi_aml_device_t* dev = pci_dev->pci_root_bridge_aml_device;
+
+    pci_dev_t* p = pci_dev;
+
+    while(!dev) {
+        p = p->parent;
+
+        if(!p) {
+            PRINTLOG(ACPI, LOG_ERROR, "cannot find aml device for pci dev %02x:%02x:%02x.%02x", pci_dev->group_number, pci_dev->bus_number, pci_dev->device_number, pci_dev->function_number);
+            return -1;
+        }
+
+        dev = p->pci_root_bridge_aml_device;
+    }
+
+    if(!dev->pxm) {
+        pci_dev->proximity_domain = 0;
+        PRINTLOG(ACPI, LOG_TRACE, "device %s has no pxm method, using 0 as proximity domain", dev->name);
+        return 0;
+    }
+
+    int64_t pxm;
+
+    if(acpi_aml_read_as_integer(ctx, dev->pxm, &pxm) != 0) {
+        PRINTLOG(ACPI, LOG_ERROR, "cannot read proximity domain for device %s", dev->name);
+        return -1;
+    }
+
+    pci_dev->proximity_domain = (uint32_t)pxm;
+
+    PRINTLOG(ACPI, LOG_DEBUG, "device %s proximity domain is %u", dev->name, pci_dev->proximity_domain);
+
+    return 0;
 }
 
 int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx) {
@@ -706,9 +858,22 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 void acpi_device_print_all(acpi_aml_parser_context_t* ctx) {
     uint64_t item_count = 0;
 
+    printf("printing pci roots...\n");
+    iterator_t* iter = list_iterator_create(ctx->pci_roots);
+
+    while(!iter->end_of_iterator(iter)) {
+        const acpi_aml_device_t* d = iter->get_item(iter);
+
+        printf("pci root %s\n", d->name);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
     printf("printing devices...\n");
 
-    iterator_t* iter = list_iterator_create(ctx->devices);
+    iter = list_iterator_create(ctx->devices);
 
     while(!iter->end_of_iterator(iter)) {
         const acpi_aml_device_t* d = iter->get_item(iter);
@@ -727,7 +892,7 @@ void acpi_device_print_all(acpi_aml_parser_context_t* ctx) {
     while(!iter->end_of_iterator(iter)) {
         const acpi_aml_interrupt_map_item_t* item = iter->get_item(iter);
 
-        printf("int map item addr 0x%x intno 0x%02x\n", item->address, item->interrupt_no);
+        printf("int map item bus num 0x%x addr 0x%x intno 0x%02x\n", item->bus_source, item->address, item->interrupt_no);
 
         iter = iter->next(iter);
     }
@@ -741,7 +906,11 @@ void acpi_device_print(acpi_aml_parser_context_t* ctx, const acpi_aml_device_t* 
     printf("device name %s ", d->name);
 
     if(d->parent) {
-        printf("parent %s", d->parent->name);
+        printf("parent %s ", d->parent->name);
+    }
+
+    if(d->pci_root) {
+        printf("pci root %s", d->pci_root->name);
     }
 
     printf("\n");

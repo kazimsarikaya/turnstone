@@ -21,6 +21,8 @@
 extern "C" {
 #endif
 
+typedef struct pci_dev_t pci_dev_t;
+
 typedef struct acpi_aml_parser_context_t acpi_aml_parser_context_t;
 typedef struct acpi_aml_object_t         acpi_aml_object_t;
 typedef struct acpi_aml_device_t         acpi_aml_device_t;
@@ -68,35 +70,37 @@ typedef struct acpi_aml_device_interrupt_t {
 } acpi_aml_device_interrupt_t;
 
 typedef struct acpi_aml_interrupt_map_item_t {
+    uint8_t  bus_source;
     uint32_t address;
     uint32_t interrupt_no;
 } acpi_aml_interrupt_map_item_t;
 
 struct acpi_aml_device_t {
-    char_t*            name;
-    acpi_aml_device_t* parent;
-    acpi_aml_object_t* self;
-    acpi_aml_object_t* adr;
-    acpi_aml_object_t* crs;
-    acpi_aml_object_t* dis;
-    acpi_aml_object_t* hid;
-    acpi_aml_object_t* ini;
-    acpi_aml_object_t* prs;
-    acpi_aml_object_t* prt;
-    acpi_aml_object_t* srs;
-    acpi_aml_object_t* sta;
-    acpi_aml_object_t* uid;
-    acpi_aml_object_t* pxm;
-    acpi_aml_object_t* bbn;
-    acpi_aml_object_t* cid;
-    acpi_aml_object_t* osc;
-    boolean_t          disabled;
-    list_t*            buses;
-    list_t*            ioports;
-    list_t*            dmas;
-    list_t*            memory_ranges;
-    list_t*            interrupts;
-    hashmap_t*         properties;
+    char_t*                  name;
+    acpi_aml_device_t*       parent;
+    const acpi_aml_device_t* pci_root;
+    acpi_aml_object_t*       self;
+    acpi_aml_object_t*       adr;
+    acpi_aml_object_t*       crs;
+    acpi_aml_object_t*       dis;
+    acpi_aml_object_t*       hid;
+    acpi_aml_object_t*       ini;
+    acpi_aml_object_t*       prs;
+    acpi_aml_object_t*       prt;
+    acpi_aml_object_t*       srs;
+    acpi_aml_object_t*       sta;
+    acpi_aml_object_t*       uid;
+    acpi_aml_object_t*       pxm;
+    acpi_aml_object_t*       bbn;
+    acpi_aml_object_t*       cid;
+    acpi_aml_object_t*       osc;
+    boolean_t                disabled;
+    list_t*                  buses;
+    list_t*                  ioports;
+    list_t*                  dmas;
+    list_t*                  memory_ranges;
+    list_t*                  interrupts;
+    hashmap_t*               properties;
 };
 
 acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t* heap, uint8_t rev);
@@ -112,6 +116,9 @@ void acpi_device_print(acpi_aml_parser_context_t* ctx, const acpi_aml_device_t* 
 const acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, const char_t* dev_name, uint64_t address);
 #define acpi_device_lookup_by_address(c, a) acpi_device_lookup(c, NULL, a)
 #define acpi_device_lookup_by_name(c, n) acpi_device_lookup(c, n, 0)
+
+int8_t acpi_device_associate_pci_dev_links(pci_dev_t* pci_dev);
+int8_t acpi_device_set_proximity_domain(pci_dev_t* pci_dev);
 
 uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t addr, uint8_t* int_count);
 
