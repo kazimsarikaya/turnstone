@@ -239,6 +239,18 @@ static int32_t smp_ap_boot(uint8_t cpu_id) {
         }
 
         if(cpu_state->local_apic_id == 0) {
+            if(apic_restore_ioapic_after_wakeup() != 0) {
+                PRINTLOG(KERNEL, LOG_ERROR, "cannot restore ioapic after wakeup");
+
+                cpu_hlt();
+            }
+
+            if(acpi_setup_events() != 0) {
+                PRINTLOG(KERNEL, LOG_ERROR, "cannot setup acpi events after wakeup");
+
+                cpu_hlt();
+            }
+
             if(pci_restore_registers() != 0) {
                 PRINTLOG(KERNEL, LOG_ERROR, "cannot restore pci registers after wakeup");
 
@@ -480,6 +492,24 @@ int8_t smp_init(void) {
                 smp_init_cpu(apic_id);
             }
         }
+    }
+
+    // wait for other cpus to boot and set running_cpu_count.
+    // we should wait here because after here, task scheduler will use
+    // proximity domain and cpu id hints to schedule tasks, and if we
+    // don't wait here, tasks might be scheduled to other cpus
+    // before they are fully booted, which can cause issues.
+    PRINTLOG(KERNEL, LOG_INFO, "AP %i (BSP) waiting for other cpus to boot.", local_apic_id);
+    while(true) {
+        lock_acquire(smp_data->lock);
+        if(smp_data->running_cpu_count >= SYSTEM_INFO->cpu_count) {
+            lock_release(smp_data->lock);
+
+            break;
+        }
+        lock_release(smp_data->lock);
+
+        task_msleep(10);
     }
 
     return 0;

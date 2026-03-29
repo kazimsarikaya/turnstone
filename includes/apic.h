@@ -269,6 +269,16 @@ typedef struct apic_lintv_t {
 int8_t apic_setup(acpi_xrsdp_descriptor_t* desc);
 
 /**
+ * @brief Restores the I/O APIC state after waking up from a low-power state.
+ *
+ * This function is typically called during system resume to reconfigure the I/O APIC
+ * based on the information gathered during APIC setup.
+ *
+ * @return 0 on success, or a negative error code on failure.
+ */
+int8_t apic_restore_ioapic_after_wakeup(void);
+
+/**
  * @brief Initializes the APIC timer.
  *
  * Configures the Local APIC timer for use, typically for system timing or scheduling.
@@ -276,16 +286,6 @@ int8_t apic_setup(acpi_xrsdp_descriptor_t* desc);
  * @return 0 on success, or a negative error code on failure.
  */
 int8_t apic_init_timer(void);
-
-/**
- * @brief Initializes the APIC for application processors (APs).
- *
- * This function is called to initialize the APIC on secondary processor cores.
- *
- * @param apic_entries A list of APIC entries discovered during the APIC setup.
- * @return 0 on success, or a negative error code on failure.
- */
-int8_t apic_init_apic(list_t* apic_entries);
 
 /**
  * @brief Configures an IRQ line on the I/O APIC.

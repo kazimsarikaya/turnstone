@@ -12,7 +12,9 @@
 #include <apic.h>
 #include <cpu.h>
 #include <cpu/interrupt.h>
+#include <cpu/smp.h>
 #include <ports.h>
+#include <memory/special_frame_addresses.h>
 #include <logging.h>
 
 MODULE("turnstone.kernel.hw.acpi");
@@ -146,8 +148,6 @@ int8_t acpi_events_isr(interrupt_frame_ext_t* frame){
     return -1;
 }
 
-
-
 int8_t acpi_setup_events(void) {
     PRINTLOG(ACPI, LOG_INFO, "acpi event setup started");
 
@@ -159,7 +159,12 @@ int8_t acpi_setup_events(void) {
 
     PRINTLOG(ACPI, LOG_DEBUG, "acpi overrided sci irq 0x%02x", irq);
 
-    interrupt_irq_set_handler(irq, &acpi_events_isr);
+    smp_data_t* smp_data = (smp_data_t*)SMP_TRAMPOLINE_SHARED_DATA;
+
+    if(!smp_data->is_for_wakeup) {
+        interrupt_irq_set_handler(irq, &acpi_events_isr);
+    }
+
     apic_ioapic_setup_irq(irq, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
     apic_ioapic_enable_irq(irq);
 

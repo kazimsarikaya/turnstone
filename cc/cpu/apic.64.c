@@ -22,17 +22,15 @@
 
 MODULE("turnstone.kernel.cpu.apic");
 
-uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic);
-
-uint64_t ioapic_bases[2]           = {0, 0};
-uint8_t ioapic_count               = 0;
-uint64_t lapic_addr                = 0;
-int8_t apic_enabled                = 0;
-uint32_t lapic_initial_timer_count = 0;
-uint64_t apic_ap_count             = 0;
-boolean_t apic_x2apic              = false;
-
-list_t* irq_remappings = NULL;
+static uint64_t ioapic_bases[2]           = {0, 0};
+static uint8_t ioapic_count               = 0;
+static uint8_t* ioapic_int_numbers[2]     = {NULL, NULL};
+static uint64_t lapic_addr                = 0;
+static int8_t apic_enabled                = 0;
+static uint32_t lapic_initial_timer_count = 0;
+static uint64_t apic_ap_count             = 0;
+static boolean_t apic_x2apic              = false;
+static list_t* irq_remappings             = NULL;
 
 static int8_t apic_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
@@ -118,33 +116,102 @@ static inline void apic_write_lvt_lint1(uint32_t value) {
     }
 }
 
-int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
-    acpi_sdt_header_t* madt = acpi_get_table(desc, "APIC");
+static uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
+    uint64_t ioapic_base = ioapic->ioapic.address;
 
+    PRINTLOG(IOAPIC, LOG_DEBUG, "address is 0x%08llx", ioapic_base);
 
-    PRINTLOG(APIC, LOG_INFO, "apic and ioapic initialization");
+    frame_allocator_t* fa = frame_get_allocator();
 
-    if(madt == NULL) {
-        PRINTLOG(APIC, LOG_ERROR, "can not find madt or incorrect checksum");
-        return -1;
+    frame_t* ioapic_frames = fa->get_reserved_frames_of_address(fa, (void*)ioapic_base);
+
+    if(ioapic_frames == NULL) {
+        PRINTLOG(APIC, LOG_DEBUG, "cannot find frames of ioapic 0x%016llx", ioapic_base);
+        frame_t tmp_ioapic_frm = {ioapic_base, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
+
+        if(fa->reserve_system_frames(fa, &tmp_ioapic_frm) != 0) {
+            PRINTLOG(APIC, LOG_ERROR, "cannot reserve frames of ioapic 0x%016llx", ioapic_base);
+
+            return -1;
+        }
+
+        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_ioapic_frm.frame_address), &tmp_ioapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(APIC, LOG_ERROR, "cannot add va for ioapic frames");
+
+            return -1;
+        }
+
+        ioapic_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base);
+
+        PRINTLOG(APIC, LOG_DEBUG, "ioapic address mapped to 0x%016llx", ioapic_base);
+
+    } else if((ioapic_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
+        PRINTLOG(APIC, LOG_TRACE, "frames of ioapic 0x%016llx is 0x%llx 0x%llx", ioapic_base, ioapic_frames->frame_address, ioapic_frames->frame_count);
+
+        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_frames->frame_address), ioapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(APIC, LOG_ERROR, "cannot add va for ioapic frames");
+
+            return -1;
+        }
+
+        ioapic_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
+
+        ioapic_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base);
     }
 
-    PRINTLOG(APIC, LOG_DEBUG, "madt is found");
+    ioapic_bases[ioapic_count] = ioapic_base;
 
-    list_t* apic_entries = acpi_get_apic_table_entries(madt);
+    volatile apic_ioapic_register_t* io_apic_r = (volatile apic_ioapic_register_t*)ioapic_base;
 
-    if(apic_init_apic(apic_entries) != 0) {
-        PRINTLOG(APIC, LOG_ERROR, "cannot enable apic");
+    io_apic_r->selector = APIC_IOAPIC_REGISTER_IDENTIFICATION;
+    io_apic_r->value    = (ioapic->ioapic.ioapic_id & 0xF) << 24;
 
-        return -1;
+    io_apic_r->selector = APIC_IOAPIC_REGISTER_VERSION;
+
+    PRINTLOG(IOAPIC, LOG_DEBUG, "version 0x%02x", io_apic_r->value & 0xFF);
+
+    uint8_t max_r_e = APIC_IOAPIC_MAX_REDIRECTION_ENTRY(io_apic_r->value);
+
+    ioapic_int_numbers[ioapic_count] = memory_malloc(sizeof(uint8_t) * max_r_e);
+
+    for(uint8_t i = 0; i < max_r_e; i++) {
+        uint8_t intnum = interrupt_get_next_empty_interrupt();
+        ioapic_int_numbers[ioapic_count][i] = intnum;
+
+        io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * i;
+        io_apic_r->value    = intnum | APIC_IOAPIC_INTERRUPT_DISABLED;
+        io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * i + 1;
+        io_apic_r->value    = 0;
+
+        PRINTLOG(IOAPIC, LOG_DEBUG, "irq 0x%02x mapped to 0x%02x", i, intnum);
     }
 
-    PRINTLOG(APIC, LOG_INFO, "apic and ioapic enabled");
+    ioapic_count++;
+
+    return max_r_e;
+}
+
+int8_t apic_restore_ioapic_after_wakeup(void) {
+    for(uint8_t i = 0; i < ioapic_count; i++) {
+        volatile apic_ioapic_register_t* io_apic_r = (volatile apic_ioapic_register_t*)ioapic_bases[i];
+
+        io_apic_r->selector = APIC_IOAPIC_REGISTER_VERSION;
+
+        uint8_t max_r_e = APIC_IOAPIC_MAX_REDIRECTION_ENTRY(io_apic_r->value);
+
+        for(uint8_t j = 0; j < max_r_e; j++) {
+            io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * j;
+            io_apic_r->value    = ioapic_int_numbers[i][j] | APIC_IOAPIC_INTERRUPT_DISABLED;
+
+            io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * j + 1;
+            io_apic_r->value    = 0;
+        }
+    }
 
     return 0;
 }
 
-int8_t apic_init_apic(list_t* apic_entries){
+static int8_t apic_init_apic(list_t* apic_entries){
     cpu_cpuid_regs_t query  = {0x1, 0, 0, 0};
     cpu_cpuid_regs_t answer = {0, 0, 0, 0};
 
@@ -254,6 +321,32 @@ int8_t apic_init_apic(list_t* apic_entries){
     return 0;
 }
 
+int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
+    acpi_sdt_header_t* madt = acpi_get_table(desc, "APIC");
+
+
+    PRINTLOG(APIC, LOG_INFO, "apic and ioapic initialization");
+
+    if(madt == NULL) {
+        PRINTLOG(APIC, LOG_ERROR, "can not find madt or incorrect checksum");
+        return -1;
+    }
+
+    PRINTLOG(APIC, LOG_DEBUG, "madt is found");
+
+    list_t* apic_entries = acpi_get_apic_table_entries(madt);
+
+    if(apic_init_apic(apic_entries) != 0) {
+        PRINTLOG(APIC, LOG_ERROR, "cannot enable apic");
+
+        return -1;
+    }
+
+    PRINTLOG(APIC, LOG_INFO, "apic and ioapic enabled");
+
+    return 0;
+}
+
 uint8_t apic_get_irq_override(uint8_t old_irq){
     iterator_t* iter = list_iterator_create(irq_remappings);
 
@@ -355,75 +448,6 @@ boolean_t apic_is_waiting_timer(void) {
     return false;
 }
 
-uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
-    uint64_t ioapic_base = ioapic->ioapic.address;
-
-    PRINTLOG(IOAPIC, LOG_DEBUG, "address is 0x%08llx", ioapic_base);
-
-    frame_allocator_t* fa = frame_get_allocator();
-
-    frame_t* ioapic_frames = fa->get_reserved_frames_of_address(fa, (void*)ioapic_base);
-
-    if(ioapic_frames == NULL) {
-        PRINTLOG(APIC, LOG_DEBUG, "cannot find frames of ioapic 0x%016llx", ioapic_base);
-        frame_t tmp_ioapic_frm = {ioapic_base, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
-
-        if(fa->reserve_system_frames(fa, &tmp_ioapic_frm) != 0) {
-            PRINTLOG(APIC, LOG_ERROR, "cannot reserve frames of ioapic 0x%016llx", ioapic_base);
-
-            return -1;
-        }
-
-        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_ioapic_frm.frame_address), &tmp_ioapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
-            PRINTLOG(APIC, LOG_ERROR, "cannot add va for ioapic frames");
-
-            return -1;
-        }
-
-        ioapic_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base);
-
-        PRINTLOG(APIC, LOG_DEBUG, "ioapic address mapped to 0x%016llx", ioapic_base);
-
-    } else if((ioapic_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-        PRINTLOG(APIC, LOG_TRACE, "frames of ioapic 0x%016llx is 0x%llx 0x%llx", ioapic_base, ioapic_frames->frame_address, ioapic_frames->frame_count);
-
-        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_frames->frame_address), ioapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
-            PRINTLOG(APIC, LOG_ERROR, "cannot add va for ioapic frames");
-
-            return -1;
-        }
-
-        ioapic_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
-
-        ioapic_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base);
-    }
-
-    ioapic_bases[ioapic_count++] = ioapic_base;
-
-    __volatile__ apic_ioapic_register_t* io_apic_r = (__volatile__ apic_ioapic_register_t*)ioapic_base;
-
-    io_apic_r->selector = APIC_IOAPIC_REGISTER_IDENTIFICATION;
-    io_apic_r->value    = (ioapic->ioapic.ioapic_id & 0xF) << 24;
-
-    io_apic_r->selector = APIC_IOAPIC_REGISTER_VERSION;
-
-    PRINTLOG(IOAPIC, LOG_DEBUG, "version 0x%02x", io_apic_r->value & 0xFF);
-
-    uint8_t max_r_e = APIC_IOAPIC_MAX_REDIRECTION_ENTRY(io_apic_r->value);
-
-    for(uint8_t i = 0; i < max_r_e; i++) {
-        uint8_t intnum = interrupt_get_next_empty_interrupt();
-        io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * i;
-        io_apic_r->value    = intnum | APIC_IOAPIC_INTERRUPT_DISABLED;
-        io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * i + 1;
-        io_apic_r->value    = 0;
-
-        PRINTLOG(IOAPIC, LOG_DEBUG, "irq 0x%02x mapped to 0x%02x", i, intnum);
-    }
-
-    return max_r_e;
-}
-
 int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
     uint8_t base_irq = INTERRUPT_IRQ_BASE;
 
@@ -433,7 +457,7 @@ int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
     dest = dest << 24;
 
     for(uint8_t i = 0; i < ioapic_count; i++) {
-        __volatile__ apic_ioapic_register_t* io_apic_r = (__volatile__ apic_ioapic_register_t*)ioapic_bases[i];
+        volatile apic_ioapic_register_t* io_apic_r = (volatile apic_ioapic_register_t*)ioapic_bases[i];
 
         io_apic_r->selector = APIC_IOAPIC_REGISTER_VERSION;
         uint8_t max_r_e = APIC_IOAPIC_MAX_REDIRECTION_ENTRY(io_apic_r->value);
