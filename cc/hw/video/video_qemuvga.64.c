@@ -193,6 +193,7 @@ int8_t video_qemu_vga_reinit(void){
 
     uint64_t vga_offset = (uint64_t)(qemuvga_device->mmio_data + VIDEO_QEMU_VGA_IOPORT_OFFSET);
 
+    mmio_read(vga_offset + (0x3da - 0x3c0), 1); // read 0x3da to reset flip-flop. search docs.
     mmio_write(vga_offset + 0, 0x20, 1); // write 0x3c0 to enable vbe extensions. search docs.
 
     uint64_t dispi_offset = (uint64_t)(qemuvga_device->mmio_data + VIDEO_QEMU_VGA_BOCHS_DISPI_OFFSET);
