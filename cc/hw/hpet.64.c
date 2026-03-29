@@ -9,8 +9,10 @@
 #include <device/hpet.h>
 #include <logging.h>
 #include <memory/paging.h>
+#include <memory/special_frame_addresses.h>
 #include <apic.h>
 #include <cpu/interrupt.h>
+#include <cpu/smp.h>
 #include <cpu.h>
 #include <time.h>
 #include <time/timer.h>
@@ -140,11 +142,14 @@ int8_t hpet_init(void) {
 
     PRINTLOG(HPET, LOG_INFO, "number of timers: %d", capabilities.fields.number_of_timers);
 
+    smp_data_t* smp_data = (smp_data_t*)SMP_TRAMPOLINE_SHARED_DATA;
 
-    if(interrupt_irq_set_handler(17, &hpet_isr) != 0) {
-        PRINTLOG(HPET, LOG_ERROR, "cannot set pic timer irq");
+    if(!smp_data->is_for_wakeup) {
+        if(interrupt_irq_set_handler(17, &hpet_isr) != 0) {
+            PRINTLOG(HPET, LOG_ERROR, "cannot set pic timer irq");
 
-        return -1;
+            return -1;
+        }
     }
 
     apic_ioapic_setup_irq(17,

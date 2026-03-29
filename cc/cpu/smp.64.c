@@ -26,6 +26,7 @@
 #include <systeminfo.h>
 #include <pci.h>
 #include <driver/video.h>
+#include <device/hpet.h>
 #include <graphics/screen.h>
 
 MODULE("turnstone.kernel.cpu.smp");
@@ -261,6 +262,14 @@ static int32_t smp_ap_boot(uint8_t cpu_id) {
             video_set_graphics_mode(true);
 
             cpu_sti();
+
+            if(hpet_init() != 0) {
+                PRINTLOG(KERNEL, LOG_ERROR, "cannot init hpet after wakeup");
+
+                cpu_hlt();
+            }
+
+            // TODO: configure iommu and other devices if needed after wakeup.
 
             // wake up other cpus.
             PRINTLOG(KERNEL, LOG_INFO, "AP %i waking up other cpus.", cpu_id);
