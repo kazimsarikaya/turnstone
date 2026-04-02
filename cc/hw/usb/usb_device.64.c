@@ -734,7 +734,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
     usb_device->descriptor_buffer = memory_malloc(desc_size);
 
     if(!usb_device->descriptor_buffer) {
-        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for descriptor buffer");
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for descriptor buffer with size 0x%x", desc_size);
         usb_device_free(usb_device);
 
         return -1;

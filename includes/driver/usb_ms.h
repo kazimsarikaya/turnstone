@@ -34,7 +34,7 @@ disk_t* usb_mass_storage_disk_impl_open(usb_driver_t* usb_ms, uint8_t lun);
         uint64_t id; \
         boolean_t is_uas; \
         boolean_t command_size_16_supported; \
-        uint32_t max_lun; \
+        uint32_t max_lun __attribute__((aligned(16))); \
         uint64_t lba_count; \
         uint32_t block_size; \
         scsi_standard_inquiry_data_t* inquiry_data;

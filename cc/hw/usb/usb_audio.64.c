@@ -44,14 +44,14 @@ MODULE("turnstone.kernel.hw.usb");
 
 typedef enum usb_audio_ac_sub_desc_type_t {
     USB_AUDIO_AC_DESCRIPTOR_UNDEFINED = 0x00,
-    USB_AUDIO_AC_HEADER = 0x01,
-    USB_AUDIO_AC_INPUT_TERMINAL = 0x02,
-    USB_AUDIO_AC_OUTPUT_TERMINAL = 0x03,
-    USB_AUDIO_AC_MIXER_UNIT = 0x04,
-    USB_AUDIO_AC_SELECTOR_UNIT = 0x05,
-    USB_AUDIO_AC_FEATURE_UNIT = 0x06,
-    USB_AUDIO_AC_PROCESSING_UNIT = 0x07,
-    USB_AUDIO_AC_EXTENSION_UNIT = 0x08,
+    USB_AUDIO_AC_HEADER               = 0x01,
+    USB_AUDIO_AC_INPUT_TERMINAL       = 0x02,
+    USB_AUDIO_AC_OUTPUT_TERMINAL      = 0x03,
+    USB_AUDIO_AC_MIXER_UNIT           = 0x04,
+    USB_AUDIO_AC_SELECTOR_UNIT        = 0x05,
+    USB_AUDIO_AC_FEATURE_UNIT         = 0x06,
+    USB_AUDIO_AC_PROCESSING_UNIT      = 0x07,
+    USB_AUDIO_AC_EXTENSION_UNIT       = 0x08,
 } usb_audio_ac_sub_desc_type_t;
 
 typedef struct usb_audio_cs_dummy_desc_t {
@@ -96,22 +96,28 @@ typedef struct usb_audio_ac_feature_unit_desc_t {
 }__attribute__((packed)) usb_audio_ac_feature_unit_desc_t;
 
 typedef enum usb_audio_driver_type_t {
-    USB_AUDIO_DRIVER_TYPE_CONTROL = 0,
+    USB_AUDIO_DRIVER_TYPE_CONTROL   = 0,
     USB_AUDIO_DRIVER_TYPE_STREAMING = 1,
 } usb_audio_driver_type_t;
 
 typedef struct usb_audio_channel_volume_t {
-    int16_t volume;
-    int16_t min_volume;
-    int16_t max_volume;
-    int16_t volume_resolution;
+    int16_t volume            __attribute__((aligned(16)));
+    int16_t min_volume        __attribute__((aligned(16)));
+    int16_t max_volume        __attribute__((aligned(16)));
+    int16_t volume_resolution __attribute__((aligned(16)));
 } usb_audio_channel_volume_t;
+
+_Static_assert(sizeof(usb_audio_channel_volume_t) == 64, "usb_audio_channel_volume_t must be 64 bytes");
+_Static_assert(offsetof_field(usb_audio_channel_volume_t, volume) == 0, "volume must be at offset 0");
+_Static_assert(offsetof_field(usb_audio_channel_volume_t, min_volume) == 16, "min_volume must be at offset 16");
+_Static_assert(offsetof_field(usb_audio_channel_volume_t, max_volume) == 32, "max_volume must be at offset 32");
+_Static_assert(offsetof_field(usb_audio_channel_volume_t, volume_resolution) == 48, "volume_resolution must be at offset 48");
 
 typedef struct usb_driver_t {
     USB_DRIVER_COMMON_FIELDS;
     usb_audio_driver_type_t              driver_type;
     int32_t                              num_channels;
-    boolean_t                            is_muted;
+    boolean_t                            is_muted __attribute__((aligned(16)));
     usb_audio_channel_volume_t*          channels;
     usb_audio_ac_output_terminal_desc_t* output_terminal;
     usb_audio_ac_input_terminal_desc_t * input_terminal;
@@ -136,10 +142,10 @@ int8_t usb_audio_control_init(usb_device_t* device, usb_interface_t* interface) 
         return -1;
     }
 
-    driver->usb_device = device;
-    driver->interface  = interface;
+    driver->usb_device        = device;
+    driver->interface         = interface;
     driver->pipeline_callback = NULL;
-    driver->driver_type = USB_AUDIO_DRIVER_TYPE_CONTROL;
+    driver->driver_type       = USB_AUDIO_DRIVER_TYPE_CONTROL;
 
     interface->driver = driver;
 
@@ -193,7 +199,7 @@ int8_t usb_audio_control_init(usb_device_t* device, usb_interface_t* interface) 
     }
 
     driver->num_channels = num_channels;
-    driver->channels = memory_malloc(sizeof(usb_audio_channel_volume_t) * num_channels);
+    driver->channels     = memory_malloc(sizeof(usb_audio_channel_volume_t) * num_channels);
 
     if(!driver->channels) {
         PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for channels");
@@ -288,6 +294,7 @@ int8_t usb_audio_control_init(usb_device_t* device, usb_interface_t* interface) 
 
     // set volume to max value
     for(int32_t i = 0; i < driver->num_channels; i++) {
+        __attribute__((aligned(16)))
         int16_t volume = driver->channels[i].max_volume;
         if(!usb_device_request(device,
                                interface,
@@ -322,13 +329,13 @@ static int16_t* usb_audio_generate_beep(float64_t freq, int32_t duration_ms,
     }
 
     float64_t phase_step = 2.0 * PI * (float64_t)freq / (float64_t)sample_rate;
-    float64_t phase = 0.0;
+    float64_t phase      = 0.0;
 
     for (size_t i = 0; i < total_samples; i++) {
         int16_t sample = (int16_t)(math_sin(phase) * amplitude);
         buffer[2 * i]     = sample; // Left
         buffer[2 * i + 1] = sample; // Right
-        phase += phase_step;
+        phase            += phase_step;
         if (phase > 2.0 * PI) {
             phase -= 2.0 * PI;
         }

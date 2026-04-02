@@ -68,8 +68,8 @@ boolean_t usb_ms_bulk_only_read_write(usb_driver_t* usb_driver, boolean_t read, 
     }
 
 
-    ut.length = dtl;
-    ut.data = data;
+    ut.length    = dtl;
+    ut.data      = data;
     ut.stream_id = stream_id;
 
     int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
@@ -89,22 +89,22 @@ boolean_t usb_ms_bulk_only_send_command(usb_driver_t* usb_driver, uint32_t dtl, 
 
     usb_driver->command_tag = rand();
 
-
+    __attribute__((aligned(16)))
     usb_mass_storage_cbw_t cbw = {0};
-    cbw.signature = USB_MASS_STORAGE_CBW_SIGNATURE;
-    cbw.tag = usb_driver->command_tag;
-    cbw.data_transfer_length = dtl;
-    cbw.flags = flags;
-    cbw.lun = lun;
-    cbw.command_length = command_length;
+    cbw.signature              = USB_MASS_STORAGE_CBW_SIGNATURE;
+    cbw.tag                    = usb_driver->command_tag;
+    cbw.data_transfer_length   = dtl;
+    cbw.flags                  = flags;
+    cbw.lun                    = lun;
+    cbw.command_length         = command_length;
     memory_memcopy(command, &cbw.command, command_length);
 
     usb_transfer_t ut = {0};
 
-    ut.driver = usb_driver;
+    ut.driver   = usb_driver;
     ut.endpoint = usb_driver->interface->endpoints[usb_driver->out_endpoint];
-    ut.length = sizeof(usb_mass_storage_cbw_t);
-    ut.data = (uint8_t*)&cbw;
+    ut.length   = sizeof(usb_mass_storage_cbw_t);
+    ut.data     = (uint8_t*)&cbw;
 
     int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
 
@@ -121,12 +121,13 @@ boolean_t usb_ms_bulk_only_send_command(usb_driver_t* usb_driver, uint32_t dtl, 
 boolean_t usb_ms_bulk_only_get_status(usb_driver_t* usb_driver) {
     usb_transfer_t ut = {0};
 
+    __attribute__((aligned(16)))
     usb_mass_storage_csw_t csw = {0};
 
-    ut.driver = usb_driver;
+    ut.driver   = usb_driver;
     ut.endpoint = usb_driver->interface->endpoints[usb_driver->in_endpoint];
-    ut.length = sizeof(usb_mass_storage_csw_t);
-    ut.data = (uint8_t*)&csw;
+    ut.length   = sizeof(usb_mass_storage_csw_t);
+    ut.data     = (uint8_t*)&csw;
 
     int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
 
@@ -183,14 +184,15 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* 
     }
 
     usb_ms->usb_device = usb_device;
-    usb_ms->interface = interface;
-    interface->driver = usb_ms;
+    usb_ms->interface  = interface;
+    interface->driver  = usb_ms;
 
     usb_ms->lock = lock_create();
 
     if(!usb_ms->lock) {
         PRINTLOG(USB, LOG_ERROR, "cannot create lock for mass storage device");
         memory_free(usb_ms);
+        interface->driver = NULL;
 
         return NULL;
     }
@@ -203,11 +205,11 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* 
 
 
     if(interface->endpoints[0]->in) {
-        usb_ms->in_endpoint = 0;
+        usb_ms->in_endpoint  = 0;
         usb_ms->out_endpoint = 1;
     } else {
         usb_ms->out_endpoint = 0;
-        usb_ms->in_endpoint = 1;
+        usb_ms->in_endpoint  = 1;
     }
 
 
@@ -220,12 +222,13 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* 
                             0, usb_ms->interface_number, 0, NULL)) {
         PRINTLOG(USB, LOG_ERROR, "cannot reset mass storage device");
         memory_free(usb_ms);
+        interface->driver = NULL;
 
         return NULL;
     }
 
     boolean_t ready = false;
-    int8_t tries = 5;
+    int8_t tries    = 5;
 
     do {
         time_timer_spinsleep(1000);
@@ -246,6 +249,7 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* 
     if(!ready) {
         PRINTLOG(USB, LOG_ERROR, "cannot get max lun of mass storage device");
         memory_free(usb_ms);
+        interface->driver = NULL;
 
         return NULL;
     }
@@ -254,6 +258,7 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* 
 
     if(usb_ms_inquiry(usb_ms) != 0) {
         memory_free(usb_ms);
+        interface->driver = NULL;
 
         return NULL;
     }
@@ -261,23 +266,27 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* 
     if(usb_ms_test_unit_ready_with_retry(usb_ms) != 0) {
         memory_free(usb_ms->inquiry_data);
         memory_free(usb_ms);
+        interface->driver = NULL;
 
         return NULL;
     }
 
+    __attribute__((aligned(16)))
     scsi_command_read_capacity_16_t read_capacity_16 = {0};
-    read_capacity_16.opcode = SCSI_COMMAND_OPCODE_READ_CAPACITY_16;
-    read_capacity_16.allocation_length[3] = sizeof(scsi_capacity_16_t);
+    read_capacity_16.opcode                          = SCSI_COMMAND_OPCODE_READ_CAPACITY_16;
+    read_capacity_16.allocation_length[3]            = sizeof(scsi_capacity_16_t);
 
     if (!usb_ms_send_command(usb_ms, sizeof(scsi_capacity_16_t), USB_MS_FLAG_DATA_IN, 0, sizeof(scsi_command_read_capacity_16_t), (uint8_t*)&read_capacity_16)) {
         PRINTLOG(USB, LOG_ERROR, "cannot send read capacity 16 command to mass storage device");
         memory_free(usb_ms->inquiry_data);
         memory_free(usb_ms);
+        interface->driver = NULL;
 
         return NULL;
     }
 
 
+    __attribute__((aligned(16)))
     scsi_capacity_16_t capacity_16 = {0};
 
     if(!usb_ms_read_write(usb_ms, true, sizeof(scsi_capacity_16_t), (uint8_t*)&capacity_16)) {
@@ -291,38 +300,41 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* 
         } else {
             usb_ms->command_size_16_supported = true;
 
-            uint64_t last_lba = BYTE_SWAP64(capacity_16.last_logical_block_address);
+            uint64_t last_lba   = BYTE_SWAP64(capacity_16.last_logical_block_address);
             uint32_t block_size = BYTE_SWAP32(capacity_16.logical_block_length);
 
             PRINTLOG(USB, LOG_DEBUG, "16 bytes command supported");
 
-            usb_ms->lba_count = last_lba + 1;
+            usb_ms->lba_count  = last_lba + 1;
             usb_ms->block_size = block_size;
 
         }
     }
 
-    if(!usb_ms->command_size_16_supported)
-    {
+    if(!usb_ms->command_size_16_supported) {
         PRINTLOG(USB, LOG_DEBUG, "16 bytes command not supported, use 10 bytes command");
 
+        __attribute__((aligned(16)))
         scsi_command_read_capacity_10_t read_capacity_10 = {0};
-        read_capacity_10.opcode = SCSI_COMMAND_OPCODE_READ_CAPACITY_10;
+        read_capacity_10.opcode                          = SCSI_COMMAND_OPCODE_READ_CAPACITY_10;
 
         if (!usb_ms_send_command(usb_ms, sizeof(scsi_capacity_10_t), USB_MS_FLAG_DATA_IN, 0, sizeof(scsi_command_read_capacity_10_t), (uint8_t*)&read_capacity_10)) {
             PRINTLOG(USB, LOG_ERROR, "cannot send read capacity 10 command to mass storage device");
             memory_free(usb_ms->inquiry_data);
             memory_free(usb_ms);
+            interface->driver = NULL;
 
             return NULL;
         }
 
+        __attribute__((aligned(16)))
         scsi_capacity_10_t capacity_10 = {0};
 
         if(!usb_ms_read_write(usb_ms, true, sizeof(scsi_capacity_10_t), (uint8_t*)&capacity_10)) {
             PRINTLOG(USB, LOG_ERROR, "cannot read capacity 10 from mass storage device");
             memory_free(usb_ms->inquiry_data);
             memory_free(usb_ms);
+            interface->driver = NULL;
 
             return NULL;
         }
@@ -331,14 +343,15 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* 
             PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device, read capacity 10 failed");
             memory_free(usb_ms->inquiry_data);
             memory_free(usb_ms);
+            interface->driver = NULL;
 
             return NULL;
         }
 
-        uint32_t last_lba = BYTE_SWAP32(capacity_10.last_logical_block_address);
+        uint32_t last_lba   = BYTE_SWAP32(capacity_10.last_logical_block_address);
         uint32_t block_size = BYTE_SWAP32(capacity_10.logical_block_length);
 
-        usb_ms->lba_count = last_lba + 1;
+        usb_ms->lba_count  = last_lba + 1;
         usb_ms->block_size = block_size;
     }
 

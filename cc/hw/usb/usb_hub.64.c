@@ -18,7 +18,7 @@ MODULE("turnstone.kernel.hw.usb");
 typedef struct usb_hub_status_t {
     uint16_t hub_status;
     uint16_t hub_change;
-} __attribute__((packed)) usb_hub_status_t;
+} __attribute__((packed, aligned(16))) usb_hub_status_t;
 
 typedef struct usb_driver_t {
     USB_DRIVER_COMMON_FIELDS;
@@ -280,10 +280,10 @@ int8_t usb_hub_init(usb_device_t* usb_device, usb_interface_t* interface) {
 
         return -1;
     }
-    usb_device->is_hub = true;
-    hub_driver->usb_device = usb_device;
-    hub_driver->interface = interface;
-    hub_driver->pipeline_callback = usb_hub_pipeline_callback;
+    usb_device->is_hub               = true;
+    hub_driver->usb_device           = usb_device;
+    hub_driver->interface            = interface;
+    hub_driver->pipeline_callback    = usb_hub_pipeline_callback;
     hub_driver->expected_packet_size = sizeof(uint16_t);
 
     interface->driver = hub_driver;
@@ -297,7 +297,7 @@ int8_t usb_hub_init(usb_device_t* usb_device, usb_interface_t* interface) {
 
     usb_config_t* config = usb_device->configurations[usb_device->selected_config];
 
-    usb_device->hub_num_ports = config->hub->num_ports;
+    usb_device->hub_num_ports               = config->hub->num_ports;
     usb_device->hub_status_endpoint_address = interface->endpoints[0]->desc->endpoint_address;
 
     PRINTLOG(USB, LOG_INFO, "initializing hub device with %d ports", config->hub->num_ports);

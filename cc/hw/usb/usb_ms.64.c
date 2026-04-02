@@ -58,10 +58,11 @@ int8_t usb_ms_inquiry(usb_driver_t* usb_ms) {
         return -1;
     }
 
+    __attribute__((aligned(16)))
     scsi_command_inquiry_t inquiry = {0};
-    inquiry.opcode = SCSI_COMMAND_OPCODE_INQUIRY;
-    inquiry.allocation_length[0] = sizeof(scsi_standard_inquiry_data_t) >> 8;
-    inquiry.allocation_length[1] = sizeof(scsi_standard_inquiry_data_t) & 0xFF;
+    inquiry.opcode                 = SCSI_COMMAND_OPCODE_INQUIRY;
+    inquiry.allocation_length[0]   = sizeof(scsi_standard_inquiry_data_t) >> 8;
+    inquiry.allocation_length[1]   = sizeof(scsi_standard_inquiry_data_t) & 0xFF;
 
     if (!usb_ms_send_command(usb_ms, sizeof(scsi_standard_inquiry_data_t), USB_MS_FLAG_DATA_IN, 0, sizeof(scsi_command_inquiry_t), (uint8_t*)&inquiry)) {
         PRINTLOG(USB, LOG_ERROR, "cannot send inquiry command to mass storage device");
@@ -98,10 +99,11 @@ int8_t usb_ms_inquiry(usb_driver_t* usb_ms) {
 
 int8_t usb_ms_sense(usb_driver_t* usb_ms, scsi_sense_data_t* sense) {
     // send request sense
+    __attribute__((aligned(16)))
     scsi_command_request_sense_t request_sense = {0};
-    request_sense.opcode = SCSI_COMMAND_OPCODE_REQUEST_SENSE;
-    request_sense.allocation_length = sizeof(scsi_sense_data_t);
-    request_sense.control = 0;
+    request_sense.opcode                       = SCSI_COMMAND_OPCODE_REQUEST_SENSE;
+    request_sense.allocation_length            = sizeof(scsi_sense_data_t);
+    request_sense.control                      = 0;
 
     if (!usb_ms_send_command(usb_ms, sizeof(scsi_sense_data_t), USB_MS_FLAG_DATA_IN, 0, sizeof(scsi_command_request_sense_t), (uint8_t*)&request_sense)) {
         PRINTLOG(USB, LOG_ERROR, "cannot send request sense command to mass storage device");
@@ -133,8 +135,9 @@ int8_t usb_ms_sense(usb_driver_t* usb_ms, scsi_sense_data_t* sense) {
 }
 
 static int8_t usb_ms_test_unit_ready(usb_driver_t* usb_ms, boolean_t soft) {
+    __attribute__((aligned(16)))
     scsi_command_test_unit_ready_t test_unit_ready = {0};
-    test_unit_ready.opcode = SCSI_COMMAND_OPCODE_TEST_UNIT_READY;
+    test_unit_ready.opcode                         = SCSI_COMMAND_OPCODE_TEST_UNIT_READY;
 
     if (!usb_ms_send_command(usb_ms, 0, USB_MS_FLAG_NO_DATA, 0, sizeof(scsi_command_test_unit_ready_t), (uint8_t*)&test_unit_ready)) {
         PRINTLOG(USB, LOG_ERROR, "cannot send test unit ready command to mass storage device");
@@ -284,21 +287,22 @@ int8_t usb_ms_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64
     uint8_t* tmp_data = data;
 
     // for(uint64_t i = 0; i < count; i++) {
+    __attribute__((aligned(16)))
     uint8_t cbw_buffer[16] = {0};
     memory_memclean(cbw_buffer, 16);
     uint8_t cbw_buffer_len = 16;
 
     if(ctx->usb_ms->command_size_16_supported) {
         scsi_command_write_16_t* write_16 = (scsi_command_write_16_t*)cbw_buffer;
-        write_16->opcode = SCSI_COMMAND_OPCODE_WRITE_16;
-        write_16->lba = BYTE_SWAP64(lba);
+        write_16->opcode          = SCSI_COMMAND_OPCODE_WRITE_16;
+        write_16->lba             = BYTE_SWAP64(lba);
         write_16->transfer_length = BYTE_SWAP32(count);
 
     } else {
         cbw_buffer_len = 10;
         scsi_command_write_10_t* write_10 = (scsi_command_write_10_t*)cbw_buffer;
-        write_10->opcode = SCSI_COMMAND_OPCODE_WRITE_10;
-        write_10->lba = BYTE_SWAP32(lba);
+        write_10->opcode          = SCSI_COMMAND_OPCODE_WRITE_10;
+        write_10->lba             = BYTE_SWAP32(lba);
         write_10->transfer_length = BYTE_SWAP16(count);
     }
 
@@ -342,21 +346,22 @@ int8_t usb_ms_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_
     uint8_t* tmp_data = *data;
 
     // for(uint64_t i = 0; i < count; i++) {
+    __attribute__((aligned(16)))
     uint8_t cbw_buffer[16] = {0};
     memory_memclean(cbw_buffer, 16);
     uint8_t cbw_buffer_len = 16;
 
     if(ctx->usb_ms->command_size_16_supported) {
         scsi_command_read_16_t* read_16 = (scsi_command_read_16_t*)cbw_buffer;
-        read_16->opcode = SCSI_COMMAND_OPCODE_READ_16;
-        read_16->lba = BYTE_SWAP64(lba);
+        read_16->opcode          = SCSI_COMMAND_OPCODE_READ_16;
+        read_16->lba             = BYTE_SWAP64(lba);
         read_16->transfer_length = BYTE_SWAP32(count);
 
     } else {
         cbw_buffer_len = 10;
         scsi_command_read_10_t* read_10 = (scsi_command_read_10_t*)cbw_buffer;
-        read_10->opcode = SCSI_COMMAND_OPCODE_READ_10;
-        read_10->lba = BYTE_SWAP32(lba);
+        read_10->opcode          = SCSI_COMMAND_OPCODE_READ_10;
+        read_10->lba             = BYTE_SWAP32(lba);
         read_10->transfer_length = BYTE_SWAP16(count);
     }
 
@@ -391,22 +396,23 @@ int8_t usb_ms_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_
 int8_t usb_ms_disk_impl_flush(const disk_or_partition_t* d) {
     disk_context_t* ctx = (disk_context_t*)d->context;
 
+    __attribute__((aligned(16)))
     uint8_t buffer[16] = {0};
     memory_memclean(buffer, 16);
     uint8_t buffer_len = 16;
 
     if(ctx->usb_ms->command_size_16_supported) {
         scsi_command_sync_cache_16_t* sync_cache_16 = (scsi_command_sync_cache_16_t*)buffer;
-        sync_cache_16->opcode = SCSI_COMMAND_OPCODE_SYNCHRONIZE_CACHE_16;
-        sync_cache_16->immed = 1;
-        sync_cache_16->lba = 0;
+        sync_cache_16->opcode           = SCSI_COMMAND_OPCODE_SYNCHRONIZE_CACHE_16;
+        sync_cache_16->immed            = 1;
+        sync_cache_16->lba              = 0;
         sync_cache_16->number_of_blocks = BYTE_SWAP32(ctx->usb_ms->lba_count);
     } else {
         buffer_len = 10;
         scsi_command_sync_cache_10_t* sync_cache = (scsi_command_sync_cache_10_t*)buffer;
-        sync_cache->opcode = SCSI_COMMAND_OPCODE_SYNCHRONIZE_CACHE_10;
-        sync_cache->immed = 1;
-        sync_cache->lba = 0;
+        sync_cache->opcode           = SCSI_COMMAND_OPCODE_SYNCHRONIZE_CACHE_10;
+        sync_cache->immed            = 1;
+        sync_cache->lba              = 0;
         sync_cache->number_of_blocks = BYTE_SWAP16(ctx->usb_ms->lba_count);
     }
 
@@ -458,10 +464,10 @@ disk_t* usb_mass_storage_disk_impl_open(usb_driver_t* usb_ms, uint8_t lun) {
         return NULL;
     }
 
-    ctx->heap = heap;
-    ctx->usb_ms = usb_ms;
+    ctx->heap       = heap;
+    ctx->usb_ms     = usb_ms;
     ctx->block_size = usb_ms->block_size;
-    ctx->lun = lun;
+    ctx->lun        = lun;
 
     disk_t* d = memory_malloc_ext(heap, sizeof(disk_t), 0);
 
@@ -471,14 +477,14 @@ disk_t* usb_mass_storage_disk_impl_open(usb_driver_t* usb_ms, uint8_t lun) {
         return NULL;
     }
 
-    d->disk.context = ctx;
-    d->disk.get_heap = usb_ms_disk_impl_get_heap;
-    d->disk.get_size = usb_ms_disk_impl_get_size;
+    d->disk.context        = ctx;
+    d->disk.get_heap       = usb_ms_disk_impl_get_heap;
+    d->disk.get_size       = usb_ms_disk_impl_get_size;
     d->disk.get_block_size = usb_ms_disk_impl_get_block_size;
-    d->disk.write = usb_ms_disk_impl_write;
-    d->disk.read = usb_ms_disk_impl_read;
-    d->disk.flush = usb_ms_disk_impl_flush;
-    d->disk.close = usb_ms_disk_impl_close;
+    d->disk.write          = usb_ms_disk_impl_write;
+    d->disk.read           = usb_ms_disk_impl_read;
+    d->disk.flush          = usb_ms_disk_impl_flush;
+    d->disk.close          = usb_ms_disk_impl_close;
 
     return d;
 }

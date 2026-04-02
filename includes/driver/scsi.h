@@ -18,15 +18,15 @@ extern "C" {
 
 
 typedef enum scsi_command_opcode_t {
-    SCSI_COMMAND_OPCODE_TEST_UNIT_READY = 0x00,
-    SCSI_COMMAND_OPCODE_REQUEST_SENSE = 0x03,
-    SCSI_COMMAND_OPCODE_INQUIRY = 0x12,
-    SCSI_COMMAND_OPCODE_READ_CAPACITY_16 = 0x9E,
-    SCSI_COMMAND_OPCODE_READ_CAPACITY_10 = 0x25,
-    SCSI_COMMAND_OPCODE_READ_16 = 0x88,
-    SCSI_COMMAND_OPCODE_READ_10 = 0x28,
-    SCSI_COMMAND_OPCODE_WRITE_16 = 0x8A,
-    SCSI_COMMAND_OPCODE_WRITE_10 = 0x2A,
+    SCSI_COMMAND_OPCODE_TEST_UNIT_READY      = 0x00,
+    SCSI_COMMAND_OPCODE_REQUEST_SENSE        = 0x03,
+    SCSI_COMMAND_OPCODE_INQUIRY              = 0x12,
+    SCSI_COMMAND_OPCODE_READ_CAPACITY_16     = 0x9E,
+    SCSI_COMMAND_OPCODE_READ_CAPACITY_10     = 0x25,
+    SCSI_COMMAND_OPCODE_READ_16              = 0x88,
+    SCSI_COMMAND_OPCODE_READ_10              = 0x28,
+    SCSI_COMMAND_OPCODE_WRITE_16             = 0x8A,
+    SCSI_COMMAND_OPCODE_WRITE_10             = 0x2A,
     SCSI_COMMAND_OPCODE_SYNCHRONIZE_CACHE_16 = 0x91,
     SCSI_COMMAND_OPCODE_SYNCHRONIZE_CACHE_10 = 0x35,
 } scsi_command_opcode_t;
@@ -36,6 +36,8 @@ typedef struct scsi_command_status_t {
     uint8_t code;
     uint8_t qualifier;
 }__attribute__((packed)) scsi_command_status_t;
+
+_Static_assert(sizeof(scsi_command_status_t) == 3, "scsi_command_status_t size mismatch");
 
 typedef struct scsi_command_test_unit_ready_t {
     uint8_t opcode;

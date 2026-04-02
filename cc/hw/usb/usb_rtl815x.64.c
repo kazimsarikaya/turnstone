@@ -1389,6 +1389,7 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
     if (usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_VERSION, &version) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot read version");
         memory_free(drv);
+        interface->driver = NULL;
         return -1;
     }
 
@@ -1399,6 +1400,7 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
     if (usb_rtl815x_init(drv) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot initialize device");
         memory_free(drv);
+        interface->driver = NULL;
         return -1;
     }
 
@@ -1406,6 +1408,7 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
 
     if (usb_rtl815x_read_mac(drv, drv->mac) != 0) {
         memory_free(drv);
+        interface->driver = NULL;
         return -1;
     }
 
@@ -1436,7 +1439,6 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
                            0, rx_pipeline)) {
         PRINTLOG(USB, LOG_ERROR, "cannot setup endpoint pipeline");
 
-
         return -1;
     }
 
@@ -1453,7 +1455,6 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
                            int_ep_size, int_ep_address,
                            0, int_pipeline)) {
         PRINTLOG(USB, LOG_ERROR, "cannot setup endpoint pipeline");
-
 
         return -1;
     }

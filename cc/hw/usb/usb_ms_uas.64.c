@@ -72,7 +72,7 @@ typedef struct usb_uas_iu_t {
         usb_uas_iu_task_mgmt_t task;
         usb_uas_iu_response_t  response;
     };
-} __attribute__((packed)) usb_uas_iu_t;
+} __attribute__((packed, aligned(16))) usb_uas_iu_t;
 
 typedef struct usb_driver_t {
     USB_DRIVER_COMMON_FIELDS;
@@ -104,8 +104,8 @@ boolean_t usb_ms_uas_read_write(usb_driver_t* usb_driver, boolean_t read, uint32
     }
 
 
-    ut.length = dtl;
-    ut.data = data;
+    ut.length    = dtl;
+    ut.data      = data;
     ut.stream_id = stream_id;
 
     int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
@@ -126,26 +126,26 @@ boolean_t usb_ms_uas_send_command(usb_driver_t* usb_driver, uint32_t dtl, uint8_
 
     lock_acquire(usb_driver->lock);
 
-    uint8_t* data = NULL;
-    uint32_t length = 0;
+    uint8_t* data      = NULL;
+    uint32_t length    = 0;
     uint32_t stream_id = 1;
     usb_driver->command_tag = BYTE_SWAP16(stream_id); // FIXME: UAS does not use tags?
     usb_uas_iu_t iu = {0};
-    iu.hdr.id = USB_UAS_UI_COMMAND;
-    iu.hdr.tag = usb_driver->command_tag;
-    iu.command.lun = lun;
+    iu.hdr.id                 = USB_UAS_UI_COMMAND;
+    iu.hdr.tag                = usb_driver->command_tag;
+    iu.command.lun            = lun;
     iu.command.add_cdb_length = 0;
     memory_memcopy(command, &iu.command.cdb, command_length);
-    data = (uint8_t*)&iu;
+    data   = (uint8_t*)&iu;
     length = sizeof(usb_uas_iu_header_t) + sizeof(usb_uas_iu_command_t) + 1;
 
 
     usb_transfer_t ut = {0};
 
-    ut.driver = usb_driver;
-    ut.endpoint = usb_driver->interface->endpoints[usb_driver->cmd_endpoint];
-    ut.length = length;
-    ut.data = data;
+    ut.driver    = usb_driver;
+    ut.endpoint  = usb_driver->interface->endpoints[usb_driver->cmd_endpoint];
+    ut.length    = length;
+    ut.data      = data;
     ut.stream_id = stream_id;
 
     int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
@@ -165,7 +165,7 @@ boolean_t usb_ms_uas_send_command(usb_driver_t* usb_driver, uint32_t dtl, uint8_
 boolean_t usb_ms_uas_get_status(usb_driver_t* usb_driver) {
     usb_transfer_t ut = {0};
 
-    uint8_t* data = NULL;
+    uint8_t* data   = NULL;
     uint32_t length = 0;
 
     uint32_t stream_id = 1;
@@ -174,11 +174,11 @@ boolean_t usb_ms_uas_get_status(usb_driver_t* usb_driver) {
 
     boolean_t is_async = false;
 
-    iu.hdr.id = USB_UAS_UI_RESPONSE;
-    iu.hdr.tag = usb_driver->command_tag;
-    data = (uint8_t*)&iu;
-    length = sizeof(usb_uas_iu_t); // sizeof(usb_uas_iu_header_t) + sizeof(usb_uas_iu_response_t);
-    is_async = !usb_driver->is_uas_cmd_sended;
+    iu.hdr.id                     = USB_UAS_UI_RESPONSE;
+    iu.hdr.tag                    = usb_driver->command_tag;
+    data                          = (uint8_t*)&iu;
+    length                        = sizeof(usb_uas_iu_t); // sizeof(usb_uas_iu_header_t) + sizeof(usb_uas_iu_response_t);
+    is_async                      = !usb_driver->is_uas_cmd_sended;
     usb_driver->is_uas_cmd_sended = false;
 
     if(is_async) {
@@ -192,12 +192,12 @@ boolean_t usb_ms_uas_get_status(usb_driver_t* usb_driver) {
         data = (uint8_t*)usb_driver->async_iu;
     }
 
-    ut.driver = usb_driver;
-    ut.endpoint = usb_driver->interface->endpoints[usb_driver->status_endpoint];
-    ut.length = length;
-    ut.data = data;
+    ut.driver    = usb_driver;
+    ut.endpoint  = usb_driver->interface->endpoints[usb_driver->status_endpoint];
+    ut.length    = length;
+    ut.data      = data;
     ut.stream_id = stream_id;
-    ut.is_async = is_async;
+    ut.is_async  = is_async;
 
     int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
 
@@ -232,7 +232,7 @@ boolean_t usb_ms_uas_get_status(usb_driver_t* usb_driver) {
 
     if(iu.hdr.id != USB_UAS_UI_RESPONSE) {
         if(iu.hdr.id == USB_UAS_UI_SENSE) {
-            if(iu.sense.status != 0 || iu.sense.sense_length != 0){
+            if(iu.sense.status != 0 || iu.sense.sense_length != 0) {
                 PRINTLOG(USB, LOG_TRACE, "sense status: 0x%x", iu.sense.status);
                 PRINTLOG(USB, LOG_TRACE, "sense length: 0x%llx", BYTE_SWAP16(iu.sense.sense_length));
                 PRINTLOG(USB, LOG_TRACE, "status qualifier: 0x%llx", BYTE_SWAP16(iu.sense.status_qualifier));
@@ -280,8 +280,8 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
     }
 
     usb_ms->usb_device = usb_device;
-    usb_ms->interface = interface;
-    interface->driver = usb_ms;
+    usb_ms->interface  = interface;
+    interface->driver  = usb_ms;
 
     usb_ms->lock = lock_create();
 
@@ -303,6 +303,7 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
         if(!interface->endpoints[0]->num_cs_interfaces || !interface->endpoints[i]->cs_interfaces || !interface->endpoints[i]->endpoint_companion) {
             PRINTLOG(USB, LOG_ERROR, "invalid endpoint companion or cs interface for uas");
             memory_free(usb_ms);
+            interface->driver = NULL;
 
             return NULL;
         }
@@ -323,6 +324,7 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
         default:
             PRINTLOG(USB, LOG_ERROR, "unknown uas pipe id: 0x%x", interface->endpoints[i]->cs_interfaces[0]->interface_number);
             memory_free(usb_ms);
+            interface->driver = NULL;
 
             return NULL;
         }
@@ -336,6 +338,7 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
 
     if(usb_ms_inquiry(usb_ms) != 0) {
         memory_free(usb_ms);
+        interface->driver = NULL;
 
         return NULL;
     }
@@ -343,6 +346,7 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
     if(usb_ms_test_unit_ready_with_retry(usb_ms) != 0) {
         memory_free(usb_ms->inquiry_data);
         memory_free(usb_ms);
+        interface->driver = NULL;
 
         return NULL;
     }
@@ -351,18 +355,21 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
         PRINTLOG(USB, LOG_ERROR, "cannot send pre-status for may failed capacity 16 command");
         memory_free(usb_ms->inquiry_data);
         memory_free(usb_ms);
+        interface->driver = NULL;
 
         return NULL;
     }
 
+    __attribute__((aligned(16)))
     scsi_command_read_capacity_16_t read_capacity_16 = {0};
-    read_capacity_16.opcode = SCSI_COMMAND_OPCODE_READ_CAPACITY_16;
-    read_capacity_16.allocation_length[3] = sizeof(scsi_capacity_16_t);
+    read_capacity_16.opcode                          = SCSI_COMMAND_OPCODE_READ_CAPACITY_16;
+    read_capacity_16.allocation_length[3]            = sizeof(scsi_capacity_16_t);
 
     if (!usb_ms_send_command(usb_ms, sizeof(scsi_capacity_16_t), USB_MS_FLAG_DATA_IN, 0, sizeof(scsi_command_read_capacity_16_t), (uint8_t*)&read_capacity_16)) {
         PRINTLOG(USB, LOG_ERROR, "cannot send read capacity 16 command to mass storage device");
         memory_free(usb_ms->inquiry_data);
         memory_free(usb_ms);
+        interface->driver = NULL;
 
         return NULL;
     }
@@ -371,6 +378,7 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
         PRINTLOG(USB, LOG_ERROR, "async iu is NULL");
         memory_free(usb_ms->inquiry_data);
         memory_free(usb_ms);
+        interface->driver = NULL;
         return NULL;
     }
 
@@ -386,7 +394,7 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
     } else {
         PRINTLOG(USB, LOG_TRACE, "async iu received. 16 bytes command not supported");
         memory_free(usb_ms->async_iu);
-        usb_ms->async_iu = NULL;
+        usb_ms->async_iu                  = NULL;
         usb_ms->command_size_16_supported = false;
     }
 
@@ -405,12 +413,12 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
             } else {
                 usb_ms->command_size_16_supported = true;
 
-                uint64_t last_lba = BYTE_SWAP64(capacity_16.last_logical_block_address);
+                uint64_t last_lba   = BYTE_SWAP64(capacity_16.last_logical_block_address);
                 uint32_t block_size = BYTE_SWAP32(capacity_16.logical_block_length);
 
                 PRINTLOG(USB, LOG_DEBUG, "16 bytes command supported");
 
-                usb_ms->lba_count = last_lba + 1;
+                usb_ms->lba_count  = last_lba + 1;
                 usb_ms->block_size = block_size;
 
             }
@@ -418,27 +426,30 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
     }
 
 
-    if(!usb_ms->command_size_16_supported)
-    {
+    if(!usb_ms->command_size_16_supported) {
         PRINTLOG(USB, LOG_DEBUG, "16 bytes command not supported, use 10 bytes command");
 
+        __attribute__((aligned(16)))
         scsi_command_read_capacity_10_t read_capacity_10 = {0};
-        read_capacity_10.opcode = SCSI_COMMAND_OPCODE_READ_CAPACITY_10;
+        read_capacity_10.opcode                          = SCSI_COMMAND_OPCODE_READ_CAPACITY_10;
 
         if (!usb_ms_send_command(usb_ms, sizeof(scsi_capacity_10_t), USB_MS_FLAG_DATA_IN, 0, sizeof(scsi_command_read_capacity_10_t), (uint8_t*)&read_capacity_10)) {
             PRINTLOG(USB, LOG_ERROR, "cannot send read capacity 10 command to mass storage device");
             memory_free(usb_ms->inquiry_data);
             memory_free(usb_ms);
+            interface->driver = NULL;
 
             return NULL;
         }
 
+        __attribute__((aligned(16)))
         scsi_capacity_10_t capacity_10 = {0};
 
         if(!usb_ms_read_write(usb_ms, true, sizeof(scsi_capacity_10_t), (uint8_t*)&capacity_10)) {
             PRINTLOG(USB, LOG_ERROR, "cannot read capacity 10 from mass storage device");
             memory_free(usb_ms->inquiry_data);
             memory_free(usb_ms);
+            interface->driver = NULL;
 
             return NULL;
         }
@@ -447,14 +458,15 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
             PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device, read capacity 10 failed");
             memory_free(usb_ms->inquiry_data);
             memory_free(usb_ms);
+            interface->driver = NULL;
 
             return NULL;
         }
 
-        uint32_t last_lba = BYTE_SWAP32(capacity_10.last_logical_block_address);
+        uint32_t last_lba   = BYTE_SWAP32(capacity_10.last_logical_block_address);
         uint32_t block_size = BYTE_SWAP32(capacity_10.logical_block_length);
 
-        usb_ms->lba_count = last_lba + 1;
+        usb_ms->lba_count  = last_lba + 1;
         usb_ms->block_size = block_size;
     }
 

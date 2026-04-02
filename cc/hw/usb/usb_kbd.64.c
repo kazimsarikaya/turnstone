@@ -401,9 +401,9 @@ static void usb_keyboard_handle_keys(usb_driver_t* usb_keyboard) {
 
         if(!found) {
             char16_t key = usb_keyboard->old_usb_kbd_report.key[i];
-            usb_keyboard->last_report_time[key] = 0;
+            usb_keyboard->last_report_time[key]    = 0;
             usb_keyboard->is_not_first_repeat[key] = false;
-            key = KBD_USB_SCANCODE_MAP[key];
+            key                                    = KBD_USB_SCANCODE_MAP[key];
             kbd_handle_key(key, false);
         }
     }
@@ -421,12 +421,12 @@ static void usb_keyboard_handle_keys(usb_driver_t* usb_keyboard) {
             }
         }
 
-        char16_t key = usb_keyboard->new_usb_kbd_report.key[i];
+        char16_t key          = usb_keyboard->new_usb_kbd_report.key[i];
         char16_t original_key = key;
-        uint64_t old_time = usb_keyboard->last_report_time[original_key];
+        uint64_t old_time     = usb_keyboard->last_report_time[original_key];
         uint64_t current_time = time_ms(NULL);
         usb_keyboard->last_report_time[original_key] = current_time;
-        key = KBD_USB_SCANCODE_MAP[key];
+        key                                          = KBD_USB_SCANCODE_MAP[key];
 
         if(is_key_new) {
             kbd_handle_key(key, true);
@@ -435,7 +435,7 @@ static void usb_keyboard_handle_keys(usb_driver_t* usb_keyboard) {
 
             if(!usb_keyboard->is_not_first_repeat[original_key]) {
                 usb_keyboard->is_not_first_repeat[original_key] = true;
-                delay *= 10;
+                delay                                          *= 10;
             }
 
             boolean_t send_report = (current_time - old_time) >= delay;
@@ -483,10 +483,10 @@ int8_t usb_keyboard_init(usb_device_t* usb_device, usb_interface_t* interface) {
     }
 
     usb_keyboard->usb_device = usb_device;
-    usb_keyboard->interface = interface;
-    interface->driver = usb_keyboard;
+    usb_keyboard->interface  = interface;
+    interface->driver        = usb_keyboard;
 
-    usb_keyboard->max_packet_size = interface->endpoints[0]->desc->max_packet_size;
+    usb_keyboard->max_packet_size      = interface->endpoints[0]->desc->max_packet_size;
     usb_keyboard->expected_packet_size = sizeof(usb_kbd_report_t);
 
     pipeline_t* pipeline = pipeline_create(usb_keyboard->expected_packet_size * 1024);
@@ -494,6 +494,7 @@ int8_t usb_keyboard_init(usb_device_t* usb_device, usb_interface_t* interface) {
     if(!pipeline) {
         PRINTLOG(USB, LOG_ERROR, "cannot create pipeline");
         memory_free(usb_keyboard);
+        interface->driver = NULL;
 
         return -1;
     }
@@ -506,6 +507,7 @@ int8_t usb_keyboard_init(usb_device_t* usb_device, usb_interface_t* interface) {
                            0, pipeline)) {
         PRINTLOG(USB, LOG_ERROR, "cannot setup endpoint pipeline");
         memory_free(usb_keyboard);
+        interface->driver = NULL;
 
         return -1;
     }
@@ -517,6 +519,7 @@ int8_t usb_keyboard_init(usb_device_t* usb_device, usb_interface_t* interface) {
                             0, interface->desc->interface_number, 0, NULL)) {
         PRINTLOG(USB, LOG_ERROR, "cannot set idle");
         memory_free(usb_keyboard);
+        interface->driver = NULL;
 
         return -1;
     }
@@ -526,6 +529,7 @@ int8_t usb_keyboard_init(usb_device_t* usb_device, usb_interface_t* interface) {
     } else {
         PRINTLOG(USB, LOG_ERROR, "unknown controller type %d", usb_device->controller->controller_type);
         memory_free(usb_keyboard);
+        interface->driver = NULL;
 
         return -1;
     }

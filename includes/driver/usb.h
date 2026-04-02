@@ -22,9 +22,9 @@ extern "C" {
 
 
 typedef enum usb_endpoint_speed_t {
-    USB_ENDPOINT_SPEED_FULL = 0,
-    USB_ENDPOINT_SPEED_LOW  = 1,
-    USB_ENDPOINT_SPEED_HIGH = 2,
+    USB_ENDPOINT_SPEED_FULL  = 0,
+    USB_ENDPOINT_SPEED_LOW   = 1,
+    USB_ENDPOINT_SPEED_HIGH  = 2,
     USB_ENDPOINT_SPEED_SUPER = 3,
 } usb_endpoint_speed_t;
 
@@ -75,22 +75,22 @@ typedef enum usb_controler_type_t {
 typedef struct usb_controller_metadata_t usb_controller_metadata_t;
 
 typedef enum usb_base_desc_type_t {
-    USB_BASE_DESC_TYPE_DEVICE = 0x01,
-    USB_BASE_DESC_TYPE_CONFIG = 0x02,
-    USB_BASE_DESC_TYPE_STRING = 0x03,
+    USB_BASE_DESC_TYPE_DEVICE    = 0x01,
+    USB_BASE_DESC_TYPE_CONFIG    = 0x02,
+    USB_BASE_DESC_TYPE_STRING    = 0x03,
     USB_BASE_DESC_TYPE_INTERFACE = 0x04,
-    USB_BASE_DESC_TYPE_ENDPOINT = 0x05,
+    USB_BASE_DESC_TYPE_ENDPOINT  = 0x05,
 } usb_base_desc_type_t;
 
 typedef enum usb_hid_desc_type_t {
-    USB_HID_DESC_TYPE_HID = 0x21,
-    USB_HID_DESC_TYPE_REPORT = 0x22,
+    USB_HID_DESC_TYPE_HID      = 0x21,
+    USB_HID_DESC_TYPE_REPORT   = 0x22,
     USB_HID_DESC_TYPE_PHYSICAL = 0x23,
 } usb_hid_desc_type_t;
 
 typedef enum usb_class_desc_type_t {
     USB_CLASS_DESC_TYPE_CS_INTERFACE = 0x24,
-    USB_CLASS_DESC_TYPE_CS_ENDPOINT = 0x25,
+    USB_CLASS_DESC_TYPE_CS_ENDPOINT  = 0x25,
 } usb_class_desc_type_t;
 
 typedef enum usb_hub_desc_type_t {
@@ -102,13 +102,13 @@ typedef enum usb_endpoint_companion_desc_type_t {
 } usb_endpoint_companion_desc_type_t;
 
 typedef enum usb_hub_characteristic_t {
-    USB_HUB_CHARACTERISTIC_POWER_MASK = 0x03,
-    USB_HUB_CHARACTERISTIC_GLOBAL= 0x00,
-    USB_HUB_CHARACTERISTIC_INDIVIDUAL = 0x01,
-    USB_HUB_CHARACTERISTIC_COMPOUND = 0x04,
+    USB_HUB_CHARACTERISTIC_POWER_MASK       = 0x03,
+    USB_HUB_CHARACTERISTIC_GLOBAL           = 0x00,
+    USB_HUB_CHARACTERISTIC_INDIVIDUAL       = 0x01,
+    USB_HUB_CHARACTERISTIC_COMPOUND         = 0x04,
     USB_HUB_CHARACTERISTIC_OVERCURRENT_MASK = 0x18,
-    USB_HUB_CHARACTERISTIC_TT_TTI_MASK = 0x60,
-    USB_HUB_CHARACTERISTIC_PORT_INDICATOR = 0x80,
+    USB_HUB_CHARACTERISTIC_TT_TTI_MASK      = 0x60,
+    USB_HUB_CHARACTERISTIC_PORT_INDICATOR   = 0x80,
 } usb_hub_characteristic_t;
 
 typedef struct usb_device_desc_t {
@@ -209,32 +209,32 @@ typedef struct usb_endpoint_companion_desc_t {
 
 typedef enum usb_request_type_t {
     USB_REQUEST_TYPE_STANDARD = 0x00,
-    USB_REQUEST_TYPE_CLASS = 0x20,
-    USB_REQUEST_TYPE_VENDOR = 0x40,
-    USB_REQUEST_TYPE_MASK = 0x60,
+    USB_REQUEST_TYPE_CLASS    = 0x20,
+    USB_REQUEST_TYPE_VENDOR   = 0x40,
+    USB_REQUEST_TYPE_MASK     = 0x60,
 } usb_request_type_t;
 
 typedef enum usb_request_recipient_t {
-    USB_REQUEST_RECIPIENT_DEVICE = 0x00,
+    USB_REQUEST_RECIPIENT_DEVICE    = 0x00,
     USB_REQUEST_RECIPIENT_INTERFACE = 0x01,
-    USB_REQUEST_RECIPIENT_ENDPOINT = 0x02,
-    USB_REQUEST_RECIPIENT_OTHER = 0x03,
-    USB_REQUEST_RECIPIENT_MASK = 0x1F,
+    USB_REQUEST_RECIPIENT_ENDPOINT  = 0x02,
+    USB_REQUEST_RECIPIENT_OTHER     = 0x03,
+    USB_REQUEST_RECIPIENT_MASK      = 0x1F,
 } usb_request_recipient_t;
 
 typedef enum usb_request_device_t {
-    USB_REQUEST_GET_STATUS = 0x00,
-    USB_REQUEST_CLEAR_FEATURE = 0x01,
-    USB_REQUEST_SET_FEATURE = 0x03,
-    USB_REQUEST_SET_ADDRESS = 0x05,
-    USB_REQUEST_GET_DESCRIPTOR = 0x06,
-    USB_REQUEST_SET_DESCRIPTOR = 0x07,
+    USB_REQUEST_GET_STATUS        = 0x00,
+    USB_REQUEST_CLEAR_FEATURE     = 0x01,
+    USB_REQUEST_SET_FEATURE       = 0x03,
+    USB_REQUEST_SET_ADDRESS       = 0x05,
+    USB_REQUEST_GET_DESCRIPTOR    = 0x06,
+    USB_REQUEST_SET_DESCRIPTOR    = 0x07,
     USB_REQUEST_GET_CONFIGURATION = 0x08,
     USB_REQUEST_SET_CONFIGURATION = 0x09,
-    USB_REQUEST_GET_INTERFACE = 0x0A,
-    USB_REQUEST_SET_INTERFACE = 0x0B,
-    USB_REQUEST_SYNCH_FRAME = 0x0C,
-    USB_REQUEST_EVALUATE_CONTEXT = 0x0D, // TODO: usb3.0 should be checked
+    USB_REQUEST_GET_INTERFACE     = 0x0A,
+    USB_REQUEST_SET_INTERFACE     = 0x0B,
+    USB_REQUEST_SYNCH_FRAME       = 0x0C,
+    USB_REQUEST_EVALUATE_CONTEXT  = 0x0D, // TODO: usb3.0 should be checked
 } usb_request_device_t;
 
 typedef enum usb_request_direction_t {
@@ -244,49 +244,50 @@ typedef enum usb_request_direction_t {
 
 typedef enum usb_request_hub_t {
     USB_REQUEST_CLEAR_TT_BUFFER = 0x08,
-    USB_REQUEST_RESET_TT = 0x09,
-    USB_REQUEST_GET_TT_STATE = 0x0A,
-    USB_REQUEST_STOP_TT = 0x0B,
+    USB_REQUEST_RESET_TT        = 0x09,
+    USB_REQUEST_GET_TT_STATE    = 0x0A,
+    USB_REQUEST_STOP_TT         = 0x0B,
 } usb_request_hub_t;
 
 typedef enum usb_request_interface_t {
-    USB_REQUEST_GET_REPORT = 0x01,
-    USB_REQUEST_GET_IDLE = 0x02,
+    USB_REQUEST_GET_REPORT   = 0x01,
+    USB_REQUEST_GET_IDLE     = 0x02,
     USB_REQUEST_GET_PROTOCOL = 0x03,
-    USB_REQUEST_SET_REPORT = 0x09,
-    USB_REQUEST_SET_IDLE = 0x0A,
+    USB_REQUEST_SET_REPORT   = 0x09,
+    USB_REQUEST_SET_IDLE     = 0x0A,
     USB_REQUEST_SET_PROTOCOL = 0x0B,
 } usb_request_interface_t;
 
 typedef enum usb_request_endpoint_t {
-    USB_ENDPOINT_SETUP_ENDPOINT = 0x81,
-    USB_ENDPOINT_CLEAR_ENDPOINT = 0x82,
-    USB_ENDPOINT_SETUP_PIPELINE = 0x83,
+    USB_ENDPOINT_SETUP_ENDPOINT      = 0x81,
+    USB_ENDPOINT_CLEAR_ENDPOINT      = 0x82,
+    USB_ENDPOINT_SETUP_PIPELINE      = 0x83,
+    USB_ENDPOINT_SETUP_ISOC_ENDPOINT = 0x84,
 } usb_request_endpoint_t;
 
 typedef enum usb_standart_feature_selector_t {
     USB_FEATURE_DEVICE_REMOTE_WAKEUP = 0x01,
-    USB_FEATURE_ENDPOINT_HALT = 0x00,
-    USB_FEATURE_TEST_MODE = 0x02,
+    USB_FEATURE_ENDPOINT_HALT        = 0x00,
+    USB_FEATURE_TEST_MODE            = 0x02,
 } usb_standart_feature_selector_t;
 
 typedef enum usb_hub_feature_selector_t {
-    USB_HUB_FEATURE_C_HUB_LOCAL_POWER = 0x00,
-    USB_HUB_FEATURE_C_HUB_OVER_CURRENT = 0x01,
-    USB_HUB_FEATURE_PORT_CONNECTION = 0x00,
-    USB_HUB_FEATURE_PORT_ENABLE = 0x01,
-    USB_HUB_FEATURE_PORT_SUSPEND = 0x02,
-    USB_HUB_FEATURE_PORT_OVER_CURRENT = 0x03,
-    USB_HUB_FEATURE_PORT_RESET = 0x04,
-    USB_HUB_FEATURE_PORT_POWER = 0x08,
-    USB_HUB_FEATURE_PORT_LOW_SPEED = 0x09,
-    USB_HUB_FEATURE_C_PORT_CONNECTION = 0x10,
-    USB_HUB_FEATURE_C_PORT_ENABLE = 0x11,
-    USB_HUB_FEATURE_C_PORT_SUSPEND = 0x12,
+    USB_HUB_FEATURE_C_HUB_LOCAL_POWER   = 0x00,
+    USB_HUB_FEATURE_C_HUB_OVER_CURRENT  = 0x01,
+    USB_HUB_FEATURE_PORT_CONNECTION     = 0x00,
+    USB_HUB_FEATURE_PORT_ENABLE         = 0x01,
+    USB_HUB_FEATURE_PORT_SUSPEND        = 0x02,
+    USB_HUB_FEATURE_PORT_OVER_CURRENT   = 0x03,
+    USB_HUB_FEATURE_PORT_RESET          = 0x04,
+    USB_HUB_FEATURE_PORT_POWER          = 0x08,
+    USB_HUB_FEATURE_PORT_LOW_SPEED      = 0x09,
+    USB_HUB_FEATURE_C_PORT_CONNECTION   = 0x10,
+    USB_HUB_FEATURE_C_PORT_ENABLE       = 0x11,
+    USB_HUB_FEATURE_C_PORT_SUSPEND      = 0x12,
     USB_HUB_FEATURE_C_PORT_OVER_CURRENT = 0x13,
-    USB_HUB_FEATURE_C_PORT_RESET = 0x14,
-    USB_HUB_FEATURE_PORT_TEST = 0x15,
-    USB_HUB_FEATURE_PORT_INDICATOR = 0x16,
+    USB_HUB_FEATURE_C_PORT_RESET        = 0x14,
+    USB_HUB_FEATURE_PORT_TEST           = 0x15,
+    USB_HUB_FEATURE_PORT_INDICATOR      = 0x16,
 } usb_hub_feature_selector_t;
 
 typedef struct usb_device_request_t {
@@ -295,7 +296,7 @@ typedef struct usb_device_request_t {
     uint16_t value;
     uint16_t index;
     uint16_t length;
-}__attribute__((packed)) usb_device_request_t;
+}__attribute__((packed, aligned(16))) usb_device_request_t;
 
 typedef struct usb_device_t                    usb_device_t;
 typedef struct usb_driver_t                    usb_driver_t;
@@ -401,62 +402,62 @@ typedef struct usb_device_t {
 } usb_device_t;
 
 typedef enum usb_class_t {
-    USB_CLASS_AUDIO = 0x01,
+    USB_CLASS_AUDIO                          = 0x01,
     USB_CLASS_COMMUNICATIONS_AND_CDC_CONTROL = 0x02,
-    USB_CLASS_HID = 0x03,
-    USB_CLASS_PHYSICAL = 0x05,
-    USB_CLASS_IMAGE = 0x06,
-    USB_CLASS_PRINTER = 0x07,
-    USB_CLASS_MASS_STORAGE = 0x08,
-    USB_CLASS_HUB = 0x09,
-    USB_CLASS_CDC_DATA = 0x0A,
-    USB_CLASS_SMART_CARD = 0x0B,
-    USB_CLASS_CONTENT_SECURITY = 0x0D,
-    USB_CLASS_VIDEO = 0x0E,
-    USB_CLASS_PERSONAL_HEALTHCARE = 0x0F,
-    USB_CLASS_AUDIO_VIDEO = 0x10,
-    USB_CLASS_BILLBOARD = 0x11,
-    USB_CLASS_DIAGNOSTIC_DEVICE = 0xDC,
-    USB_CLASS_WIRELESS_CONTROLLER = 0xE0,
-    USB_CLASS_MISCELLANEOUS = 0xEF,
-    USB_CLASS_APPLICATION_SPECIFIC = 0xFE,
-    USB_CLASS_VENDOR_SPECIFIC = 0xFF,
+    USB_CLASS_HID                            = 0x03,
+    USB_CLASS_PHYSICAL                       = 0x05,
+    USB_CLASS_IMAGE                          = 0x06,
+    USB_CLASS_PRINTER                        = 0x07,
+    USB_CLASS_MASS_STORAGE                   = 0x08,
+    USB_CLASS_HUB                            = 0x09,
+    USB_CLASS_CDC_DATA                       = 0x0A,
+    USB_CLASS_SMART_CARD                     = 0x0B,
+    USB_CLASS_CONTENT_SECURITY               = 0x0D,
+    USB_CLASS_VIDEO                          = 0x0E,
+    USB_CLASS_PERSONAL_HEALTHCARE            = 0x0F,
+    USB_CLASS_AUDIO_VIDEO                    = 0x10,
+    USB_CLASS_BILLBOARD                      = 0x11,
+    USB_CLASS_DIAGNOSTIC_DEVICE              = 0xDC,
+    USB_CLASS_WIRELESS_CONTROLLER            = 0xE0,
+    USB_CLASS_MISCELLANEOUS                  = 0xEF,
+    USB_CLASS_APPLICATION_SPECIFIC           = 0xFE,
+    USB_CLASS_VENDOR_SPECIFIC                = 0xFF,
 } usb_interface_class_t;
 
 typedef enum usb_subclass_audio_t {
-    USB_SUBCLASS_AUDIO_CONTROL = 0x01,
+    USB_SUBCLASS_AUDIO_CONTROL   = 0x01,
     USB_SUBCLASS_AUDIO_STREAMING = 0x02,
-    USB_SUBCLASS_MIDI_STREAMING = 0x03,
+    USB_SUBCLASS_MIDI_STREAMING  = 0x03,
 } usb_interface_subclass_audio_t;
 
 typedef enum usb_subclass_communication_t {
-    USB_SUBCLASS_DIRECT_LINE_CONTROL_MODEL = 0x01,
-    USB_SUBCLASS_ABSTRACT_CONTROL_MODEL = 0x02,
-    USB_SUBCLASS_TELEPHONE_CONTROL_MODEL = 0x03,
-    USB_SUBCLASS_MULTI_CHANNEL_CONTROL_MODEL = 0x04,
-    USB_SUBCLASS_CAPI_CONTROL_MODEL = 0x05,
+    USB_SUBCLASS_DIRECT_LINE_CONTROL_MODEL         = 0x01,
+    USB_SUBCLASS_ABSTRACT_CONTROL_MODEL            = 0x02,
+    USB_SUBCLASS_TELEPHONE_CONTROL_MODEL           = 0x03,
+    USB_SUBCLASS_MULTI_CHANNEL_CONTROL_MODEL       = 0x04,
+    USB_SUBCLASS_CAPI_CONTROL_MODEL                = 0x05,
     USB_SUBCLASS_ETHERNET_NETWORKING_CONTROL_MODEL = 0x06,
-    USB_SUBCLASS_ATM_NETWORKING_CONTROL_MODEL = 0x07,
-    USB_SUBCLASS_WIRELESS_HANDSET_CONTROL_MODEL = 0x08,
-    USB_SUBCLASS_DEVICE_MANAGEMENT = 0x09,
-    USB_SUBCLASS_MOBILE_DIRECT_LINE_MODEL = 0x0A,
-    USB_SUBCLASS_OBEX = 0x0B,
-    USB_SUBCLASS_ETHERNET_EMULATION_MODEL = 0x0C,
+    USB_SUBCLASS_ATM_NETWORKING_CONTROL_MODEL      = 0x07,
+    USB_SUBCLASS_WIRELESS_HANDSET_CONTROL_MODEL    = 0x08,
+    USB_SUBCLASS_DEVICE_MANAGEMENT                 = 0x09,
+    USB_SUBCLASS_MOBILE_DIRECT_LINE_MODEL          = 0x0A,
+    USB_SUBCLASS_OBEX                              = 0x0B,
+    USB_SUBCLASS_ETHERNET_EMULATION_MODEL          = 0x0C,
 } usb_interface_subclass_communication_t;
 
 typedef enum usb_subclass_hid_t {
-    USB_SUBCLASS_HID_NO_SUBCLASS = 0x00,
+    USB_SUBCLASS_HID_NO_SUBCLASS             = 0x00,
     USB_SUBCLASS_HID_BOOT_INTERFACE_SUBCLASS = 0x01,
 } usb_interface_subclass_hid_t;
 
 typedef enum usb_subclass_mass_storage_t {
-    USB_SUBCLASS_MASS_STORAGE_SCSI = 0x06,
-    USB_SUBCLASS_MASS_STORAGE_UFI = 0x04,
-    USB_SUBCLASS_MASS_STORAGE_SFF_8070I = 0x05,
+    USB_SUBCLASS_MASS_STORAGE_SCSI                         = 0x06,
+    USB_SUBCLASS_MASS_STORAGE_UFI                          = 0x04,
+    USB_SUBCLASS_MASS_STORAGE_SFF_8070I                    = 0x05,
     USB_SUBCLASS_MASS_STORAGE_SCSI_TRANSPARENT_COMMAND_SET = 0x06,
-    USB_SUBCLASS_MASS_STORAGE_LSDFS = 0x07,
-    USB_SUBCLASS_MASS_STORAGE_IEEE1667 = 0x08,
-    USB_SUBCLASS_MASS_STORAGE_VENDOR_SPECIFIC = 0xFF,
+    USB_SUBCLASS_MASS_STORAGE_LSDFS                        = 0x07,
+    USB_SUBCLASS_MASS_STORAGE_IEEE1667                     = 0x08,
+    USB_SUBCLASS_MASS_STORAGE_VENDOR_SPECIFIC              = 0xFF,
 } usb_interface_subclass_mass_storage_t;
 
 typedef enum usb_subclass_vendor_specific_t {
@@ -465,15 +466,15 @@ typedef enum usb_subclass_vendor_specific_t {
 
 typedef enum usb_protocol_hid_t {
     USB_PROTOCOL_HID_NO_PROTOCOL = 0x00,
-    USB_PROTOCOL_HID_KEYBOARD = 0x01,
-    USB_PROTOCOL_HID_MOUSE = 0x02,
+    USB_PROTOCOL_HID_KEYBOARD    = 0x01,
+    USB_PROTOCOL_HID_MOUSE       = 0x02,
 } usb_interface_protocol_hid_t;
 
 typedef enum usb_protocol_mass_storage_t {
-    USB_PROTOCOL_MASS_STORAGE_CBI = 0x00,
+    USB_PROTOCOL_MASS_STORAGE_CBI              = 0x00,
     USB_PROTOCOL_MASS_STORAGE_CBI_NO_INTERRUPT = 0x01,
-    USB_PROTOCOL_MASS_STORAGE_BULK_ONLY = 0x50,
-    USB_PROTOCOL_MASS_STORAGE_UAS = 0x62,
+    USB_PROTOCOL_MASS_STORAGE_BULK_ONLY        = 0x50,
+    USB_PROTOCOL_MASS_STORAGE_UAS              = 0x62,
 } usb_interface_protocol_mass_storage_t;
 
 int8_t usb_init(void);

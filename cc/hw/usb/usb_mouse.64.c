@@ -107,8 +107,8 @@ static void usb_qemu_tablet_handle_report(usb_driver_t* usb_qemu_tablet) {
         report.buttons |= MOUSE_BUTTON_MIDDLE;
     }
 
-    report.x = usb_qemu_tablet->new_usb_qemu_tablet_report.x;
-    report.y = usb_qemu_tablet->new_usb_qemu_tablet_report.y;
+    report.x     = usb_qemu_tablet->new_usb_qemu_tablet_report.x;
+    report.y     = usb_qemu_tablet->new_usb_qemu_tablet_report.y;
     report.wheel = usb_qemu_tablet->new_usb_qemu_tablet_report.wheel;
 
     mouse_report(&report);
@@ -148,10 +148,10 @@ int8_t usb_mouse_init(usb_device_t* usb_device, usb_interface_t* interface) {
     }
 
     usb_mouse->usb_device = usb_device;
-    interface->driver = usb_mouse;
-    usb_mouse->interface = interface;
+    interface->driver     = usb_mouse;
+    usb_mouse->interface  = interface;
 
-    usb_mouse->max_packet_size = interface->endpoints[0]->desc->max_packet_size;
+    usb_mouse->max_packet_size      = interface->endpoints[0]->desc->max_packet_size;
     usb_mouse->expected_packet_size = sizeof(usb_mouse_report_t);
 
     pipeline_t* pipeline = pipeline_create(usb_mouse->expected_packet_size * 1024);
@@ -159,6 +159,7 @@ int8_t usb_mouse_init(usb_device_t* usb_device, usb_interface_t* interface) {
     if(!pipeline) {
         PRINTLOG(USB, LOG_ERROR, "cannot create pipeline");
         memory_free(usb_mouse);
+        interface->driver = NULL;
 
         return -1;
     }
@@ -171,6 +172,7 @@ int8_t usb_mouse_init(usb_device_t* usb_device, usb_interface_t* interface) {
                            0, pipeline)) {
         PRINTLOG(USB, LOG_ERROR, "cannot setup endpoint pipeline");
         memory_free(usb_mouse);
+        interface->driver = NULL;
 
 
         return -1;
@@ -184,6 +186,7 @@ int8_t usb_mouse_init(usb_device_t* usb_device, usb_interface_t* interface) {
                             0, interface->desc->interface_number, 0, NULL)) {
         PRINTLOG(USB, LOG_ERROR, "cannot set idle");
         memory_free(usb_mouse);
+        interface->driver = NULL;
 
         return -1;
     }
@@ -193,6 +196,7 @@ int8_t usb_mouse_init(usb_device_t* usb_device, usb_interface_t* interface) {
     } else {
         PRINTLOG(USB, LOG_ERROR, "unknown controller type %d", usb_device->controller->controller_type);
         memory_free(usb_mouse);
+        interface->driver = NULL;
 
         return -1;
     }
@@ -213,10 +217,10 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device, usb_interface_t* interface
     }
 
     usb_qemu_tablet->usb_device = usb_device;
-    usb_qemu_tablet->interface = interface;
-    interface->driver = usb_qemu_tablet;
+    usb_qemu_tablet->interface  = interface;
+    interface->driver           = usb_qemu_tablet;
 
-    usb_qemu_tablet->max_packet_size = interface->endpoints[0]->desc->max_packet_size;
+    usb_qemu_tablet->max_packet_size      = interface->endpoints[0]->desc->max_packet_size;
     usb_qemu_tablet->expected_packet_size = sizeof(usb_qemu_tablet_report_t);
 
     pipeline_t* pipeline = pipeline_create(usb_qemu_tablet->expected_packet_size * 1024);
@@ -224,6 +228,7 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device, usb_interface_t* interface
     if(!pipeline) {
         PRINTLOG(USB, LOG_ERROR, "cannot create pipeline");
         memory_free(usb_qemu_tablet);
+        interface->driver = NULL;
 
         return -1;
     }
@@ -236,6 +241,7 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device, usb_interface_t* interface
                            0, pipeline)) {
         PRINTLOG(USB, LOG_ERROR, "cannot setup endpoint pipeline");
         memory_free(usb_qemu_tablet);
+        interface->driver = NULL;
 
 
         return -1;
@@ -249,6 +255,7 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device, usb_interface_t* interface
                             0, interface->desc->interface_number, 0, NULL)) {
         PRINTLOG(USB, LOG_ERROR, "cannot set idle");
         memory_free(usb_qemu_tablet);
+        interface->driver = NULL;
 
         return -1;
     }
@@ -258,6 +265,7 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device, usb_interface_t* interface
     } else {
         PRINTLOG(USB, LOG_ERROR, "unknown controller type %d", usb_device->controller->controller_type);
         memory_free(usb_qemu_tablet);
+        interface->driver = NULL;
 
         return -1;
     }
