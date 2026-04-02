@@ -308,6 +308,7 @@ typedef struct usb_endpoint_t                  usb_endpoint_t;
 typedef struct usb_device_controller_context_t usb_device_controller_context_t;
 
 typedef int8_t (*usb_pipeline_callback_f)(const usb_driver_t* driver, uint8_t endpoint, pipeline_t* pipeline);
+typedef int8_t (*usb_isoc_callback_f)(const usb_driver_t* driver, uint8_t endpoint, boolean_t is_underrun, boolean_t is_overrun);
 typedef int8_t (*usb_driver_free_f)(usb_driver_t* driver);
 
 // usb_driver_fields.h
@@ -315,6 +316,7 @@ typedef int8_t (*usb_driver_free_f)(usb_driver_t* driver);
         usb_device_t* usb_device; \
         usb_interface_t* interface; \
         usb_pipeline_callback_f pipeline_callback; \
+        usb_isoc_callback_f isoc_callback; \
         usb_driver_free_f free;
 
 typedef struct usb_transfer_t {
@@ -330,6 +332,7 @@ typedef struct usb_transfer_t {
     boolean_t             is_async;
     boolean_t             is_isochronous;
     uint32_t              iso_packet_size;
+    uint32_t              iso_mfindex;
 } usb_transfer_t;
 
 typedef struct usb_controller_t {

@@ -9,6 +9,7 @@
 #include <driver/usb.h>
 #include <logging.h>
 #include <math.h>
+#include <time.h>
 
 
 MODULE("turnstone.kernel.hw.usb");
@@ -124,8 +125,9 @@ typedef struct usb_driver_t {
     usb_audio_ac_feature_unit_desc_t*    feature_unit;
 } usb_driver_t;
 
-static int16_t* usb_audio_beep = NULL;
-static size_t usb_audio_beep_samples = 0;
+static int16_t* usb_audio_beep              = NULL;
+static size_t usb_audio_beep_samples        = 0;
+static size_t usb_audio_sended_beep_samples = 0;
 
 int8_t usb_audio_control_init(usb_device_t* device, usb_interface_t* interface) {
     if(!device || !interface || !interface->desc) {
@@ -344,6 +346,70 @@ static int16_t* usb_audio_generate_beep(float64_t freq, int32_t duration_ms,
     return buffer;
 }
 
+static time_t usb_audio_last_send_time = 0;
+static uint32_t usb_audio_last_mfindex = 0;
+
+static int8_t usb_audio_isoc_callback(const usb_driver_t* driver, uint8_t endpoint, boolean_t is_underrun, boolean_t is_overrun) {
+    if(usb_audio_beep_samples == 0 || usb_audio_sended_beep_samples >= usb_audio_beep_samples) {
+        if(is_underrun) {
+            PRINTLOG(USB, LOG_INFO, "beep sound finished. is_underrun: %i, is_overrun: %i",
+                     is_underrun, is_overrun);
+        }
+        return 0;
+    }
+
+    if(driver->interface->endpoints[0]->desc->endpoint_address != endpoint) {
+        PRINTLOG(USB, LOG_ERROR, "invalid endpoint in isoc callback");
+        return -1;
+    }
+
+    usb_transfer_t ut = {0};
+
+    size_t batch_size = 32;
+
+    if(is_underrun) {
+        batch_size = 256;
+    }
+
+    if((batch_size * 48) > usb_audio_beep_samples - usb_audio_sended_beep_samples) {
+        batch_size = (usb_audio_beep_samples - usb_audio_sended_beep_samples) / 48;
+    }
+
+    PRINTLOG(USB, LOG_TRACE, "batch size: %llu samples", batch_size);
+
+    ut.driver          = (usb_driver_t*)driver;
+    ut.endpoint        = driver->interface->endpoints[0];
+    ut.length          = batch_size * 48 * 2 * sizeof(int16_t); // batch_size ms of audio data two channels 48kHz * 2 channels * 16 bits = 192000 bps / 1000 ms = 192 bytes per ms
+    ut.data            = (uint8_t*)(usb_audio_beep + usb_audio_sended_beep_samples * 2);
+    ut.is_async        = true;
+    ut.is_isochronous  = true;
+    ut.iso_packet_size = 192; // 48kHz * 2 channels * 16 bits = 192000 bps / 1000 ms = 192 bytes per ms
+    ut.iso_mfindex     = usb_audio_last_mfindex;
+
+    time_t start_time = time_ns(NULL);
+    if(driver->usb_device->controller->data_transfer(driver->usb_device->controller, &ut) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot send beep data to audio device");
+        return -1;
+    }
+    time_t end_time = time_ns(NULL);
+
+    usb_audio_last_mfindex = ut.iso_mfindex;
+
+    usb_audio_sended_beep_samples += batch_size * 48;
+
+    if(is_underrun) {
+        PRINTLOG(USB, LOG_INFO, "%llu ms length %llu bytes ur %i send time %llu us",
+                 time_ms(NULL) - usb_audio_last_send_time,
+                 (usb_audio_beep_samples - usb_audio_sended_beep_samples) * 192,
+                 is_underrun,
+                 (end_time - start_time) / 1000);
+    }
+
+    usb_audio_last_send_time = time_ms(NULL);
+
+    return 0;
+}
+
 int8_t usb_audio_streaming_init(usb_device_t* device, usb_interface_t* interface) {
     if(!device || !interface || !interface->desc) {
         PRINTLOG(USB, LOG_ERROR, "invalid params");
@@ -359,12 +425,26 @@ int8_t usb_audio_streaming_init(usb_device_t* device, usb_interface_t* interface
         return -1;
     }
 
-    driver->usb_device = device;
-    driver->interface  = interface;
+    driver->usb_device        = device;
+    driver->interface         = interface;
     driver->pipeline_callback = NULL;
-    driver->driver_type = USB_AUDIO_DRIVER_TYPE_CONTROL;
+    driver->driver_type       = USB_AUDIO_DRIVER_TYPE_CONTROL;
+    driver->isoc_callback     = usb_audio_isoc_callback;
 
     interface->driver = driver;
+
+    if(!usb_device_request(driver->usb_device,
+                           interface,
+                           USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
+                           USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_ISOC_ENDPOINT,
+                           0, interface->endpoints[0]->desc->endpoint_address,
+                           0, 0)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot setup isochronous endpoint for audio streaming");
+        memory_free(driver);
+        interface->driver = NULL;
+
+        return -1;
+    }
 
     if(!usb_audio_beep) {
         usb_audio_beep = usb_audio_generate_beep(440.0, 1000, 30000, 48000, &usb_audio_beep_samples);
@@ -379,12 +459,12 @@ int8_t usb_audio_streaming_init(usb_device_t* device, usb_interface_t* interface
 
     usb_transfer_t ut = {0};
 
-    ut.driver = driver;
-    ut.endpoint = interface->endpoints[0];
-    ut.length = usb_audio_beep_samples * 2 * sizeof(int16_t);
-    ut.data = (uint8_t*)usb_audio_beep;
-    ut.is_async = true;
-    ut.is_isochronous = true;
+    ut.driver          = driver;
+    ut.endpoint        = interface->endpoints[0];
+    ut.length          = 256 * 48 * 2 * sizeof(int16_t); // 16 ms of audio data two channels 48kHz * 2 channels * 16 bits = 192000 bps / 1000 ms = 192 bytes per ms
+    ut.data            = (uint8_t*)usb_audio_beep;
+    ut.is_async        = true;
+    ut.is_isochronous  = true;
     ut.iso_packet_size = 192; // 48kHz * 2 channels * 16 bits = 192000 bps / 1000 ms = 192 bytes per ms
 
     if(device->controller->data_transfer(device->controller, &ut) != 0) {
@@ -394,9 +474,15 @@ int8_t usb_audio_streaming_init(usb_device_t* device, usb_interface_t* interface
         return -1;
     }
 
-    PRINTLOG(USB, LOG_INFO, "beep sound sent to audio device. address 0x%p, length %llu bytes",
+    usb_audio_last_mfindex = ut.iso_mfindex;
+
+    usb_audio_sended_beep_samples += 256 * 48;
+    usb_audio_last_send_time       = time_ms(NULL);
+
+    PRINTLOG(USB, LOG_INFO, "beep sound sent to audio device. address 0x%p, length %llu bytes sample count %llu",
              usb_audio_beep,
-             usb_audio_beep_samples * 2 * sizeof(int16_t));
+             usb_audio_beep_samples * 2 * sizeof(int16_t),
+             usb_audio_beep_samples);
 
     PRINTLOG(USB, LOG_INFO, "audio streaming device initialized");
 
