@@ -379,6 +379,10 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
+    if(hypervisor_iommu_init() != 0) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor iommu.");
+    }
+
     if(apic_setup(ACPI_CONTEXT->xrsdp_desc) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "apic setup failed. Halting");
         cpu_hlt();
@@ -404,10 +408,6 @@ int8_t kmain64(size_t entry_point) {
     PRINTLOG(KERNEL, LOG_DEBUG, "acpi is initialized");
 
     PRINTLOG(KERNEL, LOG_DEBUG, "tasking is initializing");
-
-    if(hypervisor_iommu_init() != 0) {
-        PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor iommu.");
-    }
 
     syscall_init();
 
