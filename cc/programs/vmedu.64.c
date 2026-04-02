@@ -33,12 +33,12 @@ static void edu_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
     printf("EDU ISR 0x%x\n", edu->interrupt_status);
     edu->interrupt_acknowledge = edu->interrupt_status;
-    isr_done = true;
+    isr_done                   = true;
     printf("EDU ISR done 0x%x\n", edu->interrupt_status);
     vm_guest_apic_eoi();
 }
 
-static uint64_t edu_timer_tick = 0;
+static uint64_t edu_timer_tick         = 0;
 static uint64_t edu_timer_isr_test_end = 0;
 
 static void edu_timer_isr(interrupt_frame_ext_t* frame) {
@@ -58,8 +58,8 @@ static void edu_timer_isr(interrupt_frame_ext_t* frame) {
 
 _Noreturn void vmedu(void) {
     vm_guest_print("VM EDU Passthrough Test Program\n");
-    uint64_t heap_base = 4ULL << 40;
-    uint64_t heap_size = 16ULL << 20;
+    uint64_t heap_base  = 4ULL << 40;
+    uint64_t heap_size  = 16ULL << 20;
     memory_heap_t* heap = memory_create_heap_simple(heap_base, heap_base + heap_size);
 
     if(heap == NULL) {
@@ -99,7 +99,7 @@ _Noreturn void vmedu(void) {
     uint64_t edu_pci_bar0_addr = pci_get_bar_address(edu_pci_dev, 0);
     printf("EDU PCI BAR0 Address: 0x%llx\n", edu_pci_bar0_addr);
 
-    uint64_t edu_pci_bar0_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(edu_pci_bar0_addr);
+    uint64_t edu_pci_bar0_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, edu_pci_bar0_addr);
 
     printf("EDU PCI BAR0 VA: 0x%llx\n", edu_pci_bar0_va);
 
@@ -112,7 +112,7 @@ _Noreturn void vmedu(void) {
     printf("edu identification 0x%x\n", edu->identification);
 
     edu->factorial_computation = 5;
-    edu->status = 1;
+    edu->status                = 1;
 
     while(edu->status & 1) {
         asm volatile ("pause");
@@ -121,10 +121,10 @@ _Noreturn void vmedu(void) {
     printf("Factorial of 5 is: %d\n", edu->factorial_computation);
 
     char_t* source = memory_malloc_ext(NULL, 0x1000, 0x1000);
-    char_t* dest = memory_malloc_ext(NULL, 0x1000, 0x1000);
+    char_t* dest   = memory_malloc_ext(NULL, 0x1000, 0x1000);
 
     uint64_t source_hpa = vm_guest_get_host_physical_address((uint64_t)source);
-    uint64_t dest_hpa = vm_guest_get_host_physical_address((uint64_t)dest);
+    uint64_t dest_hpa   = vm_guest_get_host_physical_address((uint64_t)dest);
 
     printf("Source HPA: 0x%llx\n", source_hpa);
     printf("Dest HPA: 0x%llx\n", dest_hpa);
@@ -134,19 +134,19 @@ _Noreturn void vmedu(void) {
     strcopy(str, source);
 
     printf("DMA transfer starting\n");
-    edu->dma_source = source_hpa;
+    edu->dma_source      = source_hpa;
     edu->dma_destination = EDU_DMA_TRANSFER_ADDRESS;
-    edu->dma_length = strlen(str) + 1;
-    edu->dma_command = 1;
+    edu->dma_length      = strlen(str) + 1;
+    edu->dma_command     = 1;
 
     while(edu->dma_command & 1) {
         asm volatile ("pause");
     }
 
-    edu->dma_source = EDU_DMA_TRANSFER_ADDRESS;
+    edu->dma_source      = EDU_DMA_TRANSFER_ADDRESS;
     edu->dma_destination = dest_hpa;
-    edu->dma_length = strlen(str) + 1;
-    edu->dma_command = 3;
+    edu->dma_length      = strlen(str) + 1;
+    edu->dma_command     = 3;
 
     while(edu->dma_command & 1) {
         asm volatile ("pause");

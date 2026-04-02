@@ -41,7 +41,7 @@ int8_t descriptor_build_gdt_register(void){
 
     frame_t* gdt_fa = NULL;
 
-    if(fa->allocate_frame_by_count(fa,
+    if(fa->allocate_frame_by_count(fa, 0,
                                    gdt_fa_size / FRAME_SIZE,
                                    FRAME_ALLOCATION_TYPE_BLOCK,
                                    &gdt_fa, NULL) != 0) {
@@ -52,7 +52,7 @@ int8_t descriptor_build_gdt_register(void){
 
     PRINTLOG(KERNEL, LOG_DEBUG, "gdt frames allocated at 0x%llx with size 0x%llx", gdt_fa->frame_address, gdt_fa_size);
 
-    uint64_t gdt_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(gdt_fa->frame_address);
+    uint64_t gdt_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, gdt_fa->frame_address);
 
     if(memory_paging_add_va_for_frame(gdt_va, gdt_fa, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot add va for gdt frame");
@@ -157,17 +157,17 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
         uint64_t gdt_fa_size = cpu_state->gdt_size + (FRAME_SIZE - (cpu_state->gdt_size % FRAME_SIZE));
         uint64_t gdt_va      = cpu_state->gdt_va;
 
-        *gdt_fa_location = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(gdt_va);
+        *gdt_fa_location = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, gdt_va);
         *out_gdt_size    = gdt_fa_size;
 
-        *tss_fa_location = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(cpu_state->tss_va);
+        *tss_fa_location = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, cpu_state->tss_va);
         *out_tss_size    = cpu_state->tss_size;
 
         tss_t* tss = (tss_t*)cpu_state->tss_va;
 
         uint64_t stack_bottom = tss->ist7 - stack_size + 0x10;
 
-        *stack_bottom_fa_location = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_bottom);
+        *stack_bottom_fa_location = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, stack_bottom);
         *out_stack_size           = stack_size * 10;
 
         descriptor_register_t gdtr = {
@@ -218,7 +218,7 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
 
     frame_t* gdt_fa = NULL;
 
-    if(fa->allocate_frame_by_count(fa,
+    if(fa->allocate_frame_by_count(fa, cpu_state->proximity_domain,
                                    gdt_fa_size / FRAME_SIZE,
                                    FRAME_ALLOCATION_TYPE_BLOCK,
                                    &gdt_fa, NULL) != 0) {
@@ -227,7 +227,7 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
         return -1;
     }
 
-    uint64_t gdt_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(gdt_fa->frame_address);
+    uint64_t gdt_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, gdt_fa->frame_address);
 
     if(memory_paging_add_va_for_frame(gdt_va, gdt_fa, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot add va for gdt frame");
@@ -281,7 +281,7 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
 
     frame_t* stack_frames = NULL;
 
-    if(fa->allocate_frame_by_count(fa,
+    if(fa->allocate_frame_by_count(fa, cpu_state->proximity_domain,
                                    frame_count,
                                    FRAME_ALLOCATION_TYPE_BLOCK,
                                    &stack_frames,
@@ -291,7 +291,7 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
         return -1;
     }
 
-    uint64_t stack_bottom = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
+    uint64_t stack_bottom = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, stack_frames->frame_address);
 
     if(memory_paging_add_va_for_frame(stack_bottom, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot add va for stack frames");
@@ -312,7 +312,7 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
 
     frame_t* tss_fa = NULL;
 
-    if(fa->allocate_frame_by_count(fa,
+    if(fa->allocate_frame_by_count(fa, cpu_state->proximity_domain,
                                    tss_size / FRAME_SIZE,
                                    FRAME_ALLOCATION_TYPE_BLOCK,
                                    &tss_fa, NULL) != 0) {
@@ -321,7 +321,7 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
         return -1;
     }
 
-    uint64_t tss_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tss_fa->frame_address);
+    uint64_t tss_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, tss_fa->frame_address);
 
     if(memory_paging_add_va_for_frame(tss_va, tss_fa, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot add va for tss frame");
@@ -387,7 +387,7 @@ int8_t descriptor_build_idt_register(void){
 
     uint16_t idt_size = sizeof(descriptor_idt_t) * 256;
 
-    frame_t idt_frame = {IDT_BASE_ADDRESS, (idt_size + FRAME_SIZE - 1) / FRAME_SIZE, FRAME_TYPE_RESERVED, 0};
+    frame_t idt_frame = {0, IDT_BASE_ADDRESS, (idt_size + FRAME_SIZE - 1) / FRAME_SIZE, FRAME_TYPE_RESERVED, 0};
 
     PRINTLOG(KERNEL, LOG_DEBUG, "idt frame address: 0x%llx count 0x%llx", idt_frame.frame_address, idt_frame.frame_count);
 

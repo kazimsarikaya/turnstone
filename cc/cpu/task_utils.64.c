@@ -562,12 +562,12 @@ int8_t task_allocate_frame_and_add_paging(uint64_t count, boolean_t is_reserved,
         allocation_type |= FRAME_ALLOCATION_TYPE_USED;
     }
 
-    if(fa->allocate_frame_by_count(fa, count, allocation_type, frame, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, current_task->proximity_domain_id, count, allocation_type, frame, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate frame with count 0x%llx for task 0x%llx on cpu 0x%llx", count, current_task->task_id, cpu_state->local_apic_id);
         return -1;
     }
 
-    uint64_t va = is_reserved ? MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((*frame)->frame_address) : (*frame)->frame_address;
+    uint64_t va = is_reserved ? MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, (*frame)->frame_address) : (*frame)->frame_address;
 
     if(memory_paging_add_va_for_frame(va, *frame, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot add va 0x%llx for frame at 0x%llx with count 0x%llx for task 0x%llx on cpu 0x%llx", va, (*frame)->frame_address, (*frame)->frame_count, current_task->task_id, cpu_state->local_apic_id);

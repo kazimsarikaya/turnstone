@@ -61,6 +61,7 @@ typedef enum frame_allocation_type_t {
  * @brief frame definition
  */
 typedef struct frame_t {
+    uint32_t     proximity_domain; ///< proximity domain for NUMA
     uint64_t     frame_address; ///< frame start address (physical)
     uint64_t     frame_count; ///< how many frames
     frame_type_t type; ///< frame type
@@ -73,13 +74,14 @@ struct frame_allocator_t;
 /**
  * @brief allocate frame with count
  * @param[in] self frame allocator
+ * @param[in] proximity_domain proximity domain for NUMA
  * @param[in] count frame count for allocation
  * @param[in] fa_type frame allocation types can be or'ed values
  * @param[out] fs list of frames that allocated
  * @param[out] alloc_list_size fs length
  * @return 0 if succeed.
  */
-typedef int8_t (* fa_allocate_frame_by_count_f)(struct frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size);
+typedef int8_t (* fa_allocate_frame_by_count_f)(struct frame_allocator_t* self, uint32_t proximity_domain, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size);
 
 /**
  * @brief allocate frame with given reference frame, ref frame not used in anywhere as is. it is only for reference.

@@ -127,28 +127,22 @@ static uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
 
     if(ioapic_frames == NULL) {
         PRINTLOG(APIC, LOG_DEBUG, "cannot find frames of ioapic 0x%016llx", ioapic_base);
-        frame_t tmp_ioapic_frm = {ioapic_base, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
+        frame_t tmp_ioapic_frm = {0, ioapic_base, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
 
-        if(fa->reserve_system_frames(fa, &tmp_ioapic_frm) != 0) {
-            PRINTLOG(APIC, LOG_ERROR, "cannot reserve frames of ioapic 0x%016llx", ioapic_base);
-
-            return -1;
-        }
-
-        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_ioapic_frm.frame_address), &tmp_ioapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, tmp_ioapic_frm.frame_address), &tmp_ioapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(APIC, LOG_ERROR, "cannot add va for ioapic frames");
 
             return -1;
         }
 
-        ioapic_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base);
+        ioapic_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, ioapic_base);
 
         PRINTLOG(APIC, LOG_DEBUG, "ioapic address mapped to 0x%016llx", ioapic_base);
 
     } else if((ioapic_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
         PRINTLOG(APIC, LOG_TRACE, "frames of ioapic 0x%016llx is 0x%llx 0x%llx", ioapic_base, ioapic_frames->frame_address, ioapic_frames->frame_count);
 
-        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_frames->frame_address), ioapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, ioapic_frames->frame_address), ioapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(APIC, LOG_ERROR, "cannot add va for ioapic frames");
 
             return -1;
@@ -156,7 +150,7 @@ static uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
 
         ioapic_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 
-        ioapic_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base);
+        ioapic_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, ioapic_base);
     }
 
     ioapic_bases[ioapic_count] = ioapic_base;
@@ -174,8 +168,14 @@ static uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
 
     ioapic_int_numbers[ioapic_count] = memory_malloc(sizeof(uint8_t) * max_r_e);
 
+    if(!ioapic_int_numbers[ioapic_count]) {
+        PRINTLOG(APIC, LOG_ERROR, "cannot allocate memory for ioapic int numbers");
+
+        return -1;
+    }
+
     for(uint8_t i = 0; i < max_r_e; i++) {
-        uint8_t intnum = interrupt_get_next_empty_interrupt();
+        uint8_t intnum = i; // interrupt_get_next_empty_interrupt();
         ioapic_int_numbers[ioapic_count][i] = intnum;
 
         io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * i;
@@ -279,28 +279,22 @@ static int8_t apic_init_apic(list_t* apic_entries){
 
     if(lapic_frames == NULL) {
         PRINTLOG(APIC, LOG_DEBUG, "cannot find frames of lapic 0x%016llx", lapic_addr);
-        frame_t tmp_lapic_frm = {lapic_addr, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
+        frame_t tmp_lapic_frm = {0, lapic_addr, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
 
-        if(fa->reserve_system_frames(fa, &tmp_lapic_frm) != 0) {
-            PRINTLOG(APIC, LOG_ERROR, "cannot reserve frames of lapic 0x%016llx", lapic_addr);
-
-            return -1;
-        }
-
-        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_lapic_frm.frame_address), &tmp_lapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, tmp_lapic_frm.frame_address), &tmp_lapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(APIC, LOG_ERROR, "cannot add va for lapic frames");
 
             return -1;
         }
 
-        lapic_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(lapic_addr);
+        lapic_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, lapic_addr);
 
         PRINTLOG(APIC, LOG_DEBUG, "lapic address mapped to 0x%016llx", lapic_addr);
 
     } else if((lapic_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
         PRINTLOG(APIC, LOG_TRACE, "frames of lapic 0x%016llx is 0x%llx 0x%llx", lapic_addr, lapic_frames->frame_address, lapic_frames->frame_count);
 
-        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(lapic_frames->frame_address), lapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, lapic_frames->frame_address), lapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(APIC, LOG_ERROR, "cannot add va for lapic frames");
 
             return -1;
@@ -308,7 +302,7 @@ static int8_t apic_init_apic(list_t* apic_entries){
 
         lapic_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 
-        lapic_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(lapic_addr);
+        lapic_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, lapic_addr);
     }
 
     PRINTLOG(APIC, LOG_DEBUG, "local apic address is: 0x%08llx", lapic_addr);

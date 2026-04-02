@@ -26,7 +26,7 @@ MODULE("turnstone.hypervisor");
 
 
 uint64_t hypervisor_allocate_region(frame_t** frame, uint64_t size) {
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), cpu_state->proximity_domain,
                                                       size / FRAME_SIZE,
                                                       FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
                                                       frame, NULL) != 0) {
@@ -36,7 +36,30 @@ uint64_t hypervisor_allocate_region(frame_t** frame, uint64_t size) {
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "allocated 0x%llx 0x%llx", (*frame)->frame_address, (*frame)->frame_count);
 
-    uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((*frame)->frame_address);
+    uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, (*frame)->frame_address);
+
+    if(memory_paging_add_va_for_frame(frame_va, *frame, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot map region frame");
+        return 0;
+    }
+
+    memory_memclean((void*)frame_va, size);
+
+    return frame_va;
+}
+
+uint64_t hypervisor_allocate_hardware_region(frame_t** frame, uint64_t size) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), cpu_state->proximity_domain,
+                                                      size / FRAME_SIZE,
+                                                      FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      frame, NULL) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate region frame");
+        return 0;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "allocated 0x%llx 0x%llx", (*frame)->frame_address, (*frame)->frame_count);
+
+    uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, (*frame)->frame_address);
 
     if(memory_paging_add_va_for_frame(frame_va, *frame, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot map region frame");
@@ -53,7 +76,10 @@ uint64_t hypervisor_create_stack(hypervisor_vm_t* vm, uint64_t stack_size) {
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
     stack_size = stack_frames_cnt * FRAME_SIZE;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), cpu_state->proximity_domain,
+                                                      stack_frames_cnt,
+                                                      FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      &stack_frames, NULL) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
 
         return -1;
@@ -61,7 +87,7 @@ uint64_t hypervisor_create_stack(hypervisor_vm_t* vm, uint64_t stack_size) {
 
     vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VMEXIT_STACK] = *stack_frames;
 
-    uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
+    uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, stack_frames->frame_address);
 
     if(memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_va, stack_frames->frame_address, stack_frames->frame_count);
@@ -77,7 +103,7 @@ uint64_t hypervisor_create_stack(hypervisor_vm_t* vm, uint64_t stack_size) {
 }
 
 static void hypervisor_cleanup_unused_modules(hypervisor_vm_t * vm, uint64_t got_fa, uint64_t got_size){
-    uint64_t got_va                                 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_fa);
+    uint64_t got_va                                 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, got_fa);
     uint64_t got_entry_count                        = got_size / sizeof(linker_global_offset_table_entry_t);
     linker_global_offset_table_entry_t* got_entries = (linker_global_offset_table_entry_t*)got_va;
 
@@ -108,6 +134,7 @@ static void hypervisor_cleanup_unused_modules(hypervisor_vm_t * vm, uint64_t got
 int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_name) {
     tosdb_manager_ipc_t ipc = {0};
 
+    ipc.proximity_domain               = vm->proximity_domain;
     ipc.type                           = TOSDB_MANAGER_IPC_TYPE_PROGRAM_LOAD;
     ipc.program_build.entry_point_name = entry_point_name;
     ipc.program_build.for_vm           = true;
@@ -164,7 +191,7 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
 int8_t hypervisor_load_module(hypervisor_vm_t* vm, uint64_t got_entry_address) {
     uint64_t got_fa   = vm->got_physical_address;
     uint64_t got_size = vm->got_size;
-    uint64_t got_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_fa);
+    uint64_t got_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, got_fa);
 
     if(got_entry_address > got_size) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "module id 0x%llx is out of got size 0x%llx", got_entry_address, got_size);
@@ -189,6 +216,7 @@ int8_t hypervisor_load_module(hypervisor_vm_t* vm, uint64_t got_entry_address) {
 
     tosdb_manager_ipc_t ipc = {0};
 
+    ipc.proximity_domain                   = vm->proximity_domain;
     ipc.type                               = TOSDB_MANAGER_IPC_TYPE_MODULE_LOAD;
     ipc.program_build.module.module_handle = module_id;
     ipc.program_build.for_vm               = true;

@@ -428,21 +428,21 @@ _Static_assert(offsetof_field(nvme_ns_identify_t, lbaf) == 128, "nvme_ns_identif
  * @brief nvme admin commands
  **/
 typedef enum nvme_admin_cmd_opcode_t {
-    NVME_ADMIN_CMD_DELETE_SQ = 0X00, ///< nvme admin command for deleting submission queue
-    NVME_ADMIN_CMD_CREATE_SQ = 0X01, ///< nvme admin command for creating submission queue
-    NVME_ADMIN_CMD_GET_LOG_PAGE = 0X02, ///< nvme admin command for getting log page entries
-    NVME_ADMIN_CMD_DELETE_CQ = 0X04, ///< nvme admin command for deleting completion queue
-    NVME_ADMIN_CMD_CREATE_CQ = 0X05, ///< nvme admin command for creating completion queue
-    NVME_ADMIN_CMD_IDENTIFY = 0X06, ///< nvme admin command for identify controller and name space
-    NVME_ADMIN_CMD_ABORT = 0X08, ///< nvme admin command for aborting another command
-    NVME_ADMIN_CMD_SET_FEATURES = 0X09, ///< nvme admin command for setting nvme features not in registers
-    NVME_ADMIN_CMD_GET_FEATURES = 0X0A, ///< nvme admin command for getting nvme features not in registers
-    NVME_ADMIN_CMD_ASYNC_EVNT_REQ = 0X0C,
-    NVME_ADMIN_CMD_FIRMWARE_COMMIT = 0X10, ///< nvme admin command for uploading firmare
+    NVME_ADMIN_CMD_DELETE_SQ         = 0X00, ///< nvme admin command for deleting submission queue
+    NVME_ADMIN_CMD_CREATE_SQ         = 0X01, ///< nvme admin command for creating submission queue
+    NVME_ADMIN_CMD_GET_LOG_PAGE      = 0X02, ///< nvme admin command for getting log page entries
+    NVME_ADMIN_CMD_DELETE_CQ         = 0X04, ///< nvme admin command for deleting completion queue
+    NVME_ADMIN_CMD_CREATE_CQ         = 0X05, ///< nvme admin command for creating completion queue
+    NVME_ADMIN_CMD_IDENTIFY          = 0X06, ///< nvme admin command for identify controller and name space
+    NVME_ADMIN_CMD_ABORT             = 0X08, ///< nvme admin command for aborting another command
+    NVME_ADMIN_CMD_SET_FEATURES      = 0X09, ///< nvme admin command for setting nvme features not in registers
+    NVME_ADMIN_CMD_GET_FEATURES      = 0X0A, ///< nvme admin command for getting nvme features not in registers
+    NVME_ADMIN_CMD_ASYNC_EVNT_REQ    = 0X0C,
+    NVME_ADMIN_CMD_FIRMWARE_COMMIT   = 0X10, ///< nvme admin command for uploading firmare
     NVME_ADMIN_CMD_FIRMWARE_DOWNLOAD = 0X11, ///< nvme admin command for downloading firmware
-    NVME_ADMIN_CMD_NS_ATTACH = 0X15, ///< nvme admin command for attaching namespace
-    NVME_ADMIN_CMD_KEEP_ALIVE = 0X18, ///< nvme admin command for keeping alive
-    NVME_ADMIN_CMD_FORMAT_NVM = 0X80, ///< nvme admin command for formatting nvme
+    NVME_ADMIN_CMD_NS_ATTACH         = 0X15, ///< nvme admin command for attaching namespace
+    NVME_ADMIN_CMD_KEEP_ALIVE        = 0X18, ///< nvme admin command for keeping alive
+    NVME_ADMIN_CMD_FORMAT_NVM        = 0X80, ///< nvme admin command for formatting nvme
 } nvme_admin_cmd_opcode_t; ///< shorthand for enum
 
 /**
@@ -450,17 +450,17 @@ typedef enum nvme_admin_cmd_opcode_t {
  * @brief nvme io commands
  **/
 typedef enum nvme_cmd_opcode_t {
-    NVME_CMD_FLUSH = 0X00, ///< nvme io command for flush
-    NVME_CMD_WRITE = 0X01, ///< nvme io command for write
-    NVME_CMD_READ = 0X02, ///< nvme io command for read
+    NVME_CMD_FLUSH               = 0X00, ///< nvme io command for flush
+    NVME_CMD_WRITE               = 0X01, ///< nvme io command for write
+    NVME_CMD_READ                = 0X02, ///< nvme io command for read
     NVME_CMD_WRITE_UNCORRECTABLE = 0X4,
-    NVME_CMD_COMPARE = 0X05,
-    NVME_CMD_WRITE_ZEROS = 0X08,
-    NVME_CMD_DATASET_MGMT = 0X09,
-    NVME_CMD_RESERVATION_REG = 0X0D,
-    NVME_CMD_RESERVATION_REP = 0X0E,
-    NVME_CMD_RESERVATION_ACQ = 0X11,
-    NVME_CMD_RESERVATION_REL = 0X15,
+    NVME_CMD_COMPARE             = 0X05,
+    NVME_CMD_WRITE_ZEROS         = 0X08,
+    NVME_CMD_DATASET_MGMT        = 0X09,
+    NVME_CMD_RESERVATION_REG     = 0X0D,
+    NVME_CMD_RESERVATION_REP     = 0X0E,
+    NVME_CMD_RESERVATION_ACQ     = 0X11,
+    NVME_CMD_RESERVATION_REL     = 0X15,
 } nvme_cmd_opcode_t; ///< shorthand for enum
 
 /**
@@ -469,7 +469,7 @@ typedef enum nvme_cmd_opcode_t {
  **/
 typedef enum nvme_feat_id_t {
     NVME_FEAT_HOST_MEM_BUF = 0XD,
-    NVME_FEAT_NUM_QUEUES = 0X07,
+    NVME_FEAT_NUM_QUEUES   = 0X07,
 } nvme_feat_id_t; ///< shorthand for enum
 
 /**
@@ -477,37 +477,37 @@ typedef enum nvme_feat_id_t {
  * @brief nvme command's status codes
  **/
 typedef enum nvme_cmd_status_t {
-    NVME_CMD_STATUS_SUCCESS = 0X0, ///< nvme command is succeed
-    NVME_CMD_STATUS_INVALID_CMD = 0X1, ///< nvme command is invalid
-    NVME_CMD_STATUS_INVALID_FIELD = 0X2,
-    NVME_CMD_STATUS_CMD_ID_CONFLICT = 0X3,
-    NVME_CMD_STATUS_DATA_XFER_ERROR = 0X4,
-    NVME_CMD_STATUS_ABORTED_PWR_LOSS = 0X5,
-    NVME_CMD_STATUS_INTERNAL_ERROR = 0X6,
-    NVME_CMD_STATUS_CMD_ABORT_REQUESTED = 0X7,
-    NVME_CMD_STATUS_CMD_ABORT_SQ_DELETED = 0X8,
-    NVME_CMD_STATUS_CMD_ABORT_FUSED_CMD = 0X9,
+    NVME_CMD_STATUS_SUCCESS                     = 0X0, ///< nvme command is succeed
+    NVME_CMD_STATUS_INVALID_CMD                 = 0X1, ///< nvme command is invalid
+    NVME_CMD_STATUS_INVALID_FIELD               = 0X2,
+    NVME_CMD_STATUS_CMD_ID_CONFLICT             = 0X3,
+    NVME_CMD_STATUS_DATA_XFER_ERROR             = 0X4,
+    NVME_CMD_STATUS_ABORTED_PWR_LOSS            = 0X5,
+    NVME_CMD_STATUS_INTERNAL_ERROR              = 0X6,
+    NVME_CMD_STATUS_CMD_ABORT_REQUESTED         = 0X7,
+    NVME_CMD_STATUS_CMD_ABORT_SQ_DELETED        = 0X8,
+    NVME_CMD_STATUS_CMD_ABORT_FUSED_CMD         = 0X9,
     NVME_CMD_STATUS_CMD_ABORT_MISSING_FUSED_CMD = 0XA,
-    NVME_CMD_STATUS_INVALID_NS_OR_FMT = 0XB,
-    NVME_CMD_STATUS_CMD_SEQ_ERROR = 0XC,
-    NVME_CMD_STATUS_INVALID_SGL_SEG_DESC = 0XD,
-    NVME_CMD_STATUS_INVALID_SGL_COUNT = 0XE,
-    NVME_CMD_STATUS_INVALID_DATA_SGL_LEN = 0XF,
-    NVME_CMD_STATUS_INVALID_MD_GL_LEN = 0X10,
-    NVME_CMD_STATUS_INVALID_SGL_DESC_TYPE = 0X11,
-    NVME_CMD_STATUS_INVALID_USE_CTRL_MEM = 0X12,
-    NVME_CMD_STATUS_INVALID_PRP_OFS = 0X13,
-    NVME_CMD_STATUS_ATOMIC_WRITE_UNIT_EXCEEDED = 0X14,
-    NVME_CMD_STATUS_INVALID_SGL_OFS = 0X16,
-    NVME_CMD_STATUS_INVALID_SGL_SUBTYPE = 0X17,
-    NVME_CMD_STATUS_INCONSISTENT_HOST_ID = 0X18,
-    NVME_CMD_STATUS_KEEPALIVE_EXPIRED = 0X19,
-    NVME_CMD_STATUS_KEEPALIVE_INVALID = 0X1A,
-    NVME_CMD_STATUS_LBA_OUT_OF_RANGE = 0X80,
-    NVME_CMD_STATUS_CAPACITY_EXCEEDED = 0X81,
-    NVME_CMD_STATUS_NS_NOT_READY = 0X82, ///< namespace is not ready
-    NVME_CMD_STATUS_RESERVATION_CONFLICT = 0X83,
-    NVME_CMD_STATUS_FORMAT_IN_PROGRESS = 0X84, ///< nvme formatting in progress
+    NVME_CMD_STATUS_INVALID_NS_OR_FMT           = 0XB,
+    NVME_CMD_STATUS_CMD_SEQ_ERROR               = 0XC,
+    NVME_CMD_STATUS_INVALID_SGL_SEG_DESC        = 0XD,
+    NVME_CMD_STATUS_INVALID_SGL_COUNT           = 0XE,
+    NVME_CMD_STATUS_INVALID_DATA_SGL_LEN        = 0XF,
+    NVME_CMD_STATUS_INVALID_MD_GL_LEN           = 0X10,
+    NVME_CMD_STATUS_INVALID_SGL_DESC_TYPE       = 0X11,
+    NVME_CMD_STATUS_INVALID_USE_CTRL_MEM        = 0X12,
+    NVME_CMD_STATUS_INVALID_PRP_OFS             = 0X13,
+    NVME_CMD_STATUS_ATOMIC_WRITE_UNIT_EXCEEDED  = 0X14,
+    NVME_CMD_STATUS_INVALID_SGL_OFS             = 0X16,
+    NVME_CMD_STATUS_INVALID_SGL_SUBTYPE         = 0X17,
+    NVME_CMD_STATUS_INCONSISTENT_HOST_ID        = 0X18,
+    NVME_CMD_STATUS_KEEPALIVE_EXPIRED           = 0X19,
+    NVME_CMD_STATUS_KEEPALIVE_INVALID           = 0X1A,
+    NVME_CMD_STATUS_LBA_OUT_OF_RANGE            = 0X80,
+    NVME_CMD_STATUS_CAPACITY_EXCEEDED           = 0X81,
+    NVME_CMD_STATUS_NS_NOT_READY                = 0X82, ///< namespace is not ready
+    NVME_CMD_STATUS_RESERVATION_CONFLICT        = 0X83,
+    NVME_CMD_STATUS_FORMAT_IN_PROGRESS          = 0X84, ///< nvme formatting in progress
 } nvme_cmd_status_t; ///< shorthand for enum
 
 
@@ -515,6 +515,7 @@ typedef enum nvme_cmd_status_t {
 typedef struct nvme_disk_t {
     memory_heap_t*                 heap; ///< heap to allocate memory from
     uint64_t                       disk_id; ///< disk id
+    const pci_dev_t*               pci_dev; ///< pci device information
     pci_generic_device_t*          pci_device; ///< pci device
     nvme_controller_registers_t*   nvme_registers; ///< nvme registers
     pci_capability_msix_t*         msix_capability; ///< msix capability

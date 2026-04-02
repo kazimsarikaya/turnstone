@@ -386,7 +386,7 @@ static int8_t acpi_configure_sleep(void) {
     }
 
     uintptr_t facs_fa = ACPI_CONTEXT->fadt->firmare_control_address_64bit?(uintptr_t)ACPI_CONTEXT->fadt->firmare_control_address_64bit:ACPI_CONTEXT->fadt->firmare_control_address_32bit;
-    uintptr_t facs_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(facs_fa);
+    uintptr_t facs_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, facs_fa);
 
     PRINTLOG(ACPI, LOG_INFO, "facs fa 0x%llx va 0x%llx", facs_fa, facs_va);
 
@@ -537,12 +537,12 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
     }
     for(size_t i = 0; i < ACPI_MCFG_PCI_SEGMENT_GROUP_CONFIG_COUNT(ACPI_CONTEXT->mcfg); i++) {
         uint64_t pci_base_address_fa = ACPI_CONTEXT->mcfg->pci_segment_group_configs[i].base_address;
-        uint64_t pci_base_address_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_base_address_fa);
+        uint64_t pci_base_address_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, pci_base_address_fa);
         uint64_t frm_count           = (ACPI_CONTEXT->mcfg->pci_segment_group_configs[i].bus_end - ACPI_CONTEXT->mcfg->pci_segment_group_configs[i].bus_start + 1) * PCI_DEVICE_MAX_COUNT * PCI_FUNCTION_MAX_COUNT * 4096 / FRAME_SIZE;
 
         PRINTLOG(ACPI, LOG_INFO, "mapping pci mmio space at 0x%llx with frame count %lli", pci_base_address_fa, frm_count);
 
-        frame_t req_frame = {pci_base_address_fa, frm_count, FRAME_TYPE_RESERVED, 0};
+        frame_t req_frame = {0, pci_base_address_fa, frm_count, FRAME_TYPE_RESERVED, 0};
 
         if(memory_paging_add_va_for_frame(pci_base_address_va, &req_frame, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(ACPI, LOG_ERROR, "cannot map pci mmio space");
@@ -563,7 +563,7 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
         dsdt_fa = fadt->dsdt_address_32bit;
     }
 
-    acpi_sdt_header_t* dsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dsdt_fa);
+    acpi_sdt_header_t* dsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, dsdt_fa);
     PRINTLOG(ACPI, LOG_DEBUG, "DSDT address 0x%p", dsdt);
 
     acpi_aml_parser_context_t* pctx = acpi_aml_parser_context_create_with_heap(NULL, dsdt->revision);

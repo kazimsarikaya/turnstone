@@ -197,7 +197,7 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
 
     PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcb_frame_fa);
 
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vmcb_frame_fa);
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vmcb_frame_fa);
 
     vmcb->save_state_area.rip = vm->program_entry_point_virtual_address;
     vmcb->save_state_area.rsp = (SVM_GUEST_STACK_TOP_VALUE) -8; // we subtract 8 because sse needs 16 byte alignment
@@ -266,7 +266,7 @@ static int8_t hypervisor_init_intel(boolean_t is_for_wakeup) {
         cpu_state->hypervisor_helper_fa = vmxon_frame->frame_address;
     } else {
         vmxon_frame_fa = cpu_state->hypervisor_helper_fa;
-        vmxon_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vmxon_frame_fa);
+        vmxon_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vmxon_frame_fa);
     }
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmxon frame va: 0x%llx", vmxon_frame_va);
@@ -314,7 +314,7 @@ static int8_t hypervisor_init_amd(boolean_t is_for_wakeup) {
         cpu_state->hypervisor_helper_fa = svm_ha_frame_fa;
     } else {
         svm_ha_frame_fa = cpu_state->hypervisor_helper_fa;
-        svm_ha_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(svm_ha_frame_fa);
+        svm_ha_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, svm_ha_frame_fa);
     }
 
     uint64_t old_ha = cpu_read_msr(SVM_MSR_VM_HSAVE_PA);

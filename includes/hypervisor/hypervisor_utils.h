@@ -21,6 +21,7 @@ extern "C" {
 #endif
 
 uint64_t hypervisor_allocate_region(frame_t** frame, uint64_t size);
+uint64_t hypervisor_allocate_hardware_region(frame_t** frame, uint64_t size);
 uint64_t hypervisor_create_stack(hypervisor_vm_t* vm, uint64_t stack_size);
 int8_t   hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_name);
 void     hypervisor_cleanup_mapped_interrupts(hypervisor_vm_t* vm);

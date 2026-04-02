@@ -66,7 +66,7 @@ static iterator_t* pci_iterator_next(iterator_t* iterator){
 
                 // calculate mmio address of device
                 size_t pci_mmio_addr_fa = iter_metadata->mcfg->pci_segment_group_configs[bus_group].base_address + ( bus_addr << 20 | dev_addr << 15 | 0 << 12 );
-                size_t pci_mmio_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_fa);
+                size_t pci_mmio_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, pci_mmio_addr_fa);
 
                 pci_common_header_t* pci_hdr = (pci_common_header_t*)pci_mmio_addr_va;
 
@@ -86,7 +86,7 @@ static iterator_t* pci_iterator_next(iterator_t* iterator){
                                 iter_metadata->function_number = func_addr;
 
                                 size_t pci_mmio_addr_f_fa = iter_metadata->mcfg->pci_segment_group_configs[bus_group].base_address + ( bus_addr << 20 | dev_addr << 15 | func_addr << 12 );
-                                size_t pci_mmio_addr_f_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_f_fa);
+                                size_t pci_mmio_addr_f_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, pci_mmio_addr_f_fa);
 
                                 pci_hdr = (pci_common_header_t*)pci_mmio_addr_f_va;
 
@@ -216,7 +216,7 @@ static iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table
 
                     // calculate mmio address of device
                     size_t pci_mmio_addr_fa = iter_metadata->mcfg->pci_segment_group_configs[i].base_address + ( bus_addr << 20 | dev_addr << 15 | func_addr << 12 );
-                    size_t pci_mmio_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_fa);
+                    size_t pci_mmio_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, pci_mmio_addr_fa);
 
                     pci_common_header_t* pci_hdr = (pci_common_header_t*)pci_mmio_addr_va;
 

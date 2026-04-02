@@ -25,17 +25,17 @@ int8_t hypervisor_svm_ipc_handle_dump(hypervisor_vm_t* vm, hypervisor_ipc_messag
 }
 
 int8_t hypervisor_svm_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector) {
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     list_t* mq = vm->interrupt_queue;
     list_queue_pop(mq);
 
     if(vm->vid_enabled) {
         uint64_t apic_bp_fa = vmcb->control_area.avic_apic_backing_page_pointer;
-        uint64_t apic_bp_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(apic_bp_fa);
+        uint64_t apic_bp_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, apic_bp_fa);
 
         int32_t irr_index = vector / 32; // 32 bits per ISR register
-        int32_t irr_bit = vector % 32;
+        int32_t irr_bit   = vector % 32;
 
         irr_index *= 0x10; // irr step is 0x10
 
@@ -49,10 +49,10 @@ int8_t hypervisor_svm_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector) {
 
     } else {
         // vm->lapic.in_service_vector = vector;
-        vmcb->control_area.vint_control.fields.v_irq = 1;
-        vmcb->control_area.vint_control.fields.v_ign_tpr = 1;
+        vmcb->control_area.vint_control.fields.v_irq         = 1;
+        vmcb->control_area.vint_control.fields.v_ign_tpr     = 1;
         vmcb->control_area.vint_control.fields.v_intr_vector = vector;
-        vmcb->control_area.clean_bits.fields.tpr = 1;
+        vmcb->control_area.clean_bits.fields.tpr             = 1;
     }
 
     if(vm->is_halted) {

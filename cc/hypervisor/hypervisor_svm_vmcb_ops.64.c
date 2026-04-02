@@ -21,7 +21,7 @@ MODULE("turnstone.hypervisor.svm");
 
 static inline void hypervisor_svm_io_bitmap_set_port(uint8_t * bitmap, uint16_t port) {
     uint16_t byte_index = port >> 3;
-    uint8_t bit_index = port & 0x7;
+    uint8_t bit_index   = port & 0x7;
     bitmap[byte_index] |= 1 << bit_index;
 }
 
@@ -42,8 +42,8 @@ static int8_t hypervisor_svm_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, bool
 
     uint32_t byte_index = msr_offset / 4; // each byte represents 4 msrs with 2 bits each
 
-    uint8_t bit_index = msr_offset % 4;
-    uint8_t read_bit_index = bit_index * 2;
+    uint8_t bit_index       = msr_offset % 4;
+    uint8_t read_bit_index  = bit_index * 2;
     uint8_t write_bit_index = bit_index * 2 + 1;
 
     if(read) {
@@ -56,7 +56,7 @@ static int8_t hypervisor_svm_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, bool
 }
 
 int8_t hypervisor_svm_vmcb_set_running(hypervisor_vm_t* vm) {
-    uint64_t vmcb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    uint64_t vmcb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     if(vmcb_va == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot get vmcb va");
@@ -64,7 +64,7 @@ int8_t hypervisor_svm_vmcb_set_running(hypervisor_vm_t* vm) {
     }
 
     uint64_t phy_apic_id_table_frame_fa = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_PHYSICAL_APIC_ID_TABLE].frame_address;
-    uint64_t phy_apic_id_table_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(phy_apic_id_table_frame_fa);
+    uint64_t phy_apic_id_table_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, phy_apic_id_table_frame_fa);
 
     uint64_t* phy_apic_id_table = (uint64_t*)phy_apic_id_table_frame_va;
 
@@ -76,7 +76,7 @@ int8_t hypervisor_svm_vmcb_set_running(hypervisor_vm_t* vm) {
 }
 
 int8_t hypervisor_svm_vmcb_set_stopped(hypervisor_vm_t* vm) {
-    uint64_t vmcb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    uint64_t vmcb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     if(vmcb_va == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot get vmcb va");
@@ -84,7 +84,7 @@ int8_t hypervisor_svm_vmcb_set_stopped(hypervisor_vm_t* vm) {
     }
 
     uint64_t phy_apic_id_table_frame_fa = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_PHYSICAL_APIC_ID_TABLE].frame_address;
-    uint64_t phy_apic_id_table_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(phy_apic_id_table_frame_fa);
+    uint64_t phy_apic_id_table_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, phy_apic_id_table_frame_fa);
 
     uint64_t* phy_apic_id_table = (uint64_t*)phy_apic_id_table_frame_va;
 
@@ -102,21 +102,21 @@ static void hypervisor_svm_vmcb_set_vapic_defaults(uint64_t vapic_address) {
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "apic version: 0x%llx", apic_vesion);
 
-    vapic[APIC_REGISTER_OFFSET_ID / 4] = 0x0; // id
-    vapic[APIC_REGISTER_OFFSET_VERSION / 4] = apic_vesion; // version
-    vapic[APIC_REGISTER_OFFSET_DFR / 4] = 0xffffffff; // dfr
+    vapic[APIC_REGISTER_OFFSET_ID / 4]                 = 0x0; // id
+    vapic[APIC_REGISTER_OFFSET_VERSION / 4]            = apic_vesion; // version
+    vapic[APIC_REGISTER_OFFSET_DFR / 4]                = 0xffffffff; // dfr
     vapic[APIC_REGISTER_OFFSET_SPURIOUS_INTERRUPT / 4] = 0x0000010f; // spurious interrupt vector
-    vapic[APIC_REGISTER_OFFSET_TERMAL_SENSOR_LVT / 4] = 0x00010000; // thermal sensor local vector table entry
-    vapic[APIC_REGISTER_OFFSET_PERF_COUNTER_LVT / 4] = 0x00010000; // performance counter local vector table entry
-    vapic[APIC_REGISTER_OFFSET_LINT0_LVT / 4] = 0x00010000; // local interrupt 0 local vector table entry
-    vapic[APIC_REGISTER_OFFSET_LINT1_LVT / 4] = 0x00010000; // local interrupt 1 local vector table entry
-    vapic[APIC_REGISTER_OFFSET_ERROR_LVT / 4] = 0x00010000; // error local vector table entry
+    vapic[APIC_REGISTER_OFFSET_TERMAL_SENSOR_LVT / 4]  = 0x00010000; // thermal sensor local vector table entry
+    vapic[APIC_REGISTER_OFFSET_PERF_COUNTER_LVT / 4]   = 0x00010000; // performance counter local vector table entry
+    vapic[APIC_REGISTER_OFFSET_LINT0_LVT / 4]          = 0x00010000; // local interrupt 0 local vector table entry
+    vapic[APIC_REGISTER_OFFSET_LINT1_LVT / 4]          = 0x00010000; // local interrupt 1 local vector table entry
+    vapic[APIC_REGISTER_OFFSET_ERROR_LVT / 4]          = 0x00010000; // error local vector table entry
 
 
-    vapic[APIC_REGISTER_OFFSET_TIMER_LVT / 4] = 0x00020020; // timer local vector table entry
+    vapic[APIC_REGISTER_OFFSET_TIMER_LVT / 4]           = 0x00020020; // timer local vector table entry
     vapic[APIC_REGISTER_OFFSET_TIMER_INITIAL_VALUE / 4] = 0x00007b43; // timer initial count
     vapic[APIC_REGISTER_OFFSET_TIMER_CURRENT_VALUE / 4] = 0x00000000; // timer current count
-    vapic[APIC_REGISTER_OFFSET_TIMER_DIVIDER / 4] = 0x00000003; // timer divide configuration
+    vapic[APIC_REGISTER_OFFSET_TIMER_DIVIDER / 4]       = 0x00000003; // timer divide configuration
 
     vapic[0x400 / 4] = 0x00040007; // extended apic feature register
 
@@ -126,14 +126,14 @@ static void hypervisor_svm_vmcb_set_vapic_defaults(uint64_t vapic_address) {
 }
 
 static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
-    uint64_t vmcb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    uint64_t vmcb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     if(vmcb_va == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot get vmcb va");
         return -1;
     }
 
-    cpu_cpuid_regs_t query = {0};
+    cpu_cpuid_regs_t query  = {0};
     cpu_cpuid_regs_t result = {0};
 
     query.eax = 0x8000000a;
@@ -145,7 +145,7 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "eax: 0x%x, ebx: 0x%x, ecx: 0x%x, edx: 0x%x", result.eax, result.ebx, result.ecx, result.edx);
 
-    boolean_t avic = (result.edx >> 13) & 1;
+    boolean_t avic        = (result.edx >> 13) & 1;
     boolean_t avic_x2apic = (result.edx >> 18) & 1;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "avic: %i, avic_x2apic: %i", avic, avic_x2apic);
@@ -160,36 +160,36 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
 
     vmcb->control_area.intercept_interrupt.bits = 0xFFFFFFFF;
 
-    vmcb->control_area.intercept_control_1.fields.intr = 1;
-    vmcb->control_area.intercept_control_1.fields.nmi = 1;
+    vmcb->control_area.intercept_control_1.fields.intr      = 1;
+    vmcb->control_area.intercept_control_1.fields.nmi       = 1;
     vmcb->control_area.intercept_control_1.fields.cr0_write = 1;
-    vmcb->control_area.intercept_control_1.fields.rdtsc = 1;
-    vmcb->control_area.intercept_control_1.fields.rdpmc = 1;
-    vmcb->control_area.intercept_control_1.fields.cpuid = 1;
-    vmcb->control_area.intercept_control_1.fields.intn = 1;
-    vmcb->control_area.intercept_control_1.fields.pause = 1;
-    vmcb->control_area.intercept_control_1.fields.hlt = 1;
-    vmcb->control_area.intercept_control_1.fields.io = 1;
-    vmcb->control_area.intercept_control_1.fields.msr = 1;
-    vmcb->control_area.intercept_control_1.fields.shutdown = 1;
+    vmcb->control_area.intercept_control_1.fields.rdtsc     = 1;
+    vmcb->control_area.intercept_control_1.fields.rdpmc     = 1;
+    vmcb->control_area.intercept_control_1.fields.cpuid     = 1;
+    vmcb->control_area.intercept_control_1.fields.intn      = 1;
+    vmcb->control_area.intercept_control_1.fields.pause     = 1;
+    vmcb->control_area.intercept_control_1.fields.hlt       = 1;
+    vmcb->control_area.intercept_control_1.fields.io        = 1;
+    vmcb->control_area.intercept_control_1.fields.msr       = 1;
+    vmcb->control_area.intercept_control_1.fields.shutdown  = 1;
 
-    vmcb->control_area.intercept_control_2.fields.vmrun = 1; // amd requires this whenever we dont use nested vm inside vm, else invalid vmexit occurs.
+    vmcb->control_area.intercept_control_2.fields.vmrun   = 1; // amd requires this whenever we dont use nested vm inside vm, else invalid vmexit occurs.
     vmcb->control_area.intercept_control_2.fields.vmmcall = 1;
-    vmcb->control_area.intercept_control_2.fields.rdtscp = 1;
+    vmcb->control_area.intercept_control_2.fields.rdtscp  = 1;
 
     vmcb->control_area.intercept_control_3.fields.idle_hlt = 1;
 
-    vmcb->control_area.guest_asid.fields.asid = 1;
+    vmcb->control_area.guest_asid.fields.asid        = 1;
     vmcb->control_area.guest_asid.fields.tlb_control = 0x3;
 
     vmcb->control_area.nested_page_control.fields.np_enable = 1;
 
-    vmcb->control_area.vint_control.fields.v_gif = 1;
+    vmcb->control_area.vint_control.fields.v_gif         = 1;
     vmcb->control_area.vint_control.fields.v_gif_enabled = 1;
     vmcb->control_area.vint_control.fields.v_nmi_enabled = 1;
-    vmcb->control_area.vint_control.fields.v_intr_mask = 1;
-    vmcb->control_area.vint_control.fields.vapic_apic = 1;
-    vmcb->control_area.vint_control.fields.vapic_x2apic = 1;
+    vmcb->control_area.vint_control.fields.v_intr_mask   = 1;
+    vmcb->control_area.vint_control.fields.vapic_apic    = 1;
+    vmcb->control_area.vint_control.fields.vapic_x2apic  = 1;
 
     frame_t* vapic_frame = NULL;
 
@@ -205,7 +205,7 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
     vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC] = *vapic_frame;
 
     vmcb->control_area.avic_apic_backing_page_pointer = vapic_frame->frame_address;
-    vmcb->control_area.avic_apic_bar = 0xfee00000;
+    vmcb->control_area.avic_apic_bar                  = 0xfee00000;
 
     frame_t* phy_apic_id_table_frame = NULL;
 
@@ -220,7 +220,7 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
 
     vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_PHYSICAL_APIC_ID_TABLE] = *phy_apic_id_table_frame;
 
-    vmcb->control_area.avic_physical_table.fields.max_index = 0; // only one entry
+    vmcb->control_area.avic_physical_table.fields.max_index        = 0; // only one entry
     vmcb->control_area.avic_physical_table.fields.physical_address = phy_apic_id_table_frame->frame_address >> 12;
 
     uint64_t* phy_apic_id_table = (uint64_t*)phy_apic_id_table_frame_va;
@@ -305,7 +305,7 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
 }
 
 static int8_t hypervisor_svm_vmcb_prepare_save_state_area(hypervisor_vm_t* vm) {
-    uint64_t vmcb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    uint64_t vmcb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     if(vmcb_va == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot get vmcb va");
@@ -315,54 +315,54 @@ static int8_t hypervisor_svm_vmcb_prepare_save_state_area(hypervisor_vm_t* vm) {
     svm_vmcb_t* vmcb = (svm_vmcb_t*)vmcb_va;
 
     vmcb->save_state_area.es.selector = 0x10;
-    vmcb->save_state_area.es.attrib = SVM_DATA_ACCESS_RIGHTS;
-    vmcb->save_state_area.es.limit = 0xffffffff;
-    vmcb->save_state_area.es.base = 0;
+    vmcb->save_state_area.es.attrib   = SVM_DATA_ACCESS_RIGHTS;
+    vmcb->save_state_area.es.limit    = 0xffffffff;
+    vmcb->save_state_area.es.base     = 0;
 
     vmcb->save_state_area.cs.selector = 0x08;
-    vmcb->save_state_area.cs.attrib = SVM_CODE_ACCESS_RIGHTS;
-    vmcb->save_state_area.cs.limit = 0xffffffff;
-    vmcb->save_state_area.cs.base = 0;
+    vmcb->save_state_area.cs.attrib   = SVM_CODE_ACCESS_RIGHTS;
+    vmcb->save_state_area.cs.limit    = 0xffffffff;
+    vmcb->save_state_area.cs.base     = 0;
 
     vmcb->save_state_area.ss.selector = 0x10;
-    vmcb->save_state_area.ss.attrib = SVM_DATA_ACCESS_RIGHTS;
-    vmcb->save_state_area.ss.limit = 0xffffffff;
-    vmcb->save_state_area.ss.base = 0;
+    vmcb->save_state_area.ss.attrib   = SVM_DATA_ACCESS_RIGHTS;
+    vmcb->save_state_area.ss.limit    = 0xffffffff;
+    vmcb->save_state_area.ss.base     = 0;
 
     vmcb->save_state_area.ds.selector = 0x10;
-    vmcb->save_state_area.ds.attrib = SVM_DATA_ACCESS_RIGHTS;
-    vmcb->save_state_area.ds.limit = 0xffffffff;
-    vmcb->save_state_area.ds.base = 0;
+    vmcb->save_state_area.ds.attrib   = SVM_DATA_ACCESS_RIGHTS;
+    vmcb->save_state_area.ds.limit    = 0xffffffff;
+    vmcb->save_state_area.ds.base     = 0;
 
     vmcb->save_state_area.fs.selector = 0x0;
-    vmcb->save_state_area.fs.attrib = SVM_DATA_ACCESS_RIGHTS;
-    vmcb->save_state_area.fs.limit =  0xffffffff;
-    vmcb->save_state_area.fs.base = 0;
+    vmcb->save_state_area.fs.attrib   = SVM_DATA_ACCESS_RIGHTS;
+    vmcb->save_state_area.fs.limit    =  0xffffffff;
+    vmcb->save_state_area.fs.base     = 0;
 
     vmcb->save_state_area.gs.selector = 0x0;
-    vmcb->save_state_area.gs.attrib = SVM_DATA_ACCESS_RIGHTS;
-    vmcb->save_state_area.gs.limit = 0xffffffff;
-    vmcb->save_state_area.gs.base = 0;
+    vmcb->save_state_area.gs.attrib   = SVM_DATA_ACCESS_RIGHTS;
+    vmcb->save_state_area.gs.limit    = 0xffffffff;
+    vmcb->save_state_area.gs.base     = 0;
 
     vmcb->save_state_area.gdtr.selector = 0;
-    vmcb->save_state_area.gdtr.attrib = 0;
-    vmcb->save_state_area.gdtr.limit = 0x2f;
-    vmcb->save_state_area.gdtr.base = SVM_GUEST_GDTR_BASE_VALUE;
+    vmcb->save_state_area.gdtr.attrib   = 0;
+    vmcb->save_state_area.gdtr.limit    = 0x2f;
+    vmcb->save_state_area.gdtr.base     = SVM_GUEST_GDTR_BASE_VALUE;
 
     vmcb->save_state_area.ldtr.selector = 0;
-    vmcb->save_state_area.ldtr.attrib = SVM_LDTR_ACCESS_RIGHTS;
-    vmcb->save_state_area.ldtr.limit = 0;
-    vmcb->save_state_area.ldtr.base = 0;
+    vmcb->save_state_area.ldtr.attrib   = SVM_LDTR_ACCESS_RIGHTS;
+    vmcb->save_state_area.ldtr.limit    = 0;
+    vmcb->save_state_area.ldtr.base     = 0;
 
     vmcb->save_state_area.idtr.selector = 0x0;
-    vmcb->save_state_area.idtr.attrib = 0;
-    vmcb->save_state_area.idtr.limit = 0xfff;
-    vmcb->save_state_area.idtr.base = SVM_GUEST_IDTR_BASE_VALUE;
+    vmcb->save_state_area.idtr.attrib   = 0;
+    vmcb->save_state_area.idtr.limit    = 0xfff;
+    vmcb->save_state_area.idtr.base     = SVM_GUEST_IDTR_BASE_VALUE;
 
     vmcb->save_state_area.tr.selector = 0x18;
-    vmcb->save_state_area.tr.attrib = SVM_TR_ACCESS_RIGHTS;
-    vmcb->save_state_area.tr.limit = 0x67;
-    vmcb->save_state_area.tr.base = SVM_GUEST_TR_BASE_VALUE;
+    vmcb->save_state_area.tr.attrib   = SVM_TR_ACCESS_RIGHTS;
+    vmcb->save_state_area.tr.limit    = 0x67;
+    vmcb->save_state_area.tr.base     = SVM_GUEST_TR_BASE_VALUE;
 
     vmcb->save_state_area.cpl = 0;
 
@@ -382,7 +382,7 @@ static int8_t hypervisor_svm_vmcb_prepare_save_state_area(hypervisor_vm_t* vm) {
     // disable 12. bit (svm) if we disable it, vmrun gives invalid vmexit
     // efer &= ~(1 << 12);
     // disable 0. bit (syscall)
-    efer &= ~(1 << 0);
+    efer                      &= ~(1 << 0);
     vmcb->save_state_area.efer = efer;
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "efer: 0x%llx", efer);
 
@@ -406,7 +406,7 @@ int8_t hypervisor_svm_vmcb_prepare_ept(hypervisor_vm_t* vm) {
         return -1;
     }
 
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     vmcb->control_area.n_cr3 = ept_pml4_base;
 

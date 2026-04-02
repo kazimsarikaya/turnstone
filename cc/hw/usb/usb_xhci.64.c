@@ -334,7 +334,8 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
     ep0_frame_size = (ep0_frame_size + FRAME_SIZE - 1) & ~(FRAME_SIZE - 1);
     uint64_t ep0_frame_count = ep0_frame_size / FRAME_SIZE;
 
-    if(fa->allocate_frame_by_count(fa, ep0_frame_count, fa_type, &ep_ctrl_frame, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, usb_controller->pci_dev->proximity_domain,
+                                   ep0_frame_count, fa_type, &ep_ctrl_frame, NULL) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot allocate frame for ep0 trb");
         memory_free(device->controller_context);
         device->controller_context = NULL;
@@ -344,12 +345,10 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
     }
 
     uint64_t ep0_trb_fa = ep_ctrl_frame->frame_address;
-    uint64_t ep0_trb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ep0_trb_fa);
+    uint64_t ep0_trb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, ep0_trb_fa);
 
     if(memory_paging_add_va_for_frame(ep0_trb_va, ep_ctrl_frame,
-                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                      MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                      MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot map frame for ep0 trb");
         fa->release_frame(fa, ep_ctrl_frame);
         memory_free(device->controller_context);
@@ -377,7 +376,7 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
     uint64_t* dbcbaa = metadata->dcbaa;
     // Set slot
     usb_xhci_trb_t* cur_cmd_ring = &cmd_rings[metadata->current_cmd_index];
-    uint64_t cur_cmd_ring_fa     = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)cur_cmd_ring);
+    uint64_t cur_cmd_ring_fa     = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(HARDWARE, (uint64_t)cur_cmd_ring);
 
     cur_cmd_ring->parameter = 0;
     cur_cmd_ring->status    = 0;
@@ -420,7 +419,7 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
     PRINTLOG(USB, LOG_TRACE, "new device slot id: %d", device->slot_id);
 
     uint64_t dcb_fa = dbcbaa[device->slot_id];
-    uint64_t* dcb   = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dcb_fa);
+    uint64_t* dcb   = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, dcb_fa);
 
     uint32_t* ictx = (uint32_t*)dcb;
     ictx[0] = 0;
@@ -445,7 +444,7 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
 
     // Set Address
     cur_cmd_ring    = &cmd_rings[metadata->current_cmd_index];
-    cur_cmd_ring_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)cur_cmd_ring);
+    cur_cmd_ring_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(HARDWARE, (uint64_t)cur_cmd_ring);
     uint64_t dev_ctx = metadata->dcbaa[device->slot_id];
     if(!dev_ctx) {
         PRINTLOG(USB, LOG_ERROR, "Device context not allocated for slot %d", device->slot_id);
@@ -546,7 +545,7 @@ static int8_t usb_xhci_evalutate_context(usb_controller_t* usb_controller, usb_t
 
     uint64_t* dbcbaa = metadata->dcbaa;
     uint64_t dcb_fa  = dbcbaa[device->slot_id];
-    uint64_t* dcb    = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dcb_fa);
+    uint64_t* dcb    = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, dcb_fa);
 
     uint32_t* ictx = (uint32_t*)dcb;
     ictx[0] = 0;
@@ -597,7 +596,7 @@ static int8_t usb_xhci_evalutate_context(usb_controller_t* usb_controller, usb_t
 
     // Set Address
     usb_xhci_trb_t* cur_cmd_ring = &cmd_rings[metadata->current_cmd_index];
-    uint64_t cur_cmd_ring_fa     = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)cur_cmd_ring);
+    uint64_t cur_cmd_ring_fa     = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(HARDWARE, (uint64_t)cur_cmd_ring);
     uint64_t dev_ctx             = metadata->dcbaa[device->slot_id];
     if(!dev_ctx) {
         PRINTLOG(USB, LOG_ERROR, "Device context not allocated for slot %d", device->slot_id);
@@ -740,7 +739,7 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
     }
 
     uint64_t dcb_fa = metadata->dcbaa[device->slot_id];
-    uint64_t* dcb   = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dcb_fa);
+    uint64_t* dcb   = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, dcb_fa);
 
     if(!dcb_fa) {
         PRINTLOG(USB, LOG_ERROR, "Device context not allocated for slot %d", device->slot_id);
@@ -770,7 +769,8 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
 
     PRINTLOG(USB, LOG_TRACE, "allocating %llx frames for ep%d trb", ep_frame_count, ep_index);
 
-    if(fa->allocate_frame_by_count(fa, ep_frame_count, fa_type, &ep_trb_frame, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, usb_controller->pci_dev->proximity_domain,
+                                   ep_frame_count, fa_type, &ep_trb_frame, NULL) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot allocate frame for ep%d trb", ep_index);
         transfer->complete = true;
         transfer->success  = false;
@@ -778,11 +778,9 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
     }
 
     uint64_t ep_trb_fa = ep_trb_frame->frame_address;
-    uint64_t ep_trb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ep_trb_fa);
+    uint64_t ep_trb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, ep_trb_fa);
     if(memory_paging_add_va_for_frame(ep_trb_va, ep_trb_frame,
-                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                      MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                      MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot map frame for ep%d trb", ep_index);
         fa->release_frame(fa, ep_trb_frame);
         transfer->complete = true;
@@ -811,7 +809,8 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
 
     if(request->length) {
         frame_t* stream_context_frame = NULL;
-        if(fa->allocate_frame_by_count(fa, 1, fa_type, &stream_context_frame, NULL) != 0) {
+        if(fa->allocate_frame_by_count(fa, usb_controller->pci_dev->proximity_domain,
+                                       1, fa_type, &stream_context_frame, NULL) != 0) {
             PRINTLOG(USB, LOG_ERROR, "cannot allocate frame for stream context");
             memory_paging_delete_va_for_frame(ep_trb_va, ep_trb_frame);
             fa->release_frame(fa, ep_trb_frame);
@@ -826,11 +825,9 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
             return -1;
         }
         uint64_t stream_context_fa = stream_context_frame->frame_address;
-        uint64_t stream_context_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stream_context_fa);
+        uint64_t stream_context_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, stream_context_fa);
         if(memory_paging_add_va_for_frame(stream_context_va, stream_context_frame,
-                                          MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                          MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                          MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+                                          MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(USB, LOG_ERROR, "cannot map frame for stream context");
             fa->release_frame(fa, stream_context_frame);
             memory_paging_delete_va_for_frame(ep_trb_va, ep_trb_frame);
@@ -885,7 +882,7 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
     usb_xhci_trb_t* cmd_rings      = metadata->cmd_ring;
     usb_xhci_doorbell_t* doorbells = metadata->doorbells;
     usb_xhci_trb_t* cur_cmd_ring   = &cmd_rings[metadata->current_cmd_index];
-    uint64_t cur_cmd_ring_fa       = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)cur_cmd_ring);
+    uint64_t cur_cmd_ring_fa       = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(HARDWARE, (uint64_t)cur_cmd_ring);
 
     cur_cmd_ring->parameter = dcb_fa;
     cur_cmd_ring->status    = 0;
@@ -1028,7 +1025,8 @@ static int8_t usb_xhci_setup_endpoint_pipeline(usb_controller_t* usb_controller,
     uint64_t data_buffer_size        = max_packet_size_aligned * metadata->cmd_ring_size;
     uint64_t data_buffer_frame_count = (data_buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
     frame_t* data_buffer_frame       = NULL;
-    if(fa->allocate_frame_by_count(fa, data_buffer_frame_count, fa_type, &data_buffer_frame, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, usb_controller->pci_dev->proximity_domain,
+                                   data_buffer_frame_count, fa_type, &data_buffer_frame, NULL) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot allocate frame for ep%d data buffer", ep_index);
         transfer->complete = true;
         transfer->success  = false;
@@ -1036,11 +1034,9 @@ static int8_t usb_xhci_setup_endpoint_pipeline(usb_controller_t* usb_controller,
     }
 
     uint64_t data_buffer_fa = data_buffer_frame->frame_address;
-    uint64_t data_buffer_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_buffer_fa);
+    uint64_t data_buffer_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, data_buffer_fa);
     if(memory_paging_add_va_for_frame(data_buffer_va, data_buffer_frame,
-                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                      MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                      MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot map frame for ep%d data buffer", ep_index);
         fa->release_frame(fa, data_buffer_frame);
         transfer->complete = true;
@@ -2064,7 +2060,7 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     uint64_t bar_fa = pci_get_bar_address((pci_generic_device_t*)pci_dev->pci_header, 0);
     PRINTLOG(USB, LOG_DEBUG, "XHCI BAR address: 0x%016llx", bar_fa);
 
-    uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
+    uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, bar_fa);
     PRINTLOG(USB, LOG_DEBUG, "XHCI BAR virtual address: 0x%016llx", bar_va);
 
     usb_xhci_capabilities_t* xhci_cap = (usb_xhci_capabilities_t*)bar_va;
@@ -2167,17 +2163,16 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     dcbaa_fa_count += (dcb_size + FRAME_SIZE - 1) / FRAME_SIZE;
     frame_t* dcbaa_frames = NULL;
 
-    if (fa->allocate_frame_by_count(fa, dcbaa_fa_count, fa_type, &dcbaa_frames, NULL) != 0) {
+    if (fa->allocate_frame_by_count(fa, usb_controller->pci_dev->proximity_domain,
+                                    dcbaa_fa_count, fa_type, &dcbaa_frames, NULL) != 0) {
         PRINTLOG(USB, LOG_ERROR, "Failed to allocate frames for DCBAA");
         return -1;
     }
     uint64_t dcbaa_fa = dcbaa_frames->frame_address;
-    uint64_t dcbaa_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dcbaa_fa);
+    uint64_t dcbaa_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, dcbaa_fa);
 
     if (memory_paging_add_va_for_frame(dcbaa_va, dcbaa_frames,
-                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                       MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                       MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(USB, LOG_ERROR, "Failed to map DCBAA frames to virtual address");
         fa->release_frame(fa, dcbaa_frames);
         return -1;
@@ -2205,17 +2200,16 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     uint64_t cmd_ring_fa_count = (cmd_ring_size + FRAME_SIZE - 1) / FRAME_SIZE;
     frame_t* cmd_ring_frames   = NULL;
 
-    if (fa->allocate_frame_by_count(fa, cmd_ring_fa_count, fa_type, &cmd_ring_frames, NULL) != 0) {
+    if (fa->allocate_frame_by_count(fa, usb_controller->pci_dev->proximity_domain,
+                                    cmd_ring_fa_count, fa_type, &cmd_ring_frames, NULL) != 0) {
         PRINTLOG(USB, LOG_ERROR, "Failed to allocate frames for Command Ring");
         return -1;
     }
     uint64_t cmd_ring_fa = cmd_ring_frames->frame_address;
-    uint64_t cmd_ring_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_ring_fa);
+    uint64_t cmd_ring_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, cmd_ring_fa);
 
     if (memory_paging_add_va_for_frame(cmd_ring_va, cmd_ring_frames,
-                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                       MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                       MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(USB, LOG_ERROR, "Failed to map Command Ring frames to virtual address");
         fa->release_frame(fa, cmd_ring_frames);
         return -1;
@@ -2235,18 +2229,17 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     // Allocate Event Ring Segment Table and Event Ring
     frame_t* erst_frame = NULL;
 
-    if (fa->allocate_frame_by_count(fa, 1, fa_type, &erst_frame, NULL) != 0) {
+    if (fa->allocate_frame_by_count(fa, usb_controller->pci_dev->proximity_domain,
+                                    1, fa_type, &erst_frame, NULL) != 0) {
         PRINTLOG(USB, LOG_ERROR, "Failed to allocate frame for ERST");
         return -1;
     }
 
     uint64_t erst_fa = erst_frame->frame_address;
-    uint64_t erst_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(erst_fa);
+    uint64_t erst_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, erst_fa);
 
     if (memory_paging_add_va_for_frame(erst_va, erst_frame,
-                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                       MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                       MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(USB, LOG_ERROR, "Failed to map ERST frame to virtual address");
         fa->release_frame(fa, erst_frame);
         return -1;
@@ -2264,17 +2257,16 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     uint64_t event_ring_fa_count = (event_ring_size + FRAME_SIZE - 1) / FRAME_SIZE;
     frame_t* event_ring_frames   = NULL;
 
-    if (fa->allocate_frame_by_count(fa, event_ring_fa_count, fa_type, &event_ring_frames, NULL) != 0) {
+    if (fa->allocate_frame_by_count(fa, usb_controller->pci_dev->proximity_domain,
+                                    event_ring_fa_count, fa_type, &event_ring_frames, NULL) != 0) {
         PRINTLOG(USB, LOG_ERROR, "Failed to allocate frames for Event Ring");
         return -1;
     }
     uint64_t event_ring_fa = event_ring_frames->frame_address;
-    uint64_t event_ring_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(event_ring_fa);
+    uint64_t event_ring_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, event_ring_fa);
 
     if (memory_paging_add_va_for_frame(event_ring_va, event_ring_frames,
-                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                       MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                       MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
+                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(USB, LOG_ERROR, "Failed to map Event Ring frames to virtual address");
         fa->release_frame(fa, event_ring_frames);
         return -1;
@@ -2347,7 +2339,8 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
 
     metadata->port_status_listener_tid = task_create_task(pslt_task_name, usb_xhci_port_status_listener_task,
                                                           1, pslt_args,
-                                                          2 << 20, 128 << 10);
+                                                          2 << 20, 128 << 10,
+                                                          .proximity_domain_hint = pci_dev->proximity_domain);
 
     memory_free(pslt_task_name);
 
@@ -2386,7 +2379,8 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
 
     metadata->interrupter_tid = task_create_task(task_name, usb_xhci_interrupter_task,
                                                  1, plt_args,
-                                                 128 << 10, 64 << 10);
+                                                 128 << 10, 64 << 10,
+                                                 .proximity_domain_hint = pci_dev->proximity_domain);
 
     memory_free(task_name);
 
@@ -2421,7 +2415,9 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
         task_msleep(1000);
     }
 
-    PRINTLOG(USB, LOG_INFO, "XHCI controller initialized successfully with %d ports", metadata->port_count);
+    PRINTLOG(USB, LOG_INFO, "XHCI controller (%lli) initialized successfully with %d ports",
+             metadata->controller_id,
+             metadata->port_count);
 
     usb_controller->reset_all_ports(usb_controller);
 

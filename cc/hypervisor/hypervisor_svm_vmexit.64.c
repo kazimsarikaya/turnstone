@@ -255,13 +255,13 @@ static void hypervisor_svm_wait_idle(void) {
 typedef int8_t (*hypervisor_svm_vmexit_handler_f)(hypervisor_vm_t* vm);
 
 static void hypervisor_svm_goto_next_instruction(hypervisor_vm_t* vm) {
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     vmcb->save_state_area.rip = vmcb->control_area.n_rip;
 }
 
 static int8_t hypervisor_svm_vmexit_handler_intr(hypervisor_vm_t* vm) { // external interrupt
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa); // get vmcb
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa); // get vmcb
 
     int32_t interrupt_vector = apic_get_isr_interrupt();
 
@@ -326,7 +326,7 @@ static int8_t hypervisor_svm_vmexit_handler_pause(hypervisor_vm_t* vm) { // paus
 }
 
 static int8_t hypervisor_svm_vmexit_handler_cpuid(hypervisor_vm_t* vm) { // cpuid
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     cpu_cpuid_regs_t query = {
         .eax = vmcb->save_state_area.rax,
@@ -358,7 +358,7 @@ static int8_t hypervisor_svm_vmexit_handle_eoi(hypervisor_vm_t* vm) {
     PRINTLOG(HYPERVISOR, LOG_ERROR, "eoi should be automatically handled by avic");
     return -1;
 
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     list_t* mq                   = vm->interrupt_queue;
     interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)list_queue_peek(mq);
@@ -387,7 +387,7 @@ static int8_t hypervisor_svm_vmexit_handle_eoi(hypervisor_vm_t* vm) {
 
 
 static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     uint32_t msr   = vm->guest_registers->rcx;
     uint64_t value = vmcb->save_state_area.rax;
@@ -492,7 +492,7 @@ static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
 }
 
 static int8_t hypervisor_svm_vmexit_handler_vmmcall(hypervisor_vm_t* vm) { // vmmcall
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     uint64_t rax = vmcb->save_state_area.rax;
 
@@ -554,7 +554,7 @@ static void hypervisor_svm_io_fast_string_printf_io(hypervisor_vm_t* vm) {
     uint64_t port = 0x3f8;
 
     uint64_t data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, rsi);
-    uint64_t data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+    uint64_t data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, data_ptr_fa);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE,
              "IO Instruction String: port 0x%llx size: 0x%llx, rsi 0x%llx, data ptr fa 0x%llx va 0x%llx",
@@ -580,7 +580,7 @@ static void hypervisor_svm_io_fast_string_printf_io(hypervisor_vm_t* vm) {
 }
 
 static int8_t hypervisor_svm_vmexit_handler_ioio(hypervisor_vm_t* vm) {
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     svm_exit_ioio_t ioio = (svm_exit_ioio_t)vmcb->control_area.exit_info_1;
 
@@ -624,10 +624,10 @@ static int8_t hypervisor_svm_vmexit_handler_ioio(hypervisor_vm_t* vm) {
     if(ioio.fields.str) {
         if(ioio.fields.type == 0) { // out from rsi
             data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, vm->guest_registers->rsi);
-            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, data_ptr_fa);
         } else {
             data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, vm->guest_registers->rdi);
-            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, data_ptr_fa);
         }
     }
 
@@ -741,7 +741,7 @@ static int8_t hypervisor_svm_vmexit_handler_ioio(hypervisor_vm_t* vm) {
 }
 
 static int8_t hypervisor_svm_vmexit_handler_excp14(hypervisor_vm_t* vm) { // page fault
-    svm_vmcb_t* vmcb    = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    svm_vmcb_t* vmcb    = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
     uint64_t error_code = vmcb->control_area.exit_info_1;
     uint64_t address    = vmcb->control_area.exit_info_2;
 
@@ -803,7 +803,7 @@ static uint64_t hypervisor_svm_vmexit_remap_exit_code(uint64_t exit_code) {
 }
 
 static int8_t hypervisor_svm_dump_vmcb(hypervisor_vm_t* vm) {
-    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
 
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    RIP: 0x%016llx RFLAGS: 0x%08llx EFER: 0x%08llx",
              vmcb->save_state_area.rip, vmcb->save_state_area.rflags,
@@ -838,7 +838,7 @@ int8_t hypervisor_svm_vm_run(uint64_t hypervisor_vm_ptr) {
     }
 
     uint64_t guest_vmcb = vm->vmcb_frame_fa;
-    svm_vmcb_t* vmcb    = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_vmcb);
+    svm_vmcb_t* vmcb    = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, guest_vmcb);
 
     while(true) {
         asm volatile ("clgi");

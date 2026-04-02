@@ -41,6 +41,7 @@ typedef enum hypervisor_vm_frame_type_t {
 typedef struct hypervisor_vm_t {
     memory_heap_t* heap;
     const char_t*  entry_point_name;
+    uint32_t       proximity_domain;
     uint64_t       task_id;
     list_t*        ipc_queue;
     union {

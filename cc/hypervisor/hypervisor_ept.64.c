@@ -33,7 +33,7 @@ static void hypervisor_ept_invept(uint64_t type) {
 
 static int8_t hypervisor_ept_add_ept_page(hypervisor_vm_t* vm, uint64_t host_physical, uint64_t guest_physical, boolean_t wb) {
     uint64_t ept_base_fa = vm->ept_pml4_base;
-    uint64_t ept_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ept_base_fa);
+    uint64_t ept_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, ept_base_fa);
 
     hypervisor_ept_pml4e_t* pml4e = (hypervisor_ept_pml4e_t*)ept_base_va;
 
@@ -65,7 +65,7 @@ static int8_t hypervisor_ept_add_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
     } else {
         uint64_t pdpte_fa = pml4e[pml4e_index].address;
         pdpte_fa <<= 12;
-        pdpte_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pdpte_fa);
+        pdpte_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pdpte_fa);
     }
 
     uint64_t pdpte_index = (guest_physical >> 30) & 0x1FF;
@@ -98,7 +98,7 @@ static int8_t hypervisor_ept_add_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
     } else {
         uint64_t pde_fa = pdptes[pdpte_index].address;
         pde_fa <<= 12;
-        pde_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pde_fa);
+        pde_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pde_fa);
     }
 
     uint64_t pde_index = (guest_physical >> 21) & 0x1FF;
@@ -131,7 +131,7 @@ static int8_t hypervisor_ept_add_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
     } else {
         uint64_t pte_fa = pdes[pde_index].address;
         pte_fa <<= 12;
-        pte_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pte_fa);
+        pte_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pte_fa);
     }
 
     uint64_t pte_index = (guest_physical >> 12) & 0x1FF;
@@ -150,7 +150,7 @@ static int8_t hypervisor_ept_add_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
 }
 static int8_t hypervisor_ept_del_ept_page(hypervisor_vm_t* vm, uint64_t host_physical, uint64_t guest_physical) {
     uint64_t ept_base_fa = vm->ept_pml4_base;
-    uint64_t ept_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ept_base_fa);
+    uint64_t ept_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, ept_base_fa);
 
     hypervisor_ept_pml4e_t* pml4e = (hypervisor_ept_pml4e_t*)ept_base_va;
 
@@ -163,7 +163,7 @@ static int8_t hypervisor_ept_del_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
     } else {
         uint64_t pdpte_fa = pml4e[pml4e_index].address;
         pdpte_fa <<= 12;
-        pdpte_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pdpte_fa);
+        pdpte_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pdpte_fa);
     }
 
     uint64_t pdpte_index = (guest_physical >> 30) & 0x1FF;
@@ -177,7 +177,7 @@ static int8_t hypervisor_ept_del_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
     } else {
         uint64_t pde_fa = pdptes[pdpte_index].address;
         pde_fa <<= 12;
-        pde_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pde_fa);
+        pde_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pde_fa);
     }
 
     uint64_t pde_index = (guest_physical >> 21) & 0x1FF;
@@ -191,7 +191,7 @@ static int8_t hypervisor_ept_del_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
     } else {
         uint64_t pte_fa = pdes[pde_index].address;
         pte_fa <<= 12;
-        pte_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pte_fa);
+        pte_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pte_fa);
     }
 
     uint64_t pte_index = (guest_physical >> 12) & 0x1FF;
@@ -217,7 +217,7 @@ int8_t hypervisor_ept_dump_mapping(hypervisor_vm_t* vm) {
     PRINTLOG(HYPERVISOR, LOG_ERROR, "==================");
 
     uint64_t ept_base_fa = vm->ept_pml4_base;
-    uint64_t ept_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ept_base_fa);
+    uint64_t ept_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, ept_base_fa);
 
     hypervisor_ept_pml4e_t* pml4e = (hypervisor_ept_pml4e_t*)ept_base_va;
 
@@ -229,7 +229,7 @@ int8_t hypervisor_ept_dump_mapping(hypervisor_vm_t* vm) {
         uint64_t pdpte_fa = pml4e[pml4e_index].address;
         pdpte_fa <<= 12;
 
-        uint64_t pdpte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pdpte_fa);
+        uint64_t pdpte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pdpte_fa);
 
         hypervisor_ept_pdpte_t* pdptes = (hypervisor_ept_pdpte_t*)pdpte_va;
 
@@ -241,7 +241,7 @@ int8_t hypervisor_ept_dump_mapping(hypervisor_vm_t* vm) {
             uint64_t pde_fa = pdptes[pdpte_index].address;
             pde_fa <<= 12;
 
-            uint64_t pde_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pde_fa);
+            uint64_t pde_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pde_fa);
 
             hypervisor_ept_pde_t* pdes           = (hypervisor_ept_pde_t*)pde_va;
             hypervisor_ept_pde_2mib_t* pdes_2mib = (hypervisor_ept_pde_2mib_t*)pde_va;
@@ -263,7 +263,7 @@ int8_t hypervisor_ept_dump_mapping(hypervisor_vm_t* vm) {
                 uint64_t pte_fa = pdes[pde_index].address;
                 pte_fa <<= 12;
 
-                uint64_t pte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pte_fa);
+                uint64_t pte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pte_fa);
 
                 hypervisor_ept_pte_t* ptes = (hypervisor_ept_pte_t*)pte_va;
 
@@ -401,7 +401,7 @@ uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm) {
 }
 
 uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical) {
-    ept_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ept_base);
+    ept_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, ept_base);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "ept_base: 0x%llx, guest_physical: 0x%llx", ept_base, guest_physical);
 
@@ -418,7 +418,7 @@ uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical
     uint64_t pdpte_fa = pml4e[pml4e_index].address;
     pdpte_fa <<= 12;
 
-    uint64_t pdpte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pdpte_fa);
+    uint64_t pdpte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pdpte_fa);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "pdpte_va: 0x%llx", pdpte_va);
 
@@ -435,7 +435,7 @@ uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical
     uint64_t pde_fa = pdptes[pdpte_index].address;
     pde_fa <<= 12;
 
-    uint64_t pde_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pde_fa);
+    uint64_t pde_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pde_fa);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "pde_va: 0x%llx", pde_va);
 
@@ -469,7 +469,7 @@ uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical
     uint64_t pte_fa = pdes[pde_index].address;
     pte_fa <<= 12;
 
-    uint64_t pte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pte_fa);
+    uint64_t pte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, pte_fa);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "pte_va: 0x%llx", pte_va);
 
@@ -540,7 +540,7 @@ static int8_t hypervisor_ept_paging_add_page(hypervisor_vm_t* vm,
                                              uint64_t physical_address, uint64_t virtual_address,
                                              memory_paging_page_type_t type) {
     uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, VMX_GUEST_CR3_BASE_VALUE);
-    uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
+    uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p4_fa);
 
     uint64_t p4_index = MEMORY_PT_GET_P4_INDEX(virtual_address);
 
@@ -568,7 +568,7 @@ static int8_t hypervisor_ept_paging_add_page(hypervisor_vm_t* vm,
         p3_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
     }
 
-    uint64_t p3_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p3_fa);
+    uint64_t p3_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p3_fa);
 
     uint64_t p3_index = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
@@ -596,7 +596,7 @@ static int8_t hypervisor_ept_paging_add_page(hypervisor_vm_t* vm,
         p2_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
     }
 
-    uint64_t p2_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p2_fa);
+    uint64_t p2_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p2_fa);
 
     uint64_t p2_index = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
@@ -624,7 +624,7 @@ static int8_t hypervisor_ept_paging_add_page(hypervisor_vm_t* vm,
         p1_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
     }
 
-    uint64_t p1_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_fa);
+    uint64_t p1_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p1_fa);
 
     uint64_t p1_index = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
@@ -654,7 +654,7 @@ static int8_t hypervisor_ept_paging_add_page(hypervisor_vm_t* vm,
 static int8_t hypervisor_ept_paging_del_page(hypervisor_vm_t* vm,
                                              uint64_t physical_address, uint64_t virtual_address) {
     uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, VMX_GUEST_CR3_BASE_VALUE);
-    uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
+    uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p4_fa);
 
     uint64_t p4_index = MEMORY_PT_GET_P4_INDEX(virtual_address);
 
@@ -671,7 +671,7 @@ static int8_t hypervisor_ept_paging_del_page(hypervisor_vm_t* vm,
         p3_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
     }
 
-    uint64_t p3_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p3_fa);
+    uint64_t p3_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p3_fa);
 
     uint64_t p3_index = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
@@ -688,7 +688,7 @@ static int8_t hypervisor_ept_paging_del_page(hypervisor_vm_t* vm,
         p2_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
     }
 
-    uint64_t p2_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p2_fa);
+    uint64_t p2_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p2_fa);
 
     uint64_t p2_index = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
@@ -705,7 +705,7 @@ static int8_t hypervisor_ept_paging_del_page(hypervisor_vm_t* vm,
         p1_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
     }
 
-    uint64_t p1_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_fa);
+    uint64_t p1_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p1_fa);
 
     uint64_t p1_index = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
@@ -778,7 +778,7 @@ static int8_t hypervisor_ept_paging_del_page(hypervisor_vm_t* vm,
 
 static uint64_t hypervisor_ept_paging_get_guest_physical(hypervisor_vm_t* vm, uint64_t virtual_address) {
     uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, VMX_GUEST_CR3_BASE_VALUE);
-    uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
+    uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p4_fa);
 
     uint64_t p4_index = MEMORY_PT_GET_P4_INDEX(virtual_address);
 
@@ -795,7 +795,7 @@ static uint64_t hypervisor_ept_paging_get_guest_physical(hypervisor_vm_t* vm, ui
         p3_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
     }
 
-    uint64_t p3_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p3_fa);
+    uint64_t p3_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p3_fa);
 
     uint64_t p3_index = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
@@ -812,7 +812,7 @@ static uint64_t hypervisor_ept_paging_get_guest_physical(hypervisor_vm_t* vm, ui
         p2_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
     }
 
-    uint64_t p2_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p2_fa);
+    uint64_t p2_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p2_fa);
 
     uint64_t p2_index = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
@@ -829,7 +829,7 @@ static uint64_t hypervisor_ept_paging_get_guest_physical(hypervisor_vm_t* vm, ui
         p1_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
     }
 
-    uint64_t p1_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_fa);
+    uint64_t p1_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p1_fa);
 
     uint64_t p1_index = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
@@ -850,7 +850,7 @@ int8_t hypervisor_ept_dump_paging_mapping(hypervisor_vm_t* vm) {
     PRINTLOG(HYPERVISOR, LOG_ERROR, "==================");
 
     uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, VMX_GUEST_CR3_BASE_VALUE);
-    uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
+    uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p4_fa);
 
     PRINTLOG(HYPERVISOR, LOG_ERROR, "p4 host fa 0x%016llx", p4_fa);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "==================");
@@ -866,7 +866,7 @@ int8_t hypervisor_ept_dump_paging_mapping(hypervisor_vm_t* vm) {
         p3_fa <<= 12;
         p3_fa   = hypervisor_ept_guest_to_host_ensured(vm, p3_fa);
 
-        uint64_t p3_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p3_fa);
+        uint64_t p3_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p3_fa);
 
         memory_page_table_t* p3 = (memory_page_table_t*)p3_va;
 
@@ -879,7 +879,7 @@ int8_t hypervisor_ept_dump_paging_mapping(hypervisor_vm_t* vm) {
             p2_fa <<= 12;
             p2_fa   = hypervisor_ept_guest_to_host_ensured(vm, p2_fa);
 
-            uint64_t p2_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p2_fa);
+            uint64_t p2_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p2_fa);
 
             memory_page_table_t* p2 = (memory_page_table_t*)p2_va;
 
@@ -892,7 +892,7 @@ int8_t hypervisor_ept_dump_paging_mapping(hypervisor_vm_t* vm) {
                 p1_fa <<= 12;
                 p1_fa   = hypervisor_ept_guest_to_host_ensured(vm, p1_fa);
 
-                uint64_t p1_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_fa);
+                uint64_t p1_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p1_fa);
 
                 memory_page_table_t* p1 = (memory_page_table_t*)p1_va;
 
@@ -954,7 +954,7 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
     uint64_t ept_pml4e_base = vm->ept_pml4_base;
 
     uint64_t gdt_fa = hypervisor_ept_guest_to_host(ept_pml4e_base, VMX_GUEST_GDTR_BASE_VALUE);
-    uint64_t gdt_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(gdt_fa);
+    uint64_t gdt_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, gdt_fa);
 
     memory_paging_add_page(gdt_va, gdt_fa, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
@@ -1074,7 +1074,7 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
 
         frame_t got_frame = {.frame_address = old_got_physical_address, .frame_count = old_got_page_count};
 
-        uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_frame.frame_address);
+        uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, got_frame.frame_address);
 
         memory_memclean((void*)frame_va, FRAME_SIZE * got_frame.frame_count);
 
@@ -1145,7 +1145,7 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "metadata virtual address: 0x%llx", metadata_virtual_address);
 
-    linker_metadata_at_memory_t* metadata = (linker_metadata_at_memory_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(metadata_virtual_address);
+    linker_metadata_at_memory_t* metadata = (linker_metadata_at_memory_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, metadata_virtual_address);
     metadata++;
 
     while(true) {
@@ -1255,7 +1255,7 @@ uint64_t hypervisor_ept_page_fault_handler(uint64_t registers, uint64_t error_co
 
             list_list_insert(vm->ept_frames, new_section_frame);
 
-            uint64_t old_section_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(res_md->section.physical_start);
+            uint64_t old_section_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, res_md->section.physical_start);
 
             memory_memcopy((void*)old_section_va, (void*)frame_va, section_size);
 
@@ -1295,7 +1295,7 @@ uint64_t hypervisor_ept_page_fault_handler(uint64_t registers, uint64_t error_co
         if(cpu_get_type() == CPU_TYPE_INTEL) {
             guest_rip = vmx_read(VMX_GUEST_RIP);
         } else {
-            svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+            svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vm->vmcb_frame_fa);
             guest_rip = vmcb->save_state_area.rip;
         }
 
@@ -1329,7 +1329,7 @@ uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci
 
     uint64_t pci_header_va = (uint64_t)pci_header;
 
-    uint64_t pci_header_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(pci_header_va);
+    uint64_t pci_header_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(HARDWARE, pci_header_va);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "pci header va: 0x%llx, pci header fa: 0x%llx", pci_header_va, pci_header_fa);
 
@@ -1354,7 +1354,7 @@ uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci
         }
 
         if(hypervisor_ept_paging_add_page(vm, frame_address,
-                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(frame_address),
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, frame_address),
                                           MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add new section pages to page table");
             return -1;
@@ -1402,7 +1402,7 @@ uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci
                     }
 
                     if(hypervisor_ept_paging_add_page(vm, frame_address,
-                                                      MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(frame_address),
+                                                      MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, frame_address),
                                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                         PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add new section pages to page table");
                         return -1;

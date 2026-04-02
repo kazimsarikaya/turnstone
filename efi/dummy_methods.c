@@ -52,7 +52,8 @@ typedef struct efi_frame_allocator_context_t {
  * @param[out] alloc_list_size size of allocation list. (ignored)
  * @return 0 on success. error code otherwise.
  */
-static int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size) {
+static int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint32_t proximity_domain, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size) {
+    UNUSED(proximity_domain);
     UNUSED(fa_type);
     UNUSED(alloc_list_size);
 

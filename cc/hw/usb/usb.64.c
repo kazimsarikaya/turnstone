@@ -68,23 +68,12 @@ int8_t usb_init(void) {
 
         PRINTLOG(USB, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
-        frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
-        uint64_t size       = pci_get_bar_size(pci_gen_dev, 0);
+        uint64_t size = pci_get_bar_size(pci_gen_dev, 0);
         PRINTLOG(USB, LOG_TRACE, "bar size 0x%llx", size);
         uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
-        frame_t bar_req_frm  = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+        frame_t bar_req_frm  = {0, bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
-        uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
-
-        if(bar_frames == NULL) {
-            PRINTLOG(USB, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
-
-            if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
-                PRINTLOG(USB, LOG_ERROR, "cannot allocate frame");
-
-                return -1;
-            }
-        }
+        uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, bar_fa);
 
         if(memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(USB, LOG_ERROR, "cannot map bar frames to virtual address");

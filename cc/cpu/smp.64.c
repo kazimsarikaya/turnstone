@@ -397,7 +397,7 @@ static int32_t smp_ap_boot(uint8_t cpu_id) {
     }
 
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booted", cpu_id);
-    uint64_t cr3 = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)user_page_table_context->page_table);
+    uint64_t cr3 = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, (uint64_t)user_page_table_context->page_table);
 
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Jumping to user code code at 0x%llx stack at 0x%llx cr3 at 0x%llx",
              cpu_id, user_code_va, user_stack_va + 16 * 0x1000 - 0x10, cr3);
@@ -456,14 +456,15 @@ int8_t smp_init(void) {
     uint64_t stack_frames_cnt = 16 * (ap_cpu_count + 1);
     uint64_t stack_size       = 16 * FRAME_SIZE;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt,
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 0,
+                                                      stack_frames_cnt,
                                                       FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
                                                       &stack_frames, NULL) != 0) {
         PRINTLOG(APIC, LOG_ERROR, "SMP: Failed to allocate stack frames");
         return -1;
     }
 
-    uint64_t stack_frames_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
+    uint64_t stack_frames_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, stack_frames->frame_address);
 
     if(memory_paging_add_va_for_frame(stack_frames_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
         PRINTLOG(APIC, LOG_ERROR, "SMP: Failed to map stack frames");
@@ -482,7 +483,7 @@ int8_t smp_init(void) {
     smp_data->stack_base        = stack_frames_va;
     smp_data->stack_size        = stack_size;
     smp_data->cr0               = cpu_read_cr0();
-    smp_data->cr3               = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(memory_paging_get_table()->page_table);
+    smp_data->cr3               = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, memory_paging_get_table()->page_table);
     smp_data->cr4               = cpu_read_cr4();
     smp_data->lock              = lock_create_with_heap(memory_get_default_heap());
     smp_data->running_cpu_count = 1; // we are already running on one cpu, so start with 1.

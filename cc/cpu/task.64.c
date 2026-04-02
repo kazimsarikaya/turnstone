@@ -337,7 +337,7 @@ static void task_cleanup_task(task_t* task) {
 
     if(!task->is_stack_protected) {
         uint64_t stack_va = (uint64_t)task->stack;
-        uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
+        uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, stack_va);
 
         uint64_t stack_size       = task->stack_size;
         uint64_t stack_frames_cnt = stack_size / FRAME_SIZE;
@@ -367,7 +367,7 @@ static void task_cleanup_task(task_t* task) {
 
     if(task->heap != memory_get_default_heap() && task->heap != task_map_heap) {
         uint64_t heap_va = (uint64_t)task->heap;
-        uint64_t heap_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(heap_va);
+        uint64_t heap_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, heap_va);
 
         uint64_t heap_size       = task->heap_size;
         uint64_t heap_frames_cnt = heap_size / FRAME_SIZE;
@@ -405,7 +405,7 @@ static void task_cleanup_task(task_t* task) {
                 uint64_t frm_va = frm->frame_address;
 
                 if(frm->type == FRAME_TYPE_RESERVED) {
-                    frm_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(frm_va);
+                    frm_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, frm_va);
                 }
 
                 uint64_t frm_count = frm->frame_count;
@@ -831,6 +831,9 @@ uint64_t task_create_task_internal(task_create_task_args_t args) {
         args.proximity_domain_hint = -1U;
     }
 
+    PRINTLOG(TASKING, LOG_INFO, "creating task %s with cpu id hint 0x%x and proximity domain hint 0x%x",
+             args.task_name, args.cpu_id_hint, args.proximity_domain_hint);
+
     if(args.cpu_id_hint != -1U) {
         if(selected_proximity_domain_id != -1U) {
             if(SYSTEM_INFO->cpu_proximity_domain_array[args.cpu_id_hint] != selected_proximity_domain_id) {
@@ -890,7 +893,7 @@ uint64_t task_create_task_internal(task_create_task_args_t args) {
     uint64_t stack_frames_cnt = (args.stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
     args.stack_size = stack_frames_cnt * FRAME_SIZE;
 
-    if(fa->allocate_frame_by_count(fa, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, selected_proximity_domain_id, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
         memory_free_ext(heap, new_task);
         memory_free_ext(heap, registers);
@@ -902,7 +905,7 @@ uint64_t task_create_task_internal(task_create_task_args_t args) {
     uint64_t heap_frames_cnt = (args.heap_size + FRAME_SIZE - 1) / FRAME_SIZE;
     args.heap_size = heap_frames_cnt * FRAME_SIZE;
 
-    if(fa->allocate_frame_by_count(fa, heap_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &heap_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, selected_proximity_domain_id, heap_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &heap_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate heap with frame count 0x%llx", heap_frames_cnt);
 
         if(fa->release_frame(fa, stack_frames) != 0) {
@@ -917,7 +920,7 @@ uint64_t task_create_task_internal(task_create_task_args_t args) {
         return -1;
     }
 
-    uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
+    uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, stack_frames->frame_address);
 
     if(memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_va, stack_frames->frame_address, stack_frames->frame_count);
@@ -927,7 +930,7 @@ uint64_t task_create_task_internal(task_create_task_args_t args) {
 
     memory_memclean((void*)stack_va, args.stack_size);
 
-    uint64_t heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(heap_frames->frame_address);
+    uint64_t heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, heap_frames->frame_address);
 
     if(memory_paging_add_va_for_frame(heap_va, heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot add heap va 0x%llx for frame at 0x%llx with count 0x%llx", heap_va, heap_frames->frame_address, heap_frames->frame_count);
@@ -971,7 +974,7 @@ uint64_t task_create_task_internal(task_create_task_args_t args) {
     registers->rflags = 0x002;
 
     uint64_t cr3_fa = (uint64_t)new_task->page_table->page_table;
-    cr3_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(cr3_fa);
+    cr3_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, cr3_fa);
 
     registers->cr3 = cr3_fa;
 
@@ -1087,7 +1090,7 @@ static int8_t task_create_idle_task(void) {
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
     stack_size = stack_frames_cnt * FRAME_SIZE;
 
-    if(fa->allocate_frame_by_count(fa, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, cpu_state->proximity_domain, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
         memory_free_ext(heap, new_task);
         memory_free_ext(heap, registers);
@@ -1095,7 +1098,7 @@ static int8_t task_create_idle_task(void) {
         return -1;
     }
 
-    uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
+    uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, stack_frames->frame_address);
 
     if(memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_va, stack_frames->frame_address, stack_frames->frame_count);
@@ -1122,7 +1125,7 @@ static int8_t task_create_idle_task(void) {
     registers->rflags = 0x002;
 
     uint64_t cr3_fa = (uint64_t)new_task->page_table->page_table;
-    cr3_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(cr3_fa);
+    cr3_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, cr3_fa);
 
     registers->cr3 = cr3_fa;
 
@@ -1189,7 +1192,7 @@ static int8_t task_create_cleaner_task(void) {
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
     stack_size = stack_frames_cnt * FRAME_SIZE;
 
-    if(fa->allocate_frame_by_count(fa, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, cpu_state->proximity_domain, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
         memory_free_ext(heap, new_task);
         memory_free_ext(heap, registers);
@@ -1197,7 +1200,7 @@ static int8_t task_create_cleaner_task(void) {
         return -1;
     }
 
-    uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
+    uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, stack_frames->frame_address);
 
     if(memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_va, stack_frames->frame_address, stack_frames->frame_count);
@@ -1224,7 +1227,7 @@ static int8_t task_create_cleaner_task(void) {
     registers->rflags = 0x002;
 
     uint64_t cr3_fa = (uint64_t)new_task->page_table->page_table;
-    cr3_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(cr3_fa);
+    cr3_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, cr3_fa);
 
     registers->cr3 = cr3_fa;
 
@@ -1395,20 +1398,21 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     frame_t* stack_frames = NULL;
 
-    if(fa->allocate_frame_by_count(fa, frame_count, FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, cpu_state->proximity_domain,
+                                   frame_count, FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 0x%llx", frame_count);
 
         return -1;
     }
 
-    uint64_t stack_bottom = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
+    uint64_t stack_bottom = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, stack_frames->frame_address);
 
     uint64_t tss_size = sizeof(tss_t);
     tss_size += 0x1000 - (tss_size % 0x1000);
 
     frame_t* tss_fa = NULL;
 
-    if(fa->allocate_frame_by_count(fa,
+    if(fa->allocate_frame_by_count(fa, cpu_state->proximity_domain,
                                    tss_size / FRAME_SIZE,
                                    FRAME_ALLOCATION_TYPE_BLOCK,
                                    &tss_fa, NULL) != 0) {
@@ -1417,7 +1421,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         return -1;
     }
 
-    uint64_t tss_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tss_fa->frame_address);
+    uint64_t tss_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, tss_fa->frame_address);
 
     if(memory_paging_add_va_for_frame(tss_va, tss_fa, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot add va for tss frame");
@@ -1471,13 +1475,15 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     for(uint32_t i = 0; i < cpu_count; i++) {
         frame_t* task_related_heap_frames = NULL;
 
-        if(fa->allocate_frame_by_count(fa, 0x1000, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &task_related_heap_frames, NULL) != 0) {
+        if(fa->allocate_frame_by_count(fa, SYSTEM_INFO->cpu_proximity_domain_array[i],
+                                       0x1000, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                       &task_related_heap_frames, NULL) != 0) {
             PRINTLOG(TASKING, LOG_FATAL, "cannot allocate task related heap frames of count 0x200");
 
             return -1;
         }
 
-        uint64_t task_related_heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(task_related_heap_frames->frame_address);
+        uint64_t task_related_heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, task_related_heap_frames->frame_address);
 
         if(memory_paging_add_va_for_frame(task_related_heap_va, task_related_heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(TASKING, LOG_FATAL, "cannot add task related heap va 0x%llx for frame at 0x%llx with count 0x%llx", task_related_heap_va, task_related_heap_frames->frame_address, task_related_heap_frames->frame_count);
@@ -1542,13 +1548,15 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     {
         frame_t* task_related_heap_frames = NULL;
 
-        if(fa->allocate_frame_by_count(fa, 0x1000, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &task_related_heap_frames, NULL) != 0) {
+        if(fa->allocate_frame_by_count(fa, cpu_state->proximity_domain,
+                                       0x1000, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                       &task_related_heap_frames, NULL) != 0) {
             PRINTLOG(TASKING, LOG_FATAL, "cannot allocate task related heap frames of count 0x200");
 
             return -1;
         }
 
-        uint64_t task_related_heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(task_related_heap_frames->frame_address);
+        uint64_t task_related_heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, task_related_heap_frames->frame_address);
 
         if(memory_paging_add_va_for_frame(task_related_heap_va, task_related_heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(TASKING, LOG_FATAL, "cannot add task related heap va 0x%llx for frame at 0x%llx with count 0x%llx", task_related_heap_va, task_related_heap_frames->frame_address, task_related_heap_frames->frame_count);
@@ -1679,8 +1687,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     memory_set_current_task_getter(&task_get_current_task);
 
-    lock_get_current_task_getter = &task_get_current_task;
-    lock_task_yielder            = &task_yield;
+    lock_get_current_task_getter = task_get_current_task;
+    lock_task_yielder            = task_yield;
 
     stdbufs_task_get_input_buffer  = &task_get_input_buffer;
     stdbufs_task_get_output_buffer = &task_get_output_buffer;

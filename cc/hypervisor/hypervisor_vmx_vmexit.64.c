@@ -260,7 +260,7 @@ static void hypervisor_vmcs_io_fast_string_printf_io(vmx_vmcs_vmexit_info_t* vme
     hypervisor_vm_t * vm = vmexit_info->vm;
 
     uint64_t data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, rsi);
-    uint64_t data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+    uint64_t data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, data_ptr_fa);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE,
              "IO Instruction String: port 0x%llx size: 0x%llx, rsi 0x%llx, data ptr fa 0x%llx va 0x%llx",
@@ -338,10 +338,10 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmx_vmcs_vmexit_info_t* v
     if(is_string) {
         if(direction == 0) { // out from rsi
             data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rsi);
-            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, data_ptr_fa);
         } else {
             data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rdi);
-            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, data_ptr_fa);
         }
 
 
@@ -459,7 +459,7 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmx_vmcs_vmexit_info_t* v
 
 static void hypervisor_vapic_set_irr(hypervisor_vm_t* vm, uint32_t vector, boolean_t clear) {
     uint64_t vapic_fa = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC].frame_address;
-    uint64_t vapic_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vapic_fa);
+    uint64_t vapic_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vapic_fa);
     uint8_t* vapic    = (uint8_t*)vapic_va;
 
     uint32_t bit_pos  = vector & 0x1F;
@@ -480,7 +480,7 @@ static void hypervisor_vapic_set_irr(hypervisor_vm_t* vm, uint32_t vector, boole
 
 static void hypervisor_vapic_set_isr(hypervisor_vm_t* vm, uint32_t vector, boolean_t clear) {
     uint64_t vapic_fa = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC].frame_address;
-    uint64_t vapic_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vapic_fa);
+    uint64_t vapic_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, vapic_fa);
     uint8_t* vapic    = (uint8_t*)vapic_va;
 
     uint32_t bit_pos  = vector & 0x1F;

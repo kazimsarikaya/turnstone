@@ -1430,20 +1430,10 @@ int8_t tpm2_init(void) {
 
     PRINTLOG(TPM, LOG_DEBUG, "tpm2 device memory range base 0x%llx size 0x%llx", tpm2_base, tpm2_size);
 
-    frame_t* tpm2_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*) tpm2_base);
-
     uint64_t tpm2_frm_cnt = (tpm2_size + FRAME_SIZE - 1) / FRAME_SIZE;
-    frame_t tpm2_req_frm  = {tpm2_base, tpm2_frm_cnt, FRAME_TYPE_RESERVED, 0};
+    frame_t tpm2_req_frm  = {0, tpm2_base, tpm2_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
-    uint64_t tpm2_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tpm2_base);
-
-    if(tpm2_frames == NULL) {
-        if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &tpm2_req_frm) != 0) {
-            PRINTLOG(TPM, LOG_ERROR, "cannot allocate frame");
-
-            return -1;
-        }
-    }
+    uint64_t tpm2_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, tpm2_base);
 
     if(memory_paging_add_va_for_frame(tpm2_base_va, &tpm2_req_frm,
                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC |

@@ -1615,6 +1615,7 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
     sysinfo->gs_page_address_base          = (64ULL << 40) | gs_page_address_base;
     sysinfo->gs_page_size                  = 4 * cpu_count * FRAME_SIZE;
     sysinfo->cpu_count                     = cpu_count;
+    sysinfo->proximity_domain_count        = max_proximity_domain + 1;
 
     memory_page_table_context_t* page_table_ctx = (memory_page_table_context_t*)program_header->page_table_context_address;
 
@@ -1676,7 +1677,7 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
         frm.frame_address = (uint64_t)vfb->physical_base_address;
         frm.frame_count   = (vfb->buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
-        vfb->virtual_base_address = (64ULL << 40) | (uint64_t)vfb->virtual_base_address;
+        vfb->virtual_base_address = 0xFFFF800000000000ULL | (uint64_t)vfb->virtual_base_address;
 
         if(memory_paging_add_va_for_frame_ext(page_table_ctx, vfb->virtual_base_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(EFI, LOG_ERROR, "cannot add video frame buffer to page table");

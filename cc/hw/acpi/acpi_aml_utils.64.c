@@ -142,7 +142,7 @@ static uint64_t acpi_aml_get_device_pci_address_internal(acpi_aml_parser_context
     for(size_t i = 0; i < ACPI_MCFG_PCI_SEGMENT_GROUP_CONFIG_COUNT(mcfg); i++) {
         if(mcfg->pci_segment_group_configs[i].group_number == seg) {
             uint64_t pci_base_address = mcfg->pci_segment_group_configs[i].base_address;
-            pci_base_address = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_base_address);
+            pci_base_address = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, pci_base_address);
             int64_t adr = 0;
 
             // not every pci root device has _ADR, but if it has _ADR we can use it to get bus number and device/function number.
@@ -523,7 +523,7 @@ static int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, i
     uint8_t* memva = NULL;
 
     if(obj->field.related_object->type == ACPI_AML_OT_OPREGION) {
-        memva = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(obj->field.related_object->opregion.region_offset);
+        memva = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, obj->field.related_object->opregion.region_offset);
     } else if(obj->field.related_object->type == ACPI_AML_OT_BUFFER) {
         memva = obj->field.related_object->buffer.buf;
     } else if(obj->field.related_object->type == ACPI_AML_OT_STRING) {
@@ -833,7 +833,7 @@ static int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, co
     uint8_t* memva = NULL;
 
     if(obj->field.related_object->type == ACPI_AML_OT_OPREGION) {
-        memva = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(obj->field.related_object->opregion.region_offset);
+        memva = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, obj->field.related_object->opregion.region_offset);
     } else if(obj->field.related_object->type == ACPI_AML_OT_BUFFER) {
         memva = obj->field.related_object->buffer.buf;
     } else if(obj->field.related_object->type == ACPI_AML_OT_STRING) {

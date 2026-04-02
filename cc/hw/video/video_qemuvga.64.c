@@ -40,7 +40,7 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
     stdbufs_set_postphone_flush(true);
 
     uint64_t fb_bar_addr_fa = pci_get_bar_address(pci_dev, 0);
-    uint64_t fb_bar_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fb_bar_addr_fa);
+    uint64_t fb_bar_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, fb_bar_addr_fa);
     uint64_t fb_bar_size    = pci_get_bar_size(pci_dev, 0);
     uint64_t fb_bar_frm_cnt = (fb_bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
@@ -70,7 +70,7 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
     video_release_lock();
 
     uint64_t mmio_bar_addr_fa = pci_get_bar_address(pci_dev, 2);
-    uint64_t mmio_bar_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(mmio_bar_addr_fa);
+    uint64_t mmio_bar_addr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, mmio_bar_addr_fa);
     uint64_t mmio_bar_size    = pci_get_bar_size(pci_dev, 2);
     uint64_t mmio_bar_frm_cnt = (mmio_bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
@@ -89,8 +89,7 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
 
     if(memory_paging_add_va_for_frame(mmio_bar_addr_va, &mmio_bar_frm,
                                       MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                      MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE |
-                                      MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH) != 0) {
+                                      MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) != 0) {
         PRINTLOG(VIDEO, LOG_ERROR, "Failed to map QEMU VGA MMIO BAR to virtual address");
         return -1;
     }

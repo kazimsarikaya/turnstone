@@ -18,6 +18,7 @@
 #include <acpi/aml.h>
 #include <cpu/interrupt.h>
 #include <cpu.h>
+#include <cpu/cpu_state.h>
 #include <apic.h>
 #include <utils.h>
 #include <cpu/task.h>
@@ -96,6 +97,11 @@ static int8_t network_igb_process_tx(void) {
     for(uint64_t dev_idx = 0; dev_idx < list_size(igb_net_devs); dev_idx++) {
         network_igb_dev_t* dev = (network_igb_dev_t*)list_get_data_at_position(igb_net_devs, dev_idx);
 
+        cpu_cli();
+        pci_msix_update_lapic((pci_generic_device_t*)dev->pci_netdev->pci_header, dev->msix_cap, 1);
+        pci_msix_clear_pending_bit((pci_generic_device_t*)dev->pci_netdev->pci_header, dev->msix_cap, 1);
+        cpu_sti();
+
         dev->return_queue = list_create_queue_with_heap(NULL);
         task_add_message_queue(dev->return_queue);
 
@@ -121,7 +127,10 @@ static int8_t network_igb_process_tx(void) {
         args[0] = (void*)dev->mac;
         args[1] = dev->return_queue;
 
-        task_create_task(dhcp_task_name, network_dhcpv4_send_discover, 2, args, 2 << 20, 64 << 10);
+        task_create_task(dhcp_task_name, network_dhcpv4_send_discover,
+                         2, args,
+                         2 << 20, 64 << 10,
+                         .proximity_domain_hint = cpu_state->proximity_domain);
         memory_free(dhcp_task_name);
     }
 
@@ -149,7 +158,7 @@ static int8_t network_igb_process_tx(void) {
 
                     // then transmit
 
-                    uint8_t* buffer = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dev->tx_desc[dev->tx_tail].transmit.read.buffer_addr);
+                    uint8_t* buffer = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, dev->tx_desc[dev->tx_tail].transmit.read.buffer_addr);
 
                     memory_memcopy(packet->packet_data, buffer, packet->packet_len);
 
@@ -195,7 +204,9 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
 
     frame_t* rx_packet_buffer_frames;
 
-    if(fa->allocate_frame_by_count(fa, packet_buffer_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &rx_packet_buffer_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, dev->pci_netdev->proximity_domain,
+                                   packet_buffer_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                   &rx_packet_buffer_frames, NULL) != 0) {
         PRINTLOG(IGB, LOG_ERROR, "cannot allocate frames for rx packet buffer");
 
         return -1;
@@ -204,7 +215,7 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
     rx_packet_buffer_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 
     uint64_t rx_packet_buffer_fa = rx_packet_buffer_frames->frame_address;
-    uint64_t rx_packet_buffer_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(rx_packet_buffer_fa);
+    uint64_t rx_packet_buffer_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, rx_packet_buffer_fa);
     if(memory_paging_add_va_for_frame(rx_packet_buffer_va, rx_packet_buffer_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(IGB, LOG_ERROR, "cannot map rx packet buffer frames");
 
@@ -224,7 +235,9 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
 
     frame_t* rx_header_buffer_frames;
 
-    if(fa->allocate_frame_by_count(fa, header_buffer_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &rx_header_buffer_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, dev->pci_netdev->proximity_domain,
+                                   header_buffer_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                   &rx_header_buffer_frames, NULL) != 0) {
         PRINTLOG(IGB, LOG_ERROR, "cannot allocate frames for rx header buffer");
 
         fa->release_frame(fa, rx_packet_buffer_frames);
@@ -235,7 +248,7 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
     rx_header_buffer_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 
     uint64_t rx_header_buffer_fa = rx_header_buffer_frames->frame_address;
-    uint64_t rx_header_buffer_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(rx_header_buffer_frames->frame_address);
+    uint64_t rx_header_buffer_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, rx_header_buffer_frames->frame_address);
     if(memory_paging_add_va_for_frame(rx_header_buffer_va, rx_header_buffer_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(IGB, LOG_ERROR, "cannot map rx header buffer frames");
 
@@ -255,7 +268,9 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
 
     frame_t* queue_meta_frames;
 
-    if(fa->allocate_frame_by_count(fa, queue_meta_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_meta_frames, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, dev->pci_netdev->proximity_domain,
+                                   queue_meta_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                   &queue_meta_frames, NULL) != 0) {
         PRINTLOG(IGB, LOG_ERROR, "cannot allocate frames for rx queue meta");
 
         fa->release_frame(fa, rx_header_buffer_frames);
@@ -268,7 +283,7 @@ static int8_t network_igb_rx_init(network_igb_dev_t* dev) {
 
 
     uint64_t queue_meta_fa = queue_meta_frames->frame_address;
-    uint64_t queue_meta_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_meta_frames->frame_address);
+    uint64_t queue_meta_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, queue_meta_frames->frame_address);
     if(memory_paging_add_va_for_frame(queue_meta_va, queue_meta_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(IGB, LOG_ERROR, "cannot map rx queue meta frames");
 
@@ -328,8 +343,14 @@ static int8_t network_igb_tx_init(network_igb_dev_t* dev) {
 
     PRINTLOG(IGB, LOG_TRACE, "tx queue size 0x%llx queue frm count 0x%llx meta frm count 0x%llx", queue_size, queue_frm_cnt, queue_meta_frm_cnt);
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), queue_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_frames, NULL) != 0 ||
-       frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), queue_meta_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_meta_frames, NULL) != 0) {
+    frame_allocator_t* fa = frame_get_allocator();
+
+    if(fa->allocate_frame_by_count(fa, dev->pci_netdev->proximity_domain,
+                                   queue_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                   &queue_frames, NULL) != 0 ||
+       fa->allocate_frame_by_count(fa, dev->pci_netdev->proximity_domain,
+                                   queue_meta_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                   &queue_meta_frames, NULL) != 0) {
         PRINTLOG(IGB, LOG_ERROR, "cannot allocate frames for tx queue");
 
         return -1;
@@ -339,7 +360,7 @@ static int8_t network_igb_tx_init(network_igb_dev_t* dev) {
     queue_meta_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 
     uint64_t queue_fa = queue_frames->frame_address;
-    uint64_t queue_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_frames->frame_address);
+    uint64_t queue_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, queue_frames->frame_address);
     if(memory_paging_add_va_for_frame(queue_va, queue_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(IGB, LOG_ERROR, "cannot map tx queue frames");
 
@@ -350,7 +371,7 @@ static int8_t network_igb_tx_init(network_igb_dev_t* dev) {
     }
 
     uint64_t queue_meta_fa = queue_meta_frames->frame_address;
-    uint64_t queue_meta_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_meta_frames->frame_address);
+    uint64_t queue_meta_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, queue_meta_frames->frame_address);
     if(memory_paging_add_va_for_frame(queue_meta_va, queue_meta_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(IGB, LOG_ERROR, "cannot map tx queue meta frames");
 
@@ -420,16 +441,15 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
         return -1;
     }
 
-    while(!dev->return_queue) {
-        task_yield();
-    }
-
-
     cpu_cli();
     pci_msix_update_lapic((pci_generic_device_t*)dev->pci_netdev->pci_header, dev->msix_cap, 0);
     pci_msix_clear_pending_bit((pci_generic_device_t*)dev->pci_netdev->pci_header, dev->msix_cap, 0);
     task_set_interruptible();
     cpu_sti();
+
+    while(!dev->return_queue) {
+        task_yield();
+    }
 
     while(true) {
         boolean_t notify_network_rx = true;
@@ -474,7 +494,7 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
                     // send the packet to higher layers for parsing
                     PRINTLOG(IGB, LOG_TRACE, "packet received with len 0x%x", pktlen);
 
-                    pkt = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pkt);
+                    pkt = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, pkt);
 
                     network_received_packet_t* packet = memory_malloc_ext(list_get_heap(network_received_packets), sizeof(network_received_packet_t), 0);
 
@@ -718,31 +738,15 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
 
         PRINTLOG(IGB, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
-        frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
-        uint64_t size       = pci_get_bar_size(pci_dev, 0);
+        uint64_t size = pci_get_bar_size(pci_dev, 0);
         PRINTLOG(IGB, LOG_TRACE, "bar size 0x%llx", size);
         uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
-        frame_t bar_req_frm  = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+        frame_t bar_req_frm  = {pci_netdev->proximity_domain, bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
-        bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
-
-        if(bar_frames == NULL) {
-            PRINTLOG(IGB, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
-
-            if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
-                PRINTLOG(IGB, LOG_ERROR, "cannot allocate frame");
-                memory_free(dev);
-
-                return NULL;
-            }
-        }
+        bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, bar_fa);
 
         if(memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(IGB, LOG_ERROR, "cannot map bar frames");
-
-            if(bar_frames == NULL) {
-                frame_get_allocator()->release_frame(frame_get_allocator(), &bar_req_frm);
-            }
 
             memory_free(dev);
 
@@ -781,7 +785,8 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
 
     uint8_t* mac_tmp = (uint8_t*)&dev->mac;
 
-    PRINTLOG(IGB, LOG_TRACE, "device has mac %02x:%02x:%02x:%02x:%02x:%02x", mac_tmp[0], mac_tmp[1], mac_tmp[2], mac_tmp[3], mac_tmp[4], mac_tmp[5]);
+    PRINTLOG(IGB, LOG_TRACE, "device has mac %02x:%02x:%02x:%02x:%02x:%02x",
+             mac_tmp[0], mac_tmp[1], mac_tmp[2], mac_tmp[3], mac_tmp[4], mac_tmp[5]);
 
     dev->mtu = network_igb_get_mtu(dev);
 
@@ -835,6 +840,8 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
 
     list_list_insert(igb_net_devs, dev);
 
+    PRINTLOG(IGB, LOG_INFO, "device proximity domain 0x%x", pci_netdev->proximity_domain);
+
     void** rx_args = memory_malloc(sizeof(void*) * 1);
 
     if(rx_args == NULL) {
@@ -849,12 +856,19 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
                                      dev->mac[0], dev->mac[1], dev->mac[2],
                                      dev->mac[3], dev->mac[4], dev->mac[5]);
 
-    uint64_t rx_task_id = task_create_task(rx_task_name, network_igb_process_rx, 1, rx_args, 2 << 20, 64 << 10);
+    uint64_t rx_task_id = task_create_task(rx_task_name, network_igb_process_rx,
+                                           1, rx_args,
+                                           2 << 20, 64 << 10,
+                                           .proximity_domain_hint = pci_netdev->proximity_domain);
+
     dev->rx_task_id = rx_task_id;
     memory_free(rx_task_name);
 
+    // FIXME: this should be device specific and not global
+    uint64_t tx_task_id = task_create_task("igb-tx", network_igb_process_tx,
+                                           .heap_size             = 2 << 20, 64 << 10,
+                                           .proximity_domain_hint = pci_netdev->proximity_domain);
 
-    uint64_t tx_task_id = task_create_task("igb-tx", network_igb_process_tx, .heap_size = 2 << 20, 64 << 10);
     dev->tx_task_id = tx_task_id;
 
     PRINTLOG(IGB, LOG_INFO, "device initialized");

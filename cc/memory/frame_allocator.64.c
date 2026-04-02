@@ -122,7 +122,7 @@ static int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
 
     while(rem_frm_cnt) {
 
-        frame_t search_frm = {rem_frm_start, 1, 0, 0};
+        frame_t search_frm = {0, rem_frm_start, 1, 0, 0};
 
         frame_t* frm = (frame_t*)ctx->reserved_frames_by_address->find(ctx->reserved_frames_by_address, &search_frm);
 
@@ -132,10 +132,13 @@ static int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
 
         if(frm->frame_address <= rem_frm_start && rem_frm_cnt <= frm->frame_count) {
             lock_release(ctx->lock);
-            PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "frame inside reserved area");
+            PRINTLOG(FRAMEALLOCATOR, LOG_INFO, "frame inside reserved area");
 
             return 0;
         }
+
+        PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "found reserved frame 0x%llx with count 0x%llx", frm->frame_address, frm->frame_count);
+        PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "remaining frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
 
         uint64_t frm_alloc_cnt = (rem_frm_start - frm->frame_address) / FRAME_SIZE;
         frm_alloc_cnt = frm->frame_count - frm_alloc_cnt;
@@ -148,7 +151,7 @@ static int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
     while(rem_frm_cnt) {
         PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "remaining frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
 
-        frame_t search_frm = {rem_frm_start, 1, 0, 0};
+        frame_t search_frm = {0, rem_frm_start, 1, 0, 0};
 
         frame_t* frm = (frame_t*)ctx->free_frames_by_address->find(ctx->free_frames_by_address, &search_frm);
 
@@ -163,19 +166,28 @@ static int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
             new_r_frm->frame_address = rem_frm_start;
             new_r_frm->frame_count   = rem_frm_cnt;
             new_r_frm->type          = FRAME_TYPE_RESERVED;
-            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_r_frm, new_r_frm, NULL);
+
+            frame_t* old_frame = NULL;
+
+            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_r_frm, new_r_frm, (void**)&old_frame);
 
             PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "no used frame found, inserted into reserveds, frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
+
+            if(old_frame) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "old frame 0x%llx with count 0x%llx and type 0x%x", old_frame->frame_address, old_frame->frame_count, old_frame->type);
+
+                memory_free_ext(ctx->heap, old_frame);
+            }
 
             break;
         }
 
-        PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "area inside free frames, frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
+        PRINTLOG(FRAMEALLOCATOR, LOG_WARNING, "area inside free frames, frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
 
         uint64_t frm_alloc_cnt = (rem_frm_start - frm->frame_address) / FRAME_SIZE;
         frm_alloc_cnt = frm->frame_count - frm_alloc_cnt;
 
-        frame_t new_frm = {rem_frm_start, 0, FRAME_TYPE_RESERVED, 0};
+        frame_t new_frm = {0, rem_frm_start, 0, FRAME_TYPE_RESERVED, 0};
 
         if(frm_alloc_cnt < rem_frm_cnt) {
             new_frm.frame_count = frm_alloc_cnt;
@@ -196,7 +208,9 @@ static int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
 }
 
 
-static int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size) {
+static int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint32_t proximity_domain, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size) {
+    // TODO: use it.
+    UNUSED(proximity_domain);
     frame_allocator_context_t* ctx = (frame_allocator_context_t*)self->context;
 
     PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "allocating frame by count 0x%llx with type 0x%x", count, fa_type);
@@ -838,7 +852,7 @@ static frame_t* fa_get_reserved_frames_of_address(frame_allocator_t* self, void*
 
     frame_allocator_context_t* ctx = self->context;
 
-    frame_t f = {((((uint64_t)address) >> 12) << 12), 1, 0, 0};
+    frame_t f = {0, ((((uint64_t)address) >> 12) << 12), 1, 0, 0};
 
     frame_t* res = (frame_t*)ctx->reserved_frames_by_address->find(ctx->reserved_frames_by_address, &f);
 
@@ -850,7 +864,6 @@ static frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type){
     case EFI_LOADER_CODE:
     case EFI_LOADER_DATA:
     case EFI_CONVENTIONAL_MEMORY:
-        return FRAME_TYPE_FREE;
         return FRAME_TYPE_FREE;
     case EFI_BOOT_SERVICES_CODE:
     case EFI_RUNTIME_SERVICES_CODE:
@@ -1006,6 +1019,10 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
     frame_type_t current_type          = fa_get_fa_type(mem_desc_current.type);
     frame_type_t current_original_type = mem_desc_current.type;
 
+    PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "start 0x%llx count 0x%llx type %i -> %s",
+             current_frame_start, current_frame_count,
+             mem_desc_current.type, fa_frame_type_names[current_type]);
+
 #define LOWER_2MB (2 << 20)
 
     if(current_frame_start < LOWER_2MB && current_type == FRAME_TYPE_FREE) {
@@ -1052,6 +1069,10 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
         frame_type_t new_type          = fa_get_fa_type(mem_desc_next.type);
         frame_type_t new_original_type = mem_desc_next.type;
 
+        PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "start 0x%llx count 0x%llx type %i -> %s",
+                 new_frame_start, new_frame_count,
+                 mem_desc_next.type, fa_frame_type_names[new_type]);
+
         if(new_frame_start < LOWER_2MB && new_type == FRAME_TYPE_FREE) {
             new_type = FRAME_TYPE_UNDER_2M_RESERVED;
 
@@ -1090,6 +1111,14 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
         }
     }
 
+    // last one:
+    if(fa_add_mem_desc(ctx, current_frame_start, current_frame_count, current_type, current_frame_attr) != 0) {
+        PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "failed to add memory descriptor to frame allocator. physical start 0x%llx, page count 0x%llx, attribute 0x%llx type 0x%x",
+                 current_frame_start, current_frame_count, current_frame_attr, current_type);
+
+        return NULL;
+    }
+
     fa->context                        = ctx;
     fa->allocate_frame_by_count        = fa_allocate_frame_by_count;
     fa->allocate_frame                 = fa_allocate_frame;
@@ -1106,7 +1135,6 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
 }
 #pragma GCC diagnostic pop
 
-// TODO: delete me
 void frame_allocator_print(frame_allocator_t* fa) {
     if(fa == NULL) {
         return;
@@ -1229,6 +1257,8 @@ int8_t frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t* fa) 
         } else {
             PRINTLOG(FRAMEALLOCATOR, LOG_WARNING, "unknown acpi runtime frame type 0x%x", f->type);
         }
+
+        f->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 
         iter = iter->next(iter);
     }

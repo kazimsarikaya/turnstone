@@ -158,23 +158,12 @@ static int8_t nvme_configure_bar_va(nvme_disk_t* nvme_disk) {
 
     PRINTLOG(NVME, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
-    frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
-    uint64_t size       = pci_get_bar_size(pci_nvme, 0);
+    uint64_t size = pci_get_bar_size(pci_nvme, 0);
     PRINTLOG(NVME, LOG_TRACE, "bar size 0x%llx", size);
     uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
-    frame_t bar_req_frm  = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+    frame_t bar_req_frm  = {0, bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
-    uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
-
-    if(bar_frames == NULL) {
-        PRINTLOG(NVME, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
-
-        if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame");
-
-            return -1;
-        }
-    }
+    uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, bar_fa);
 
     if(memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(NVME, LOG_ERROR, "cannot add va for bar frame");
@@ -190,13 +179,17 @@ static int8_t nvme_configure_bar_va(nvme_disk_t* nvme_disk) {
 static int8_t nvme_configure_queues_address(nvme_disk_t* nvme_disk, nvme_controller_registers_t* nvme_regs) {
     frame_t* queue_frames = NULL;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 4, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_frames, NULL) != 0) {
+    frame_allocator_t* fa = frame_get_allocator();
+
+    if(fa->allocate_frame_by_count(fa, nvme_disk->pci_dev->proximity_domain,
+                                   4, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                   &queue_frames, NULL) != 0) {
         PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for queues");
 
         return -1;
     }
 
-    uint64_t queue_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_frames->frame_address);
+    uint64_t queue_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, queue_frames->frame_address);
     if(memory_paging_add_va_for_frame(queue_va, queue_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(NVME, LOG_ERROR, "cannot add va for queue frames");
 
@@ -317,13 +310,17 @@ static int8_t nvme_configure_queues(nvme_disk_t* nvme_disk) {
 static int8_t nvme_perform_identifies(nvme_disk_t* nvme_disk) {
     frame_t* identify_frames = NULL;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 3, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &identify_frames, NULL) != 0) {
+    frame_allocator_t* fa = frame_get_allocator();
+
+    if(fa->allocate_frame_by_count(fa, nvme_disk->pci_dev->proximity_domain,
+                                   3, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                   &identify_frames, NULL) != 0) {
         PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for identify");
 
         return -1;
     }
 
-    uint64_t identify_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(identify_frames->frame_address);
+    uint64_t identify_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, identify_frames->frame_address);
     if(memory_paging_add_va_for_frame(identify_va, identify_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(NVME, LOG_ERROR, "cannot add va for identify frames");
 
@@ -476,14 +473,18 @@ static int8_t nvme_configure_queue_configs(nvme_disk_t* nvme_disk) {
 static int8_t nvme_configure_prp_frames(nvme_disk_t* nvme_disk) {
     frame_t* prp_frames = NULL;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 64, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &prp_frames, NULL) != 0) {
+    frame_allocator_t* fa = frame_get_allocator();
+
+    if(fa->allocate_frame_by_count(fa, nvme_disk->pci_dev->proximity_domain,
+                                   64, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                   &prp_frames, NULL) != 0) {
         PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for prp");
 
         return -1;
     }
 
     nvme_disk->prp_frame_fa = prp_frames->frame_address;
-    nvme_disk->prp_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(nvme_disk->prp_frame_fa);
+    nvme_disk->prp_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, nvme_disk->prp_frame_fa);
 
     if(memory_paging_add_va_for_frame(nvme_disk->prp_frame_va, prp_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(NVME, LOG_ERROR, "cannot add va for prp frames");
@@ -522,6 +523,7 @@ static int8_t nvme_init_disk(memory_heap_t* heap, uint64_t disk_id, const pci_de
 
     nvme_disk->heap          = heap;
     nvme_disk->disk_id       = disk_id;
+    nvme_disk->pci_dev       = p;
     nvme_disk->pci_device    = pci_nvme;
     nvme_disk->current_phase = true; // when nvme controller is reset, phase is 1
 
@@ -817,7 +819,7 @@ future_t* nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t
         prp2 = prp1 + 0x1000;
     } else if(fa_cnt > 2) {
         prp2 = nvme_disk->prp_frame_fa + iosqt * 0x1000;
-        uint64_t* prp2_list = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(prp2);
+        uint64_t* prp2_list = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, prp2);
         memory_memclean(prp2_list, 0x1000);
 
         for(uint64_t i = 0; i < fa_cnt - 1; i++) {

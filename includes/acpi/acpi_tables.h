@@ -32,6 +32,8 @@ typedef struct acpi_sdt_header_t {
     uint32_t creator_revision;
 }__attribute__((packed)) acpi_sdt_header_t;
 
+_Static_assert(sizeof(acpi_sdt_header_t) == 36, "acpi_sdt_header_t size is not correct");
+
 typedef struct acpi_xrsdt_t {
     acpi_sdt_header_t  header;
     acpi_sdt_header_t* acpi_sdt_header_ptrs[];

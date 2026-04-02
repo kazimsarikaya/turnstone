@@ -29,7 +29,7 @@ static hashmap_t* tosdb_manager_deployed_modules = NULL;
 static buffer_t* tosdb_manager_global_offset_table_buffer = NULL;
 static hashmap_t* tosdb_manager_got_symbol_index_map      = NULL;
 
-static uint64_t tosdb_manager_clone_global_offset_table(uint64_t* got_return_size) {
+static uint64_t tosdb_manager_clone_global_offset_table(uint64_t* got_return_size, uint32_t proximity_domain) {
     uint64_t got_buffer_size = buffer_get_length(tosdb_manager_global_offset_table_buffer);
     uint64_t got_size        = got_buffer_size;
 
@@ -37,18 +37,20 @@ static uint64_t tosdb_manager_clone_global_offset_table(uint64_t* got_return_siz
         got_size += FRAME_SIZE - (got_size % FRAME_SIZE);
     }
 
+    frame_allocator_t* fa = frame_get_allocator();
+
     frame_t* got_dump_frame = NULL;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
-                                                      got_size / FRAME_SIZE,
-                                                      FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
-                                                      &got_dump_frame, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, proximity_domain,
+                                   got_size / FRAME_SIZE,
+                                   FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                   &got_dump_frame, NULL) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot allocate region frame");
 
         return -1;
     }
 
-    uint64_t got_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_dump_frame->frame_address);
+    uint64_t got_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, got_dump_frame->frame_address);
 
     if(memory_paging_add_va_for_frame(got_va, got_dump_frame, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot map region frame");
@@ -68,6 +70,7 @@ static uint64_t tosdb_manager_clone_global_offset_table(uint64_t* got_return_siz
 
     return got_physical_address;
 }
+
 static uint64_t tosdb_manager_get_entrypoint_virtual_address(uint64_t sym_id) {
     if(sym_id == -1ULL) {
         return 0;
@@ -91,6 +94,8 @@ static uint64_t tosdb_manager_get_entrypoint_virtual_address(uint64_t sym_id) {
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static void tosdb_manager_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, uint64_t mod_id, uint64_t sym_id) {
     int8_t exit_code = 0;
+
+    frame_allocator_t* fa = frame_get_allocator();
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(tdb, "system");
 
@@ -122,7 +127,7 @@ static void tosdb_manager_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, u
 
     if(deployed_module) {
         uint64_t got_size             = 0;
-        uint64_t got_physical_address = tosdb_manager_clone_global_offset_table(&got_size);
+        uint64_t got_physical_address = tosdb_manager_clone_global_offset_table(&got_size, ipc->proximity_domain);
 
         if(got_physical_address == -1ULL) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot clone got");
@@ -208,17 +213,17 @@ static void tosdb_manager_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, u
 
     frame_t* program_dump_frame = NULL;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
-                                                      total_program_size / FRAME_SIZE,
-                                                      FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
-                                                      &program_dump_frame, NULL) != 0) {
+    if(fa->allocate_frame_by_count(fa, ipc->proximity_domain,
+                                   total_program_size / FRAME_SIZE,
+                                   FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                   &program_dump_frame, NULL) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot allocate region frame");
 
         exit_code = -1;
         goto exit_with_destroy_context;
     }
 
-    uint64_t program_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(program_dump_frame->frame_address);
+    uint64_t program_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, program_dump_frame->frame_address);
 
     if(memory_paging_add_va_for_frame(program_va, program_dump_frame, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot map region frame");
@@ -271,7 +276,7 @@ static void tosdb_manager_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, u
     ctx->got_symbol_index_map = NULL; // do not free got symbol index map
 
     uint64_t got_size             = 0;
-    uint64_t got_physical_address = tosdb_manager_clone_global_offset_table(&got_size);
+    uint64_t got_physical_address = tosdb_manager_clone_global_offset_table(&got_size, ipc->proximity_domain);
 
     if(got_physical_address == -1ULL) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot clone got");
@@ -649,6 +654,7 @@ int8_t tosdb_manager_init(void) {
         return -1;
     }
 
+    // FIXME: start this task near ahci and nvme devices because of numa.
     tosdb_manager_task_id = task_create_task("tosdb_manager", tosdb_manager_main, .heap_size = 256 << 20, 2 << 20);
     return tosdb_manager_task_id == -1ULL ? -1 : 0;
 }

@@ -22,14 +22,14 @@ MODULE("turnstone.kernel.hw.acpi");
 static int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
     if(xrsdp_desc->rsdp.revision == 0) {
         uint32_t addr           = xrsdp_desc->rsdp.rsdt_address;
-        acpi_sdt_header_t* rsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(addr));
+        acpi_sdt_header_t* rsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, (uint64_t)(addr));
         uint8_t* table_addrs    = (uint8_t*)(rsdt + 1);
         size_t table_count      = (rsdt->length - sizeof(acpi_sdt_header_t)) / sizeof(uint32_t);
         acpi_sdt_header_t* res;
 
         for(size_t i = 0; i < table_count; i++) {
             uint32_t table_addr = *((uint32_t*)(void*)(table_addrs + (i * sizeof(uint32_t))));
-            res = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(table_addr));
+            res = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, (uint64_t)(table_addr));
 
             PRINTLOG(ACPI, LOG_TRACE, "table %llx of %llx at fa 0x%x va 0x%p", i, table_count, table_addr, res);
 
@@ -39,7 +39,7 @@ static int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc)
                 PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of table 0x%016x", table_addr);
             } else if((acpi_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
                 PRINTLOG(ACPI, LOG_TRACE, "frames of table 0x%016x is 0x%llx 0x%llx", table_addr, acpi_frames->frame_address, acpi_frames->frame_count);
-                if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(ACPI, LOG_ERROR, "cannot add page mapping for table 0x%016x", table_addr);
                     return -1;
                 }
@@ -52,13 +52,13 @@ static int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc)
 
         }
     } else if (xrsdp_desc->rsdp.revision >= 2) {
-        acpi_xrsdt_t* xrsdt = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(xrsdp_desc->xrsdt);
+        acpi_xrsdt_t* xrsdt = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, xrsdp_desc->xrsdt);
 
         size_t table_count = (xrsdt->header.length - sizeof(acpi_sdt_header_t)) / sizeof(void*);
         acpi_sdt_header_t* res;
 
         for(size_t i = 0; i < table_count; i++) {
-            res = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(xrsdt->acpi_sdt_header_ptrs[i]);
+            res = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, xrsdt->acpi_sdt_header_ptrs[i]);
 
             PRINTLOG(ACPI, LOG_TRACE, "table %lli of %lli at fa 0x%p va 0x%p", i, table_count, xrsdt->acpi_sdt_header_ptrs[i], res);
 
@@ -69,7 +69,7 @@ static int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc)
                 PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of table 0x%p", xrsdt->acpi_sdt_header_ptrs[i]);
             } else if((acpi_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
                 PRINTLOG(ACPI, LOG_TRACE, "frames of table 0x%p is 0x%llx 0x%llx", xrsdt->acpi_sdt_header_ptrs[i], acpi_frames->frame_address, acpi_frames->frame_count);
-                if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(ACPI, LOG_ERROR, "cannot add page mapping for table 0x%p", xrsdt->acpi_sdt_header_ptrs[i]);
                     return -1;
                 }
@@ -102,7 +102,7 @@ static int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc)
         PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of  dsdt table");
     } else if((acpi_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
         PRINTLOG(ACPI, LOG_TRACE, "frames of dsdt table is 0x%llx 0x%llx", acpi_frames->frame_address, acpi_frames->frame_count);
-        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(ACPI, LOG_ERROR, "cannot add page mapping for dsdt table");
             return -1;
         }
@@ -125,18 +125,18 @@ acpi_xrsdp_descriptor_t* acpi_find_xrsdp(void){
         return NULL;
     }
 
-    uint64_t acpi_frames_vas = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address);
+    uint64_t acpi_frames_vas = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, acpi_frames->frame_address);
 
     PRINTLOG(ACPI, LOG_DEBUG, "acpi area frames 0x%016llx->0x%016llx 0x%08llx", acpi_frames_vas, acpi_frames->frame_address, acpi_frames->frame_count);
 
     if(((acpi_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) &&
-       memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+       memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         acpi_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
         PRINTLOG(ACPI, LOG_ERROR, "cannot add page mapping for acpi area 0x%016llx->0x%016llx 0x%08llx", acpi_frames_vas, acpi_frames->frame_address, acpi_frames->frame_count);
         return NULL;
     }
 
-    acpi_xrsdp_descriptor_t* desc = (acpi_xrsdp_descriptor_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(SYSTEM_INFO->acpi_xrsdp);
+    acpi_xrsdp_descriptor_t* desc = (acpi_xrsdp_descriptor_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, SYSTEM_INFO->acpi_xrsdp);
     PRINTLOG(ACPI, LOG_DEBUG, "acpi descriptor address 0x%p", desc);
 
 
@@ -188,7 +188,7 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, cons
 
         PRINTLOG(ACPI, LOG_TRACE, "rsdt address 0x%016x", addr);
 
-        acpi_sdt_header_t* rsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(addr));
+        acpi_sdt_header_t* rsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, (uint64_t)(addr));
         uint8_t* table_addrs    = (uint8_t*)(rsdt + 1);
         size_t table_count      = (rsdt->length - sizeof(acpi_sdt_header_t)) / sizeof(uint32_t);
         acpi_sdt_header_t* res;
@@ -197,7 +197,7 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, cons
 
         for(size_t i = 0; i < table_count; i++) {
             uint32_t table_addr = *((uint32_t*)(void*)(table_addrs + (i * sizeof(uint32_t))));
-            res = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(table_addr));
+            res = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, (uint64_t)(table_addr));
 
             PRINTLOG(ACPI, LOG_TRACE, "looking for table %lli of %lli at fa 0x%x va 0x%p", i, table_count, table_addr, res);
 
@@ -216,7 +216,7 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, cons
 
         }
     } else if (xrsdp_desc->rsdp.revision == 2) {
-        acpi_xrsdt_t* xrsdt = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(xrsdp_desc->xrsdt);
+        acpi_xrsdt_t* xrsdt = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, xrsdp_desc->xrsdt);
         PRINTLOG(ACPI, LOG_TRACE, "xrsdp address 0x%p", xrsdp_desc);
         PRINTLOG(ACPI, LOG_TRACE, "xrsdt address 0x%p", xrsdp_desc->xrsdt);
 
@@ -224,7 +224,7 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, cons
         acpi_sdt_header_t* res;
 
         for(size_t i = 0; i < table_count; i++) {
-            res = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(xrsdt->acpi_sdt_header_ptrs[i]);
+            res = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, xrsdt->acpi_sdt_header_ptrs[i]);
 
             PRINTLOG(ACPI, LOG_TRACE, "looking for table %lli of %lli at fa 0x%p va 0x%p", i, table_count, xrsdt->acpi_sdt_header_ptrs[i], res);
 

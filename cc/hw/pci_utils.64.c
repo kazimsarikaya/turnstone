@@ -51,22 +51,10 @@ int8_t pci_msix_configure(const pci_generic_device_t* pci_gen_dev, const pci_cap
 
     bar_fa   = pci_get_bar_address(pci_gen_dev, msix_cap->bir);
     bar_size = pci_get_bar_size(pci_gen_dev, msix_cap->bir);
-    bar_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
-
-    frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
+    bar_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, bar_fa);
 
     uint64_t bar_frm_cnt = (bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
-    frame_t bar_req_frm  = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
-
-    if(bar_frames == NULL) {
-        PRINTLOG(PCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
-
-        if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
-            PRINTLOG(PCI, LOG_ERROR, "cannot allocate frame");
-
-            return -1;
-        }
-    }
+    frame_t bar_req_frm  = {0, bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
     if(memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(PCI, LOG_ERROR, "cannot add va for msix table");
@@ -77,23 +65,11 @@ int8_t pci_msix_configure(const pci_generic_device_t* pci_gen_dev, const pci_cap
     if(msix_cap->bir != msix_cap->pending_bit_bir) {
         bar_fa   = pci_get_bar_address(pci_gen_dev, msix_cap->pending_bit_bir);
         bar_size = pci_get_bar_size(pci_gen_dev, msix_cap->pending_bit_bir);
-        bar_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
-
-        bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
+        bar_va   = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, bar_fa);
 
         bar_frm_cnt               = (bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
         bar_req_frm.frame_address = bar_fa;
         bar_req_frm.frame_count   = bar_frm_cnt;
-
-        if(bar_frames == NULL) {
-            PRINTLOG(PCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
-
-            if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
-                PRINTLOG(PCI, LOG_ERROR, "cannot allocate frame");
-
-                return -1;
-            }
-        }
 
         if(memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(PCI, LOG_ERROR, "cannot add va for msix pending bit table");
@@ -115,7 +91,7 @@ uint8_t pci_msix_set_isr(const pci_generic_device_t* pci_dev, const pci_capabili
 
     msix_table_address += (msix_cap->table_offset << 3);
 
-    pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_table_address);
+    pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, msix_table_address);
 
     uint32_t msg_addr = 0xFEE00000;
     uint32_t apic_id  = cpu_state->local_apic_id;
@@ -137,8 +113,8 @@ uint8_t pci_msix_set_isr(const pci_generic_device_t* pci_dev, const pci_capabili
     uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
     interrupt_irq_set_handler(isrnum, isr);
 
-    PRINTLOG(PCI, LOG_TRACE, "msixcap %p intnum 0x%x isrnum 0x%x", msix_cap, intnum, isrnum);
-    PRINTLOG(PCI, LOG_TRACE, "msix table %p offset %x vector 0x%x int 0x%02x", msix_table, msix_cap->table_offset, msix_vector,  msix_table->entries[msix_vector].message_data);
+    PRINTLOG(PCI, LOG_INFO, "msixcap %p intnum 0x%x isrnum 0x%x", msix_cap, intnum, isrnum);
+    PRINTLOG(PCI, LOG_INFO, "msix table %p offset %x vector 0x%x int 0x%02x", msix_table, msix_cap->table_offset, msix_vector,  msix_table->entries[msix_vector].message_data);
 
     return isrnum;
 }
@@ -153,7 +129,7 @@ uint8_t pci_msix_update_lapic(const pci_generic_device_t* pci_dev, const pci_cap
 
     msix_table_address += (msix_cap->table_offset << 3);
 
-    pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_table_address);
+    pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, msix_table_address);
 
     uint32_t msg_addr = msix_table->entries[msix_vector].message_address;
     msg_addr &= 0xFFF00FFF;
@@ -162,6 +138,8 @@ uint8_t pci_msix_update_lapic(const pci_generic_device_t* pci_dev, const pci_cap
     msg_addr |= apic_id;
 
     msix_table->entries[msix_vector].message_address = msg_addr;
+
+    PRINTLOG(PCI, LOG_INFO, "msixcap %p update lapic msg_addr 0x%x", msix_cap, msg_addr);
 
     return 0;
 }
@@ -178,7 +156,7 @@ boolean_t pci_msix_is_pending_bit_set(const pci_generic_device_t* pci_dev, const
 
     PRINTLOG(PCI, LOG_TRACE, "msix pending bit table address 0x%llx", msix_pendind_bit_table_address);
 
-    uint64_t* pending_bit_table = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_pendind_bit_table_address);
+    uint64_t* pending_bit_table = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, msix_pendind_bit_table_address);
 
     uint32_t tbl_idx = msix_vector / 64;
     uint32_t bit_idx = msix_vector % 64;
@@ -204,7 +182,7 @@ int8_t pci_msix_clear_pending_bit(const pci_generic_device_t* pci_dev, const pci
 
     PRINTLOG(PCI, LOG_TRACE, "msix pending bit table address 0x%llx", msix_pendind_bit_table_address);
 
-    uint64_t* pending_bit_table = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_pendind_bit_table_address);
+    uint64_t* pending_bit_table = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, msix_pendind_bit_table_address);
 
     uint32_t tbl_idx = msix_vector / 64;
     uint32_t bit_idx = msix_vector % 64;

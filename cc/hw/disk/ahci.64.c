@@ -223,7 +223,7 @@ int8_t ahci_read_log_ncq(ahci_sata_disk_t* disk) {
 
     PRINTLOG(AHCI, LOG_TRACE, "slot %i", slot);
 
-    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
+    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, port->command_list_base_address);
     cmd_hdr += slot;
 
     cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
@@ -231,7 +231,7 @@ int8_t ahci_read_log_ncq(ahci_sata_disk_t* disk) {
     cmd_hdr->prdt_length        = 1;
     cmd_hdr->clear_busy         = 1;
 
-    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
+    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, cmd_hdr->prdt_base_address);
     memory_memclean(cmd_table, sizeof(ahci_hba_prdt_t) + (sizeof(ahci_hba_prdt_entry_t) * (  cmd_hdr->prdt_length - 1)));
 
     uint64_t el_phy_addr = 0;
@@ -246,7 +246,7 @@ int8_t ahci_read_log_ncq(ahci_sata_disk_t* disk) {
     cmd_table->prdt_entry[0].data_base_address = el_phy_addr;
     cmd_table->prdt_entry[0].data_byte_count   = sizeof(ahci_ata_ncq_error_log_t) - 1;
 
-    ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
+    ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, &cmd_table->command_fis);
     memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
 
     fis->fis_type           = AHCI_FIS_TYPE_REG_H2D;
@@ -375,21 +375,10 @@ int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
 
         PRINTLOG(AHCI, LOG_TRACE, "frame address at bar 0x%llx", abar_fa);
 
-        frame_t* bar_frames  = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)abar_fa);
         uint64_t bar_frm_cnt = 2;
-        frame_t bar_req_frm  = {abar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+        frame_t bar_req_frm  = {0, abar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
-        uint64_t abar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(abar_fa);
-
-        if(bar_frames == NULL) {
-            PRINTLOG(AHCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", abar_fa);
-
-            if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
-                PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frame");
-
-                return -1;
-            }
-        }
+        uint64_t abar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, abar_fa);
 
         if(memory_paging_add_va_for_frame(abar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
             PRINTLOG(AHCI, LOG_ERROR, "cannot map frame to abar va");
@@ -474,6 +463,8 @@ int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
             return -1;
         }
 
+        frame_allocator_t* fa = frame_get_allocator();
+
         PRINTLOG(AHCI, LOG_TRACE, "controller port cnt %i cmd slots %i sncq %i bohc %x", nr_port, nr_cmd_slots, sncq, hba_mem->bios_os_handoff_control_and_status);
 
         for(uint8_t port_idx = 0; port_idx < nr_port; port_idx++) {
@@ -513,21 +504,23 @@ int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
 
                 frame_t* port_frames = NULL;
 
-                if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 10, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &port_frames, NULL) != 0) {
+                if(fa->allocate_frame_by_count(fa, p->proximity_domain,
+                                               10, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                               &port_frames, NULL) != 0) {
                     PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frames for disk %lli at 0x%llx", disk->disk_id, disk->port_address);
                     iter->destroy(iter);
 
                     return -1;
                 }
 
-                if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port_frames->frame_address), port_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, port_frames->frame_address), port_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(AHCI, LOG_ERROR, "cannot page map frames for disk %lli at 0x%llx", disk->disk_id, disk->port_address);
                     iter->destroy(iter);
 
                     return -1;
                 }
 
-                memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port_frames->frame_address), 4096 * 10);
+                memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, port_frames->frame_address), 4096 * 10);
 
                 ahci_port_rebase(port, port_frames->frame_address, nr_cmd_slots);
 
@@ -578,7 +571,7 @@ future_t* ahci_flush(uint64_t disk_id) {
 
     PRINTLOG(AHCI, LOG_TRACE, "flush port 0x%p slot %i", port, slot);
 
-    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
+    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, port->command_list_base_address);
     cmd_hdr += slot;
 
     cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
@@ -586,10 +579,10 @@ future_t* ahci_flush(uint64_t disk_id) {
     cmd_hdr->prdt_length        = 0;
     cmd_hdr->clear_busy         = 1;
 
-    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
+    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, cmd_hdr->prdt_base_address);
     memory_memclean(cmd_table, sizeof(ahci_hba_prdt_t));
 
-    ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
+    ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, &cmd_table->command_fis);
     memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
 
     fis->fis_type           = AHCI_FIS_TYPE_REG_H2D;
@@ -628,7 +621,7 @@ int8_t ahci_identify(uint64_t disk_id) {
         return -1;
     }
 
-    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)port->command_list_base_address);
+    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, (uint64_t)port->command_list_base_address);
     cmd_hdr += slot;
 
     PRINTLOG(AHCI, LOG_TRACE, "identify port 0x%p slot %i cmd hdr 0x%p", port, slot, cmd_hdr);
@@ -638,7 +631,7 @@ int8_t ahci_identify(uint64_t disk_id) {
     cmd_hdr->prdt_length        = 1;
     cmd_hdr->clear_busy         = 1;
 
-    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)cmd_hdr->prdt_base_address);
+    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, (uint64_t)cmd_hdr->prdt_base_address);
 
     PRINTLOG(AHCI, LOG_TRACE, "cmd table 0x%p", cmd_table);
 
@@ -658,7 +651,7 @@ int8_t ahci_identify(uint64_t disk_id) {
     cmd_table->prdt_entry[0].data_base_address = id_phy_addr;
     cmd_table->prdt_entry[0].data_byte_count   = sizeof(ahci_ata_identify_data_t) - 1;
 
-    ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
+    ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, &cmd_table->command_fis);
 
     PRINTLOG(AHCI, LOG_TRACE, "fis 0x%p", fis);
 
@@ -809,7 +802,7 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
 
     PRINTLOG(AHCI, LOG_TRACE, "size 0x%x sector count 0x%x prdt length 0x%x", size, sector_count, prdt_length);
 
-    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
+    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, port->command_list_base_address);
     cmd_hdr += slot;
 
     cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
@@ -817,7 +810,7 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
     cmd_hdr->prdt_length        = prdt_length;
     cmd_hdr->clear_busy         = 1;
 
-    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
+    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, cmd_hdr->prdt_base_address);
     memory_memclean(cmd_table, sizeof(ahci_hba_prdt_t) + (sizeof(ahci_hba_prdt_entry_t) * (  cmd_hdr->prdt_length - 1)));
 
     uint64_t buffer_phy_addr = 0;
@@ -843,7 +836,7 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
         buffer_phy_addr += (4 << 20);
     }
 
-    ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
+    ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, &cmd_table->command_fis);
     memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
 
     fis->fis_type           = AHCI_FIS_TYPE_REG_H2D;
@@ -938,7 +931,7 @@ future_t* ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buf
 
     PRINTLOG(AHCI, LOG_TRACE, "write to port 0x%p at lba 0x%llx with size 0x%x from buffer 0x%p slot %i", port, lba, size, buffer, slot);
 
-    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
+    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, port->command_list_base_address);
     cmd_hdr += slot;
 
     cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
@@ -946,7 +939,7 @@ future_t* ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buf
     cmd_hdr->prdt_length        = prdt_length;
     cmd_hdr->clear_busy         = 1;
 
-    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
+    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, cmd_hdr->prdt_base_address);
     memory_memclean(cmd_table, sizeof(ahci_hba_prdt_t) + (sizeof(ahci_hba_prdt_entry_t) * (  cmd_hdr->prdt_length - 1)));
 
     uint64_t buffer_phy_addr = 0;
@@ -967,7 +960,7 @@ future_t* ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buf
         buffer_phy_addr += (4 << 20);
     }
 
-    ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
+    ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, &cmd_table->command_fis);
     memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
 
     fis->fis_type           = AHCI_FIS_TYPE_REG_H2D;
@@ -1119,16 +1112,16 @@ void ahci_port_rebase(ahci_hba_port_t* port, uint64_t offset, int8_t nr_cmd_slot
     PRINTLOG(AHCI, LOG_TRACE, "port 0x%p is rebasing to 0x%llx", port, offset);
 
     port->command_list_base_address = offset;
-    memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address), 1024);
+    memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, port->command_list_base_address), 1024);
 
     offset += 1024;
 
     port->fis_base_address = offset;
-    memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->fis_base_address), 256);
+    memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, port->fis_base_address), 256);
 
     offset += 256;
 
-    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
+    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, port->command_list_base_address);
 
     for(uint8_t i = 0; i < nr_cmd_slots; i++) {
         cmd_hdr[i].prdt_length       = 64;
@@ -1138,7 +1131,7 @@ void ahci_port_rebase(ahci_hba_port_t* port, uint64_t offset, int8_t nr_cmd_slot
 
         PRINTLOG(AHCI, LOG_TRACE, "prdt offset 0x%llx size 0x%llx", offset, size);
 
-        memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr[i].prdt_base_address), size);
+        memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, cmd_hdr[i].prdt_base_address), size);
 
         offset += size;
     }

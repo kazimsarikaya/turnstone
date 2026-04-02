@@ -38,6 +38,7 @@ typedef struct tosdb_manager_deployed_module_t {
 
 typedef struct tosdb_manager_ipc_t {
     tosdb_manager_ipc_type_t type;
+    uint32_t                 proximity_domain;
     uint64_t                 sender_task_id;
     buffer_t*                response_buffer;
     boolean_t                is_response_done;

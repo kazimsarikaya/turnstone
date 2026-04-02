@@ -139,13 +139,18 @@ int8_t network_init(void) {
     uint64_t heap_frames_cnt = (heap_size + FRAME_SIZE - 1) / FRAME_SIZE;
     heap_size = heap_frames_cnt * FRAME_SIZE;
 
-    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), heap_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &heap_frames, NULL) != 0) {
+    frame_allocator_t* fa = frame_get_allocator();
+
+    // FIXME: put these frames near network devices because of numa.
+    if(fa->allocate_frame_by_count(fa, 0,
+                                   heap_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                   &heap_frames, NULL) != 0) {
         PRINTLOG(NETWORK, LOG_ERROR, "cannot allocate heap with frame count 0x%llx", heap_frames_cnt);
 
         return -1;
     }
 
-    uint64_t heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(heap_frames->frame_address);
+    uint64_t heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, heap_frames->frame_address);
 
     if(memory_paging_add_va_for_frame(heap_va, heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(NETWORK, LOG_ERROR, "cannot add heap va 0x%llx for frame at 0x%llx with count 0x%llx", heap_va, heap_frames->frame_address, heap_frames->frame_count);
@@ -188,7 +193,8 @@ int8_t network_init(void) {
         if(pci_header->vendor_id == NETWORK_DEVICE_VENDOR_ID_INTEL && pci_header->device_id == NETWORK_DEVICE_DEVICE_ID_IGB) {
             errors += network_igb_init(pci_netdev);
         } else {
-            PRINTLOG(NETWORK, LOG_ERROR, "unknown net device vendor 0x%04x device 0x%04x", pci_header->vendor_id, pci_header->device_id);
+            PRINTLOG(NETWORK, LOG_ERROR, "unknown net device vendor 0x%04x device 0x%04x",
+                     pci_header->vendor_id, pci_header->device_id);
             errors += -1;
         }
 

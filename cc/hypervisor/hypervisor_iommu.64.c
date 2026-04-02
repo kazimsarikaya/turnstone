@@ -233,7 +233,7 @@ int8_t hypervisor_iommu_init(void) {
         .frame_count   = AMDVI_REG_TOTAL_SIZE / FRAME_SIZE,
     };
 
-    uint64_t amdvi_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(amdvi_base_fa);
+    uint64_t amdvi_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, amdvi_base_fa);
 
     if(memory_paging_add_va_for_frame(amdvi_base_va, &amdvi_base_frame, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(HYPERVISOR_IOMMU, LOG_ERROR, "cannot map AMD-Vi base va 0x%llx for frame at 0x%llx with count 0x%llx", amdvi_base_va, amdvi_base_fa, amdvi_base_frame.frame_count);
@@ -244,7 +244,7 @@ int8_t hypervisor_iommu_init(void) {
 
     frame_t* frm_device_table_base_address = NULL;
 
-    uint64_t dev_tlb_va = hypervisor_allocate_region(&frm_device_table_base_address, AMDVI_REG_TOTAL_SIZE);
+    uint64_t dev_tlb_va = hypervisor_allocate_hardware_region(&frm_device_table_base_address, device_table_size);
 
     if(!dev_tlb_va) {
         PRINTLOG(HYPERVISOR_IOMMU, LOG_ERROR, "cannot allocate device table base address");
@@ -275,7 +275,7 @@ int8_t hypervisor_iommu_init(void) {
         control.fields.ga_log_en  = 1; // configure ga log base address 0x00e0, 0x2040, 0x2048
 
         frame_t* frm_ga_log_base_address = NULL;
-        uint64_t ga_log_base_va          = hypervisor_allocate_region(&frm_ga_log_base_address, 0x1000);
+        uint64_t ga_log_base_va          = hypervisor_allocate_hardware_region(&frm_ga_log_base_address, 0x1000);
 
         if(!ga_log_base_va) {
             PRINTLOG(HYPERVISOR_IOMMU, LOG_ERROR, "cannot allocate GA log base address");
@@ -297,7 +297,7 @@ int8_t hypervisor_iommu_init(void) {
 
     frame_t* frm_event_log_base_address = NULL;
 
-    uint64_t event_log_base_va = hypervisor_allocate_region(&frm_event_log_base_address, 0x1000);
+    uint64_t event_log_base_va = hypervisor_allocate_hardware_region(&frm_event_log_base_address, 0x1000);
 
     if(!event_log_base_va) {
         PRINTLOG(HYPERVISOR_IOMMU, LOG_ERROR, "cannot allocate event log base address");
@@ -318,7 +318,7 @@ int8_t hypervisor_iommu_init(void) {
 
     frame_t* frm_cmd_buf_base_address = NULL;
 
-    uint64_t cmd_buf_base_va = hypervisor_allocate_region(&frm_cmd_buf_base_address, 0x1000);
+    uint64_t cmd_buf_base_va = hypervisor_allocate_hardware_region(&frm_cmd_buf_base_address, 0x1000);
 
     if(!cmd_buf_base_va) {
         PRINTLOG(HYPERVISOR_IOMMU, LOG_ERROR, "cannot allocate command buffer base address");
@@ -340,7 +340,7 @@ int8_t hypervisor_iommu_init(void) {
 
     frame_t* frm_ppr_log_base_address = NULL;
 
-    uint64_t ppr_log_base_va = hypervisor_allocate_region(&frm_ppr_log_base_address, 0x1000);
+    uint64_t ppr_log_base_va = hypervisor_allocate_hardware_region(&frm_ppr_log_base_address, 0x1000);
 
     if(!ppr_log_base_va) {
         PRINTLOG(HYPERVISOR_IOMMU, LOG_ERROR, "cannot allocate ppr log base address");

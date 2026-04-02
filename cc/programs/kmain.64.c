@@ -229,7 +229,7 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator created");
         frame_set_allocator(fa);
 
-        frame_t gs_pages = {MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(SYSTEM_INFO->gs_page_address_base),
+        frame_t gs_pages = {0, MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, SYSTEM_INFO->gs_page_address_base),
                             SYSTEM_INFO->gs_page_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
 
         if(fa->allocate_frame(fa, &gs_pages) != 0) {
@@ -241,7 +241,7 @@ int8_t kmain64(size_t entry_point) {
 
         PRINTLOG(KERNEL, LOG_DEBUG, "kernel program header is at 0x%p", kernel);
 
-        frame_t kernel_frames = {SYSTEM_INFO->program_header_physical_start, kernel->total_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
+        frame_t kernel_frames = {0, SYSTEM_INFO->program_header_physical_start, kernel->total_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
 
         if(fa->allocate_frame(fa, &kernel_frames) != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel frames");
@@ -250,7 +250,7 @@ int8_t kmain64(size_t entry_point) {
 
         PRINTLOG(KERNEL, LOG_DEBUG, "kernel frames allocated");
 
-        frame_t kernel_heap_frames = {kernel->program_heap_physical_address, kernel->program_heap_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
+        frame_t kernel_heap_frames = {0, kernel->program_heap_physical_address, kernel->program_heap_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
 
         if(fa->allocate_frame(fa, &kernel_heap_frames) != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default heap frames");
@@ -259,7 +259,7 @@ int8_t kmain64(size_t entry_point) {
 
         PRINTLOG(KERNEL, LOG_DEBUG, "kernel heap frames allocated");
 
-        frame_t kernel_stack_frames = {kernel->program_stack_physical_address, kernel->program_stack_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
+        frame_t kernel_stack_frames = {0, kernel->program_stack_physical_address, kernel->program_stack_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
 
         if(fa->allocate_frame(fa, &kernel_stack_frames) != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default stack frames");
@@ -268,7 +268,7 @@ int8_t kmain64(size_t entry_point) {
 
         PRINTLOG(KERNEL, LOG_DEBUG, "kernel stack frames allocated");
 
-        frame_t spool_frames = {SYSTEM_INFO->spool_physical_start, SYSTEM_INFO->spool_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
+        frame_t spool_frames = {0, SYSTEM_INFO->spool_physical_start, SYSTEM_INFO->spool_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
 
         if(fa->allocate_frame(fa, &spool_frames) != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default spool frames");
@@ -285,7 +285,7 @@ int8_t kmain64(size_t entry_point) {
         if(SYSTEM_INFO->boot_type == SYSTEM_INFO_BOOT_TYPE_PXE) {
             PRINTLOG(KERNEL, LOG_DEBUG, "boot type is pxe, need to allocate system used frames");
 
-            frame_t tosdb_frames = {SYSTEM_INFO->pxe_tosdb_address, SYSTEM_INFO->pxe_tosdb_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
+            frame_t tosdb_frames = {0, SYSTEM_INFO->pxe_tosdb_address, SYSTEM_INFO->pxe_tosdb_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
 
             if(fa->allocate_frame(fa, &tosdb_frames) != 0) {
                 PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate tosdb frames");

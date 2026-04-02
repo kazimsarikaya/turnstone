@@ -130,7 +130,7 @@ int8_t hpet_init(void) {
 
     PRINTLOG(HPET, LOG_INFO, "count of comparators at table: %d", hpet_table->comparator_count);
 
-    uint64_t hpet_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(hpet_table->address.address);
+    uint64_t hpet_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, hpet_table->address.address);
     memory_paging_add_page(hpet_va, hpet_table->address.address, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
     volatile hpet_t* hpet = (volatile hpet_t*)hpet_va;

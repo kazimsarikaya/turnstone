@@ -21,14 +21,14 @@ extern "C" {
 
 typedef union ivrs_ivinfo_t {
     struct {
-        uint32_t efr_support      :1;
-        uint32_t dma_remap_support:1;
-        uint32_t reserved0        :3;
-        uint32_t gva_size         :3;
-        uint32_t pa_size          :7;
-        uint32_t va_size          :7;
-        uint32_t ht_ats_reserved  :1;
-        uint32_t reserved1        :9;
+        uint32_t efr_support      :1; ///< bit 0 EFR support
+        uint32_t dma_remap_support:1; ///< bit 1 DMA remapping support
+        uint32_t reserved0        :3; ///< bits 2-4 reserved
+        uint32_t gva_size         :3; ///< bits 5-7 GVA size
+        uint32_t pa_size          :7; ///< bits 8-14 PA size
+        uint32_t va_size          :7; ///< bits 15-21 VA size
+        uint32_t ht_ats_reserved  :1; ///< bit 22 HT ATS reserved
+        uint32_t reserved1        :9; ///< bits 23-31 reserved
     } __attribute__((packed)) fields;
     uint32_t bits;
 }__attribute__((packed)) ivrs_ivinfo_t;
@@ -69,7 +69,7 @@ typedef struct ivrs_ivhd_type_10_t {
             uint8_t unit_id   :5;
             uint8_t reserved1 :3;
         }__attribute__((packed)) fields;
-        uint8_t bits;
+        uint16_t bits;
     }__attribute__((packed)) iommu_info;
     union {
         struct {
@@ -120,7 +120,7 @@ typedef struct ivrs_ivhd_type_11_t {
             uint8_t unit_id   :5;
             uint8_t reserved1 :3;
         }__attribute__((packed)) fields;
-        uint8_t bits;
+        uint16_t bits;
     }__attribute__((packed)) iommu_info;
     union {
         struct {
@@ -425,6 +425,167 @@ typedef union amdvi_extended_feature_t {
 } __attribute__((packed)) amdvi_extended_feature_t;
 
 _Static_assert(sizeof(amdvi_extended_feature_t) == sizeof(uint64_t), "amdvi_extended_feature_t size is not correct");
+
+typedef struct amdvi_dte_entry_t {
+    union {
+        struct {
+            uint64_t v                                       :1; ///<0
+            uint64_t tv                                      :1; ///<1
+            uint64_t reserved0                               :5; ///<2-6
+            uint64_t had                                     :2; ///<7-8
+            uint64_t mode                                    :3; ///<9-11
+            uint64_t host_page_table_root_pointer_12_51_bits :40; ///<12-51
+            uint64_t ppr                                     :1; ///<52
+            uint64_t gppr                                    :1; ///<53
+            uint64_t giov                                    :1; ///<54
+            uint64_t gv                                      :1; ///<55
+            uint64_t glx                                     :2; ///<56-57
+            uint64_t gcr3_table_root_pointer_12_14_bits      :3; ///<58-60
+            uint64_t ir                                      :1; ///<61
+            uint64_t iw                                      :1; ///<62
+            uint64_t reserved1                               :1; ///<63
+        } __attribute__((packed));
+        uint64_t first_qword; ///< 0-63
+    };
+    union {
+        struct {
+            uint64_t domainid                          :16; ///< 64-79
+            uint64_t gcr3_table_root_pointer_15_30_bits:16; ///< 80-95
+            uint64_t i                                 :1; ///< 96
+            uint64_t se                                :1; ///< 97
+            uint64_t sa                                :1; ///< 98
+            uint64_t ioctl                             :2; ///< 99-100
+            uint64_t cache                             :1; ///< 101
+            uint64_t sd                                :1; ///< 102
+            uint64_t ex                                :1; ///< 103
+            uint64_t sysmgt                            :2; ///< 104-105
+            uint64_t sats                              :1; ///< 106
+            uint64_t gcr3_table_root_pointer_31_51_bits:21; ///< 107-127
+        } __attribute__((packed));
+        uint64_t second_qword; ///< 64-127
+    };
+    union {
+        struct {
+            uint64_t iv                                    :1; ///< 128
+            uint64_t inttablen                             :4; ///< 129-132
+            uint64_t ig                                    :1; ///< 133
+            uint64_t interrupt_table_root_pointer_6_51_bits: 46; ///< 134-179
+            uint64_t reserved2                             :2; ///< 180-181
+            uint64_t guestpagingmode                       :2; ///< 182-183
+            uint64_t initpass                              :1; ///< 184
+            uint64_t eintpass                              :1; ///< 185
+            uint64_t nmipass                               :1; ///< 186
+            uint64_t hptmode                               :1; ///< 187
+            uint64_t intctl                                :2; ///< 188-189
+            uint64_t lint0pass                             :1; ///< 190
+            uint64_t lint1pass                             :1; ///< 191
+        } __attribute__((packed));
+        uint64_t third_qword; ///< 128-191
+    };
+    union {
+        struct {
+            uint16_t reserved3      :15; ///< 192-206
+            uint64_t vimuen         :1; ///< 207
+            uint16_t gdeviceid      :16; ///< 208-223
+            uint16_t guestid        :16; ///< 224-239
+            uint64_t reserved4      :5; ///< 240-244
+            uint64_t reserved5      :1; ///< 245
+            uint64_t attrv          :1; ///< 246
+            uint64_t mode0fc        :1; ///< 247
+            uint64_t snoopattribute :8; ///< 248-255
+        } __attribute__((packed));
+        uint64_t fourth_qword; ///< 192-255
+    };
+} __attribute__((packed)) amdvi_dte_entry_t;
+
+_Static_assert(sizeof(amdvi_dte_entry_t) == 4 * sizeof(uint64_t), "amdvi_dte_entry_t size is not correct");
+
+typedef union amvdi_irte_t {
+    struct {
+        union {
+            struct {
+                uint64_t remapen                 :1; ///<0
+                uint64_t supiopf                 :1; ///<1
+                uint64_t inttype                 :3; ///<2-4
+                uint64_t gappidis                :1; ///<5
+                uint64_t isrun                   :1; ///<6
+                uint64_t guestmode               :1; ///<7
+                uint64_t destination_0_23_bits   :24; ///<8-31
+                uint64_t guestmode_off_reserved0 :32; ///<32-63
+            } __attribute__((packed));
+            uint64_t first_qword; ///< 0-63
+        };
+        union {
+            struct {
+                uint64_t vector                  :8; ///< 64-71
+                uint64_t guestmode_off_reserved1 :48; ///< 72-119
+                uint64_t destination_24_31_bits  :8; ///< 120-127
+            } __attribute__((packed));
+            uint64_t second_qword; ///< 64-127
+        };
+    } __attribute__((packed)) guestmode_off;
+    struct {
+        union {
+            struct {
+                uint64_t remapen               :1; ///<0
+                uint64_t supiopf               :1; ///<1
+                uint64_t galogintr             :1; ///<2
+                uint64_t reserved0             :2; ///<3-4
+                uint64_t gappidis              :1; ///<5
+                uint64_t isrun                 :1; ///<6
+                uint64_t guestmode             :1; ///<7
+                uint64_t destination_0_23_bits :24; ///<8-31
+                uint64_t gatag_0_31_bits       :32; ///<32-63
+            } __attribute__((packed));
+            uint64_t first_qword; ///< 0-63
+        };
+        union {
+            struct {
+                uint64_t vector                                           :8; ///< 64-71
+                uint64_t reserved1                                        :4; ///< 72-75
+                uint64_t guest_virtual_apic_table_root_pointer_12_51_bits :40; ///< 76-115
+                uint64_t reserved2                                        :4; ///< 116-119
+                uint64_t destination_24_31_bits                           :8; ///< 120-127
+            } __attribute__((packed));
+            uint64_t second_qword; ///< 64-127
+        };
+    } __attribute__((packed)) guestmode_on;
+} __attribute__((packed)) amdvi_irte_t;
+
+_Static_assert(sizeof(amdvi_irte_t) == 2 * sizeof(uint64_t), "amvdi_irte_t size is not correct");
+
+typedef enum amdvi_command_type_t {
+    AMDVI_COMMAND_TYPE_COMPLEETION_WAIT        = 0x1,
+    AMDVI_COMMAND_TYPE_INVALIDATE_DEVTAB_ENTRY = 0x2,
+} amdvi_command_type_t;
+
+typedef struct amdvi_cmd_completion_wait_t {
+    uint64_t s                      :1; ///< 0
+    uint64_t i                      :1; ///< 1
+    uint64_t f                      :1; ///< 2
+    uint64_t store_address_3_51_bits:49; ///< 3-51
+    uint64_t reserved0              :8; ///< 52-59
+    uint64_t command_type           :4; ///< 60-63
+    uint64_t store_data             :64; ///< 64-127
+} __attribute__((packed)) amdvi_cmd_completion_wait_t;
+
+typedef struct amdvi_cmd_invalidate_devtab_entry_t {
+    uint64_t deviceid     :16; ///< 0-15
+    uint64_t reserved0    :44; ///< 16-59
+    uint64_t command_type :4; ///< 60-63
+    uint64_t reserved1    :64; ///< 64-127
+} __attribute__((packed)) amdvi_cmd_invalidate_devtab_entry_t;
+
+typedef union amdvi_command_t {
+    struct {
+        uint64_t reserved0    :60; ///< 0-59
+        uint64_t command_type :4; ///< 60-63
+        uint64_t reserved1    :64; ///< 64-127
+    } __attribute__((packed)) common;
+    amdvi_cmd_completion_wait_t         completion_wait;
+    amdvi_cmd_invalidate_devtab_entry_t invalidate_devtab_entry;
+} __attribute__((packed)) amdvi_command_t;
+
 
 int8_t hypervisor_iommu_init(void);
 

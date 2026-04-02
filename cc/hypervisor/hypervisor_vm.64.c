@@ -77,24 +77,27 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
 
     buffer_t* output_buffer = task_get_output_buffer();
 
+    task_t* current_task = task_get_current_task();
 
-    vm->heap = memory_get_heap(NULL);
-    vm->ipc_queue = mq_list;
-    vm->task_id = task_get_id();
-    vm->last_tsc = rdtsc();
-    vm->output_buffer = output_buffer;
-    vm->msr_map = map_integer();
-    vm->ept_frames = list_create_list();
+
+    vm->heap              = memory_get_heap(NULL);
+    vm->ipc_queue         = mq_list;
+    vm->proximity_domain  = current_task->proximity_domain_id;
+    vm->task_id           = current_task->task_id;
+    vm->last_tsc          = rdtsc();
+    vm->output_buffer     = output_buffer;
+    vm->msr_map           = map_integer();
+    vm->ept_frames        = list_create_list();
     vm->loaded_module_ids = hashmap_integer(128);
-    vm->read_only_frames = list_create_list();
-    vm->released_pages = list_create_queue();
+    vm->read_only_frames  = list_create_list();
+    vm->released_pages    = list_create_queue();
 
     list_set_equality_comparator(vm->read_only_frames, hypervisor_vm_readonly_section_cmp);
 
     vm->mapped_pci_devices = list_create_list();
-    vm->mapped_io_ports = list_create_list();
-    vm->mapped_interrupts = list_create_list();
-    vm->interrupt_queue = list_create_queue();
+    vm->mapped_io_ports    = list_create_list();
+    vm->mapped_interrupts  = list_create_list();
+    vm->interrupt_queue    = list_create_queue();
 
     vm->lapic.timer_masked = true;
 
@@ -141,7 +144,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
         PRINTLOG(HYPERVISOR, LOG_TRACE, "released 0x%llx 0x%llx", frame->frame_address, frame->frame_count);
 
         if(frame->frame_address != 0) {
-            uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(frame->frame_address);
+            uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, frame->frame_address);
             memory_memclean((void*)frame_va, FRAME_SIZE * frame->frame_count);
 
             if(memory_paging_delete_va_for_frame_ext(NULL, frame_va, frame) != 0 ) {
@@ -162,7 +165,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
 
         PRINTLOG(HYPERVISOR, LOG_TRACE, "released 0x%llx 0x%llx", ept_frame->frame_address, ept_frame->frame_count);
 
-        uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ept_frame->frame_address);
+        uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, ept_frame->frame_address);
         memory_memclean((void*)frame_va, FRAME_SIZE * ept_frame->frame_count);
 
         if(memory_paging_delete_va_for_frame_ext(NULL, frame_va, ept_frame) != 0 ) {
@@ -177,8 +180,8 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
 
     list_destroy(vm->ept_frames);
 
-    uint64_t got_address = vm->got_physical_address;
-    uint64_t got_size = vm->got_size;
+    uint64_t got_address     = vm->got_physical_address;
+    uint64_t got_size        = vm->got_size;
     uint64_t got_frame_count = (got_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
     if(got_address != 0) {
@@ -186,7 +189,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
 
         PRINTLOG(HYPERVISOR, LOG_TRACE, "released 0x%llx 0x%llx", got_frame.frame_address, got_frame.frame_count);
 
-        uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_frame.frame_address);
+        uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, got_frame.frame_address);
 
         memory_memclean((void*)frame_va, FRAME_SIZE * got_frame.frame_count);
 
@@ -202,7 +205,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "released 0x%llx 0x%llx", self_frame.frame_address, self_frame.frame_count);
 
-    uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(self_frame.frame_address);
+    uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, self_frame.frame_address);
     memory_memclean((void*)frame_va, FRAME_SIZE * self_frame.frame_count);
 
     if(memory_paging_delete_va_for_frame_ext(NULL, frame_va, &self_frame) != 0 ) {
@@ -249,7 +252,7 @@ void hypervisor_vm_notify_timers(void) {
             vm->lapic.timer_current_value -= delta; // delta;
         } else {
             vm->lapic.timer_current_value = vm->lapic.timer_initial_value;
-            timer_expired = true;
+            timer_expired                 = true;
         }
 
         if(timer_expired && !vm->lapic.timer_masked && !vm->lapic.timer_exits) {

@@ -353,13 +353,11 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
         }
 
         if(sym->type == ACPI_AML_OT_OPREGION && sym->opregion.region_space == ACPI_AML_OPREGT_SYSMEM) {
-            // TODO: add reserved frames
-
             uint64_t region_start = sym->opregion.region_offset;
             uint64_t region_fa    = region_start & ~(FRAME_SIZE - 1);
 
-            frame_t f    = {region_fa, (sym->opregion.region_len + FRAME_SIZE - 1) / FRAME_SIZE, FRAME_TYPE_RESERVED, 0};
-            uint64_t fva = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(sym->opregion.region_offset);
+            frame_t f    = {0, region_fa, (sym->opregion.region_len + FRAME_SIZE - 1) / FRAME_SIZE, FRAME_TYPE_RESERVED, 0};
+            uint64_t fva = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(HARDWARE, sym->opregion.region_offset);
 
             if(memory_paging_add_va_for_frame(fva, &f, MEMORY_PAGING_PAGE_TYPE_UNKNOWN) != 0) {
                 iter->destroy(iter);
@@ -671,7 +669,7 @@ int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx) {
 
                 uint64_t frm_cnt = (mem->max - mem->min + 1 + FRAME_SIZE - 1) / FRAME_SIZE;
 
-                frame_t f = {mem->min, frm_cnt, 0, 0};
+                frame_t f = {0, mem->min, frm_cnt, 0, 0};
 
                 frame_get_allocator()->reserve_system_frames(frame_get_allocator(), &f);
 

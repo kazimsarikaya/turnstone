@@ -24,33 +24,36 @@ extern "C" {
  *
  * each entry is 64bit long
  */
-typedef struct memory_page_entry_t {
-    uint64_t present               : 1; ///< bit 0 page present?
-    uint64_t writable              : 1; ///< bit 1 page can be writen?
-    uint64_t user_accessible       : 1; ///< bit 2 page can be accessable by user space
-    uint64_t write_through_caching : 1; ///< bit 3 how cache will be writen
-    uint64_t disable_cache         : 1; ///< bit 4 for disable caching of page when 1
-    uint64_t accessed              : 1; ///< bit 5 page is accessed by cpu, cpu sets this bit
-    uint64_t dirty                 : 1; ///< bit 6 page is writen, cpu sets this bits
-    uint64_t hugepage              : 1; ///< bit 7 hugepage flag for p3 (1g) and p2 (2m)
-    uint64_t global                : 1; ///< bit 8 page is global? for caching while page switches needs cr4.pge 1
-    uint64_t os_avail01            : 1; ///< bit 9 is available for os
-    uint64_t os_avail02            : 1; ///< bit 10 is available for os
-    uint64_t os_avail03            : 1; ///< bit 11 is available for os
-    uint64_t physical_address      : 40; ///< bits 12-51 physical address 40 bits, shifted by 12 (long mode)
-    uint64_t os_avail04            : 1; ///< bit 52 is available for os
-    uint64_t os_avail05            : 1; ///< bit 53 is available for os
-    uint64_t os_avail06            : 1; ///< bit 54 is available for os
-    uint64_t os_avail07            : 1; ///< bit 55 is available for os
-    uint64_t os_avail08            : 1; ///< bit 56 is available for os
-    uint64_t os_avail09            : 1; ///< bit 57 is available for os
-    uint64_t os_avail10            : 1; ///< bit 58 is available for os
-    uint64_t os_avail11            : 1; ///< bit 59 is available for os or pke if cr4.pke 1 or cr4.pks 1
-    uint64_t os_avail12            : 1; ///< bit 60 is available for os or pke if cr4.pke 1 or cr4.pks 1
-    uint64_t os_avail13            : 1; ///< bit 61 is available for os or pke if cr4.pke 1 or cr4.pks 1
-    uint64_t os_avail14            : 1; ///< bit 62 is available for os or pke if cr4.pke 1 or cr4.pks 1
-    uint64_t no_execute            : 1; ///< bit 63 prevents execution of page by kernel programs
-} __attribute__((packed)) memory_page_entry_t; ///< short hand for struct
+typedef union memory_page_entry_t {
+    struct {
+        uint64_t present               : 1; ///< bit 0 page present?
+        uint64_t writable              : 1; ///< bit 1 page can be writen?
+        uint64_t user_accessible       : 1; ///< bit 2 page can be accessable by user space
+        uint64_t write_through_caching : 1; ///< bit 3 how cache will be writen
+        uint64_t disable_cache         : 1; ///< bit 4 for disable caching of page when 1
+        uint64_t accessed              : 1; ///< bit 5 page is accessed by cpu, cpu sets this bit
+        uint64_t dirty                 : 1; ///< bit 6 page is writen, cpu sets this bits
+        uint64_t hugepage              : 1; ///< bit 7 hugepage flag for p3 (1g) and p2 (2m)
+        uint64_t global                : 1; ///< bit 8 page is global? for caching while page switches needs cr4.pge 1
+        uint64_t os_avail01            : 1; ///< bit 9 is available for os
+        uint64_t os_avail02            : 1; ///< bit 10 is available for os
+        uint64_t os_avail03            : 1; ///< bit 11 is available for os
+        uint64_t physical_address      : 40; ///< bits 12-51 physical address 40 bits, shifted by 12 (long mode)
+        uint64_t os_avail04            : 1; ///< bit 52 is available for os
+        uint64_t os_avail05            : 1; ///< bit 53 is available for os
+        uint64_t os_avail06            : 1; ///< bit 54 is available for os
+        uint64_t os_avail07            : 1; ///< bit 55 is available for os
+        uint64_t os_avail08            : 1; ///< bit 56 is available for os
+        uint64_t os_avail09            : 1; ///< bit 57 is available for os
+        uint64_t os_avail10            : 1; ///< bit 58 is available for os
+        uint64_t os_avail11            : 1; ///< bit 59 is available for os or pke if cr4.pke 1 or cr4.pks 1
+        uint64_t os_avail12            : 1; ///< bit 60 is available for os or pke if cr4.pke 1 or cr4.pks 1
+        uint64_t os_avail13            : 1; ///< bit 61 is available for os or pke if cr4.pke 1 or cr4.pks 1
+        uint64_t os_avail14            : 1; ///< bit 62 is available for os or pke if cr4.pke 1 or cr4.pks 1
+        uint64_t no_execute            : 1; ///< bit 63 prevents execution of page by kernel programs
+    } __attribute__((packed));
+    uint64_t bits;
+}memory_page_entry_t; ///< short hand for struct
 
 _Static_assert(sizeof(memory_page_entry_t) == sizeof(uint64_t), "memory_page_entry_t size should be 8 bytes");
 
@@ -178,13 +181,15 @@ int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, 
 #define MEMORY_PT_GET_P1_INDEX(u64) ((u64 >> 12) & (MEMORY_PAGING_INDEX_COUNT - 1))
 
 #if ___KERNELBUILD == 1
-/*! returns frame address of reserved virtual address */
-#define MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(va)  ((typeof(va))(((64ULL << 40 ) - 1) & (uint64_t)(va)))
-/*! computes reserved virtual address of frame adddress */
-#define MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fa)  ((typeof(fa))((64ULL << 40) | (uint64_t)(fa)))
+#define MEMORY_PAGING_GET_FA_FOR_HARDWARE_RESERVED_VA(va) ((typeof(va))((uint64_t)(va) & ~(0xFFFF800000000000ULL)))
+#define MEMORY_PAGING_GET_VA_FOR_HARDWARE_RESERVED_FA(fa) ((typeof(fa))(0xFFFF800000000000ULL | (uint64_t)(fa)))
+#define MEMORY_PAGING_GET_FA_FOR_KERNEL_RESERVED_VA(va) ((typeof(va))((uint64_t)(va) & ~(0x0000400000000000ULL)))
+#define MEMORY_PAGING_GET_VA_FOR_KERNEL_RESERVED_FA(fa) ((typeof(fa))(0x0000400000000000ULL | (uint64_t)(fa)))
+#define MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(type, va) MEMORY_PAGING_GET_FA_FOR_ ## type ## _RESERVED_VA(va)
+#define MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(type, fa) MEMORY_PAGING_GET_VA_FOR_ ## type ## _RESERVED_FA(fa)
 #else
-#define MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(va)  ((typeof(va))((uint64_t)(va)))
-#define MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fa)  ((typeof(fa))((uint64_t)(fa)))
+#define MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(type, va)  ((typeof(va))((uint64_t)(va)))
+#define MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(type, fa)  ((typeof(fa))((uint64_t)(fa)))
 #endif
 
 int8_t memory_paging_add_va_for_frame_ext(memory_page_table_context_t* table_context, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type);

@@ -35,7 +35,8 @@ static void memory_paging_internal_frame_build(memory_page_table_context_t* tabl
         cpu_hlt();
     }
 
-    if(fa->allocate_frame_by_count(fa,
+    // TODO: optimize by numa proximity domain.
+    if(fa->allocate_frame_by_count(fa, 0,
                                    MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT,
                                    FRAME_ALLOCATION_TYPE_BLOCK,
                                    &internal_frms, NULL) != 0) {
@@ -50,7 +51,7 @@ static void memory_paging_internal_frame_build(memory_page_table_context_t* tabl
 
 #if ___KERNELBUILD == 1
     if(memory_paging_add_va_for_frame_ext(table_context,
-                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frms->frame_address),
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, internal_frms->frame_address),
                                           internal_frms,
                                           MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(PAGING, LOG_PANIC, "cannot map internal paging frames. Halting...");
@@ -58,7 +59,7 @@ static void memory_paging_internal_frame_build(memory_page_table_context_t* tabl
     }
 #endif
 
-    uint64_t internal_frm_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(table_context->internal_frames_2_start);
+    uint64_t internal_frm_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, table_context->internal_frames_2_start);
 
     memory_memclean((void*)internal_frm_va, table_context->internal_frames_2_count * FRAME_SIZE);
 }
@@ -130,7 +131,7 @@ memory_page_table_context_t* memory_paging_switch_table(const memory_page_table_
                           : "=r" (old_table));
 
     if(new_table != NULL) {
-        __asm__ __volatile__ ("mov %0, %%cr3\n" : : "r" (MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(new_table->page_table)));
+        __asm__ __volatile__ ("mov %0, %%cr3\n" : : "r" (MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, new_table->page_table)));
     }
 
     if(!memory_paging_page_tables) {
@@ -138,7 +139,7 @@ memory_page_table_context_t* memory_paging_switch_table(const memory_page_table_
         cpu_hlt();
     }
 
-    old_table = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(old_table);
+    old_table = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, old_table);
 
     uint64_t hm_key = (uint64_t)old_table;
     hm_key >>= 12; // first 12 bits are always 0 because of page alignment, so we can ignore them for hashmap key
@@ -216,7 +217,7 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
         p3_addr = memory_paging_get_internal_frame(curr);
 
         t_p3 = (memory_page_table_t*)p3_addr;
-        t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
+        t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p3);
 
         memory_memclean(t_p3, FRAME_SIZE);
 
@@ -227,7 +228,7 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
     }else {
         uint64_t tmp_pa = p4->pages[p4idx].physical_address;
         t_p3 = (memory_page_table_t*)(tmp_pa << 12);
-        t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
+        t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p3);
     }
 
     PRINTLOG(PAGING, LOG_TRACE, "p3 address: 0x%p", t_p3);
@@ -284,7 +285,7 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
             p2_addr = memory_paging_get_internal_frame(curr);
 
             t_p2 = (memory_page_table_t*)p2_addr;
-            t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
+            t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p2);
 
             memory_memclean(t_p2, FRAME_SIZE);
 
@@ -295,7 +296,8 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
         }
     } else {
         if(type & MEMORY_PAGING_PAGE_TYPE_1G) {
-            uint64_t current_fa = t_p3->pages[p3idx].physical_address << 12;
+            uint64_t current_fa = t_p3->pages[p3idx].physical_address;
+            current_fa <<= 12;
 
             if(current_fa != (frame_address & 0xFFFFFC0000)) {
                 PRINTLOG(PAGING, LOG_ERROR, "cannot map 1G page for va 0x%llx to fa 0x%llx because there is already a different frame mapped at that address. current fa: 0x%llx",
@@ -311,7 +313,7 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
 
         uint64_t tmp_pa = t_p3->pages[p3idx].physical_address;
         t_p2 = (memory_page_table_t*)(tmp_pa << 12);
-        t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
+        t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p2);
     }
 
     PRINTLOG(PAGING, LOG_TRACE, "p2 address: 0x%p", t_p2);
@@ -369,7 +371,7 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
             p1_addr = memory_paging_get_internal_frame(curr);
 
             t_p1 = (memory_page_table_t*)p1_addr;
-            t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
+            t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p1);
 
             memory_memclean(t_p1, FRAME_SIZE);
 
@@ -380,7 +382,8 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
         }
     } else {
         if(type & MEMORY_PAGING_PAGE_TYPE_2M) {
-            uint64_t current_fa = t_p2->pages[p2idx].physical_address << 12;
+            uint64_t current_fa = t_p2->pages[p2idx].physical_address;
+            current_fa <<= 12;
 
             if(current_fa != (frame_address & 0xFFFFFFFE00)) {
                 PRINTLOG(PAGING, LOG_ERROR, "cannot map 2M page for va 0x%llx to fa 0x%llx because there is already a different frame mapped at that address. current fa: 0x%llx",
@@ -396,7 +399,7 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
 
         uint64_t tmp_pa = t_p2->pages[p2idx].physical_address;
         t_p1 = (memory_page_table_t*)(tmp_pa << 12);
-        t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
+        t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p1);
     }
 
     PRINTLOG(PAGING, LOG_TRACE, "p1 address: 0x%p", t_p1);
@@ -444,7 +447,8 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
 
         t_p1->pages[p1idx].physical_address = frame_address >> 12;
     } else {
-        uint64_t current_fa = t_p1->pages[p1idx].physical_address << 12;
+        uint64_t current_fa = t_p1->pages[p1idx].physical_address;
+        current_fa <<= 12;
 
         if(current_fa != frame_address) {
             PRINTLOG(PAGING, LOG_ERROR, "cannot map page for va 0x%llx to fa 0x%llx because there is already a different frame mapped at that address. current fa: 0x%llx",
@@ -514,7 +518,7 @@ int8_t memory_paging_reserve_current_page_table_frames(void) {
         return -1;
     }
 
-    old_p4 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(old_p4);
+    old_p4 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, old_p4);
     uint64_t hm_key = (uint64_t)old_p4;
     hm_key >>= 12; // first 12 bits are always 0 because of page alignment, so we can ignore them for hashmap key
 
@@ -640,7 +644,7 @@ memory_page_table_context_t* memory_paging_create_empty_userspace_table(
     tmp_frame.frame_count   = (gdt_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
     if(memory_paging_add_va_for_frame_ext(new_table_context,
-                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_frame.frame_address),
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, tmp_frame.frame_address),
                                           &tmp_frame,
                                           MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(PAGING, LOG_ERROR, "failed to map gdt frames for userspace page table");
@@ -653,7 +657,7 @@ memory_page_table_context_t* memory_paging_create_empty_userspace_table(
     tmp_frame.frame_count   = (tss_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
     if(memory_paging_add_va_for_frame_ext(new_table_context,
-                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_frame.frame_address),
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, tmp_frame.frame_address),
                                           &tmp_frame,
                                           MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(PAGING, LOG_ERROR, "failed to map tss frames for userspace page table");
@@ -666,7 +670,7 @@ memory_page_table_context_t* memory_paging_create_empty_userspace_table(
     tmp_frame.frame_count   = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
     if(memory_paging_add_va_for_frame_ext(new_table_context,
-                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_frame.frame_address),
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, tmp_frame.frame_address),
                                           &tmp_frame,
                                           MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(PAGING, LOG_ERROR, "failed to map stack frames for userspace page table");
@@ -719,8 +723,9 @@ int8_t memory_paging_destroy_userspace_table(memory_page_table_context_t* table_
 
     for(size_t i = 0; i < MEMORY_PAGING_INDEX_COUNT; i++) {
         if(p4->pages[i].present) {
-            uint64_t p3_fa_addr       = p4->pages[i].physical_address << 12;
-            uint64_t p3_va_addr       = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p3_fa_addr);
+            uint64_t p3_fa_addr = p4->pages[i].physical_address;
+            p3_fa_addr <<= 12;
+            uint64_t p3_va_addr       = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p3_fa_addr);
             memory_page_table_t* t_p3 = (memory_page_table_t*)p3_va_addr;
 
             for(size_t j = 0; j < MEMORY_PAGING_INDEX_COUNT; j++) {
@@ -729,8 +734,9 @@ int8_t memory_paging_destroy_userspace_table(memory_page_table_context_t* table_
                         continue;
                     }
 
-                    uint64_t p2_fa_addr       = t_p3->pages[j].physical_address << 12;
-                    uint64_t p2_va_addr       = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p2_fa_addr);
+                    uint64_t p2_fa_addr = t_p3->pages[j].physical_address;
+                    p2_fa_addr <<= 12;
+                    uint64_t p2_va_addr       = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p2_fa_addr);
                     memory_page_table_t* t_p2 = (memory_page_table_t*)p2_va_addr;
 
                     for(size_t k = 0; k < MEMORY_PAGING_INDEX_COUNT; k++) {
@@ -739,8 +745,9 @@ int8_t memory_paging_destroy_userspace_table(memory_page_table_context_t* table_
                                 continue;
                             }
 
-                            uint64_t p1_fa_addr = t_p2->pages[k].physical_address << 12;
-                            uint64_t p1_va_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_fa_addr);
+                            uint64_t p1_fa_addr = t_p2->pages[k].physical_address;
+                            p1_fa_addr <<= 12;
+                            uint64_t p1_va_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p1_fa_addr);
 
 
                             memory_paging_delete_page(p1_va_addr, NULL);
@@ -780,7 +787,7 @@ int8_t memory_paging_destroy_userspace_table(memory_page_table_context_t* table_
 
     memory_paging_delete_page((uint64_t)p4, NULL);
 
-    frm.frame_address = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)p4);
+    frm.frame_address = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, (uint64_t)p4);
     frm.frame_count   = 1;
 
     if(fa->release_frame(fa, &frm) != 0) {
@@ -840,7 +847,7 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
 
     memory_page_table_t* p4 = (memory_page_table_t*)p4_fa;
 
-    p4 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4);
+    p4 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, p4);
 
     table_context->page_table = p4;
 
@@ -849,7 +856,7 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
 #if ___EFIBUILD == 1
     for(int32_t i = 0; i < 4; i++) {
         memory_paging_add_page_ext(table_context,
-                                   MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frame_address + i * MEMORY_PAGING_PAGE_SIZE) | (64ULL << 40),
+                                   MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, internal_frame_address + i * MEMORY_PAGING_PAGE_SIZE) | (64ULL << 40),
                                    internal_frame_address + i * MEMORY_PAGING_PAGE_SIZE,
                                    MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
@@ -861,7 +868,7 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
     internal_frms.frame_count   = table_context->internal_frames_1_count;
 
     if(memory_paging_add_va_for_frame_ext(table_context,
-                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frms.frame_address) | (64ULL << 40),
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, internal_frms.frame_address) | (64ULL << 40),
                                           &internal_frms,
                                           MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(PAGING, LOG_PANIC, "cannot map internal paging frames. Halting...");
@@ -872,7 +879,7 @@ memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_f
     internal_frms.frame_count   = table_context->internal_frames_2_count;
 
     if(memory_paging_add_va_for_frame_ext(table_context,
-                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(internal_frms.frame_address) | (64ULL << 40),
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, internal_frms.frame_address) | (64ULL << 40),
                                           &internal_frms,
                                           MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
         PRINTLOG(PAGING, LOG_PANIC, "cannot map internal paging frames. Halting...");
@@ -907,8 +914,10 @@ int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, 
         return -1;
     }
 
-    t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
-    t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
+    uint64_t tmp_pa = p4->pages[p4_idx].physical_address;
+    tmp_pa <<= 12;
+    t_p3     = (memory_page_table_t*)tmp_pa;
+    t_p3     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p3);
 
     size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
@@ -930,8 +939,10 @@ int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, 
             cpu_tlb_invalidate(t_p3);
 
         } else {
-            t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
-            t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
+            tmp_pa   = t_p3->pages[p3_idx].physical_address;
+            tmp_pa <<= 12;
+            t_p2     = (memory_page_table_t*)tmp_pa;
+            t_p2     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p2);
 
             size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
@@ -955,8 +966,10 @@ int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, 
 
 
             } else {
-                t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
-                t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
+                tmp_pa   = t_p2->pages[p2_idx].physical_address;
+                tmp_pa <<= 12;
+                t_p1     = (memory_page_table_t*)tmp_pa;
+                t_p1     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p1);
 
                 size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
@@ -1015,8 +1028,10 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
         p4->pages[p4_idx].user_accessible = ~p4->pages[p4_idx].user_accessible;
     }
 
-    t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
-    t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
+    uint64_t tmp_pa = p4->pages[p4_idx].physical_address;
+    tmp_pa <<= 12;
+    t_p3     = (memory_page_table_t*)tmp_pa;
+    t_p3     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p3);
 
     size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
@@ -1059,8 +1074,10 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
                 t_p3->pages[p3_idx].user_accessible = ~t_p3->pages[p3_idx].user_accessible;
             }
 
-            t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
-            t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
+            tmp_pa   = t_p3->pages[p3_idx].physical_address;
+            tmp_pa <<= 12;
+            t_p2     = (memory_page_table_t*)tmp_pa;
+            t_p2     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p2);
 
             size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
@@ -1105,8 +1122,10 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
                     t_p2->pages[p2_idx].user_accessible = ~t_p2->pages[p2_idx].user_accessible;
                 }
 
-                t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
-                t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
+                tmp_pa   = t_p2->pages[p2_idx].physical_address;
+                tmp_pa <<= 12;
+                t_p1     = (memory_page_table_t*)tmp_pa;
+                t_p1     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p1);
 
                 size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
@@ -1179,8 +1198,10 @@ int8_t memory_paging_set_user_accessible_ext(memory_page_table_context_t* table_
 
     p4->pages[p4_idx].user_accessible = 1;
 
-    t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
-    t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
+    uint64_t tmp_pa = p4->pages[p4_idx].physical_address;
+    tmp_pa <<= 12;
+    t_p3     = (memory_page_table_t*)tmp_pa;
+    t_p3     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p3);
 
     size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
@@ -1197,8 +1218,10 @@ int8_t memory_paging_set_user_accessible_ext(memory_page_table_context_t* table_
         } else {
             t_p3->pages[p3_idx].user_accessible = 1;
 
-            t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
-            t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
+            tmp_pa   = t_p3->pages[p3_idx].physical_address;
+            tmp_pa <<= 12;
+            t_p2     = (memory_page_table_t*)tmp_pa;
+            t_p2     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p2);
 
             size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
@@ -1216,8 +1239,10 @@ int8_t memory_paging_set_user_accessible_ext(memory_page_table_context_t* table_
             } else {
                 t_p2->pages[p2_idx].user_accessible = 1;
 
-                t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
-                t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
+                tmp_pa   = t_p2->pages[p2_idx].physical_address;
+                tmp_pa <<= 12;
+                t_p1     = (memory_page_table_t*)tmp_pa;
+                t_p1     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p1);
 
                 size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
@@ -1273,8 +1298,10 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
         return -1;
     }
 
-    t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
-    t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
+    uint64_t tmp_pa = p4->pages[p4_idx].physical_address;
+    tmp_pa <<= 12;
+    t_p3     = (memory_page_table_t*)tmp_pa;
+    t_p3     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p3);
 
     size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
@@ -1285,15 +1312,19 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
     } else {
         if(t_p3->pages[p3_idx].hugepage == 1) {
             if(frame_address) {
-                *frame_address = t_p3->pages[p3_idx].physical_address << 12;
+                tmp_pa         = t_p3->pages[p3_idx].physical_address;
+                tmp_pa       <<= 12;
+                *frame_address = tmp_pa;
             }
 
             memory_memclean(&t_p3->pages[p3_idx], sizeof(memory_page_entry_t));
 
             cpu_tlb_invalidate(t_p3);
         } else {
-            t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
-            t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
+            tmp_pa   = t_p3->pages[p3_idx].physical_address;
+            tmp_pa <<= 12;
+            t_p2     = (memory_page_table_t*)tmp_pa;
+            t_p2     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p2);
 
             size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
@@ -1306,15 +1337,19 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
 
             if(t_p2->pages[p2_idx].hugepage == 1) {
                 if(frame_address) {
-                    *frame_address = t_p2->pages[p2_idx].physical_address << 12;
+                    tmp_pa         = t_p2->pages[p2_idx].physical_address;
+                    tmp_pa       <<= 12;
+                    *frame_address = tmp_pa;
                 }
 
                 memory_memclean(&t_p2->pages[p2_idx], sizeof(memory_page_entry_t));
 
                 cpu_tlb_invalidate(t_p2);
             } else {
-                t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
-                t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
+                tmp_pa   = t_p2->pages[p2_idx].physical_address;
+                tmp_pa <<= 12;
+                t_p1     = (memory_page_table_t*)tmp_pa;
+                t_p1     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p1);
 
                 size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
@@ -1326,7 +1361,9 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
                 }
 
                 if(frame_address) {
-                    *frame_address = t_p1->pages[p1_idx].physical_address << 12;
+                    tmp_pa         = t_p1->pages[p1_idx].physical_address;
+                    tmp_pa       <<= 12;
+                    *frame_address = tmp_pa;
                 }
 
                 memory_memclean(&t_p1->pages[p1_idx], sizeof(memory_page_entry_t));
@@ -1351,7 +1388,7 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
                         PRINTLOG(PAGING, LOG_ERROR, "failed to delete p1 page table page for virtual address: 0x%llx", (uint64_t)t_p1);
                     }
 
-                    frame_t f = {MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)t_p1), 1, 0, 0};
+                    frame_t f = {0, MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, (uint64_t)t_p1), 1, 0, 0};
                     fa->release_frame(fa, &f);
                 }
 
@@ -1375,7 +1412,7 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
                     PRINTLOG(PAGING, LOG_ERROR, "failed to delete p2 page table page for virtual address: 0x%llx", (uint64_t)t_p2);
                 }
 
-                frame_t f = {MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)t_p2), 1, 0, 0};
+                frame_t f = {0, MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, (uint64_t)t_p2), 1, 0, 0};
                 fa->release_frame(fa, &f);
             }
         }
@@ -1398,7 +1435,7 @@ int8_t memory_paging_delete_page_ext(memory_page_table_context_t* table_context,
                 PRINTLOG(PAGING, LOG_ERROR, "failed to delete p3 page table page for virtual address: 0x%llx", (uint64_t)t_p3);
             }
 
-            frame_t f = {MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)t_p3), 1, 0, 0};
+            frame_t f = {0, MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(KERNEL, (uint64_t)t_p3), 1, 0, 0};
             fa->release_frame(fa, &f);
         }
     }
@@ -1435,8 +1472,10 @@ int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table
         return -1;
     }
 
-    t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
-    t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
+    uint64_t tmp_pa = p4->pages[p4_idx].physical_address;
+    tmp_pa <<= 12;
+    t_p3     = (memory_page_table_t*)tmp_pa;
+    t_p3     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p3);
 
     size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
@@ -1446,14 +1485,16 @@ int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table
         return -1;
     } else {
         if(t_p3->pages[p3_idx].hugepage == 1) {
-            size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
-            size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
+            uint64_t current_fa = t_p3->pages[p3_idx].physical_address;
+            current_fa = current_fa << 12;
 
-            *physical_address = (t_p3->pages[p3_idx].physical_address | (p2_idx << 12) | p1_idx) << 12 | (virtual_address & ((1ULL << 30) - 1));
+            *physical_address = current_fa | (virtual_address & ((1ULL << 30) - 1));
 
         } else {
-            t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
-            t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
+            tmp_pa   = t_p3->pages[p3_idx].physical_address;
+            tmp_pa <<= 12;
+            t_p2     = (memory_page_table_t*)tmp_pa;
+            t_p2     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p2);
 
             size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
@@ -1464,13 +1505,16 @@ int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table
             }
 
             if(t_p2->pages[p2_idx].hugepage == 1) {
-                size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
+                uint64_t current_fa = t_p2->pages[p2_idx].physical_address;
+                current_fa = current_fa << 12;
 
-                *physical_address = (t_p2->pages[p2_idx].physical_address | p1_idx) << 12 | (virtual_address & ((1ULL << 21) - 1));
+                *physical_address = current_fa | (virtual_address & ((1ULL << 21) - 1));
 
             } else {
-                t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
-                t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
+                tmp_pa   = t_p2->pages[p2_idx].physical_address;
+                tmp_pa <<= 12;
+                t_p1     = (memory_page_table_t*)tmp_pa;
+                t_p1     = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(KERNEL, t_p1);
 
                 size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
@@ -1480,7 +1524,10 @@ int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table
                     return -1;
                 }
 
-                *physical_address = t_p1->pages[p1_idx].physical_address << 12 | (virtual_address & ((1ULL << 12) - 1));
+                uint64_t current_fa = t_p1->pages[p1_idx].physical_address;
+                current_fa = current_fa << 12;
+
+                *physical_address = current_fa | (virtual_address & ((1ULL << 12) - 1));
             }
         }
     }
