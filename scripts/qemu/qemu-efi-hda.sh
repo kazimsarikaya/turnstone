@@ -232,13 +232,14 @@ qemu-system-x86_64 \
   -name osdev-hda-efi-boot \
   -cpu host,topoext=on,x2apic=on \
   -accel $ACCEL ${TRACE_OPTS} \
+  -global hpet.msi=on \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${OUTPUTDIR}/edk2-x86_64-code.fd \
   -drive if=pflash,readonly=off,format=raw,unit=1,file=${OUTPUTDIR}/edk2-i386-vars.fd \
   -drive id=system,if=none,format=raw,file=${OUTPUTDIR}/qemu-hda,werror=report,rerror=report \
   -drive id=cache,if=none,format=raw,file=${OUTPUTDIR}/qemu-nvme-cache,werror=report,rerror=report \
   -drive id=usbbot,if=none,format=raw,file=${OUTPUTDIR}/qemu-usb-bot,werror=report,rerror=report \
   -drive id=usbuas,if=none,format=raw,file=${OUTPUTDIR}/qemu-usb-uas,werror=report,rerror=report \
-  -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
+  -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on,dma-remap=true,dma-translation=on \
   -chardev socket,id=chrtpm,path=${TPM_DIR}/swtpm.ctrl \
   -tpmdev emulator,id=tpm0,chardev=chrtpm \
   -device tpm-tis,tpmdev=tpm0 \
@@ -272,4 +273,4 @@ qemu-system-x86_64 \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
   -monitor stdio \
   -audio pipewire \
-  -display sdl,gl=on,show-cursor=off
+  -display sdl,gl=on,show-cursor=on

@@ -165,7 +165,7 @@ int8_t acpi_setup_events(void) {
         interrupt_irq_set_handler(irq, &acpi_events_isr);
     }
 
-    apic_ioapic_setup_irq(irq, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
+    // apic_ioapic_setup_irq(irq, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
     apic_ioapic_enable_irq(irq);
 
     if(ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address) {

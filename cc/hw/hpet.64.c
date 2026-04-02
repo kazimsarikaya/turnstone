@@ -32,8 +32,9 @@ volatile uint64_t hpet_rdtsc_start = 0;
 volatile uint64_t hpet_rdtsc_end   = 0;
 volatile uint64_t hpet_last_rdtsc  = 0;
 
-uint64_t hpet_next_calibration_tick = 0;
-uint64_t hpet_next_rtc_resync_tick  = 0;
+static uint64_t hpet_next_calibration_tick = 0;
+static uint64_t hpet_next_rtc_resync_tick  = 0;
+static uint8_t hpet_interrupt_vector       = 0;
 
 #define HPET_CALIBRATION_INTERVAL_US     (1000000ULL) // 1 second
 #define HPET_CALIBRATION_INTERVAL_TICKS  (HPET_CALIBRATION_INTERVAL_US / HPET_MIN_US_SLEEP)
@@ -139,24 +140,33 @@ int8_t hpet_init(void) {
 
     hpet_capabilities_t capabilities = (hpet_capabilities_t) hpet->capabilities;
 
-
     PRINTLOG(HPET, LOG_INFO, "number of timers: %d", capabilities.fields.number_of_timers);
+
+    hpet_timer_configuration_t tmr0_config = (hpet_timer_configuration_t) hpet->timer0_configuration;
+
+    boolean_t use_fsb = false;
+    hpet_interrupt_vector = INTERRUPT_IRQ_BASE + 17; // default to PIC IRQ 17
+
+    if(capabilities.fields.legacy_replacement && tmr0_config.fields.fsb_interrupt_enable) {
+        use_fsb = true;
+    }
 
     smp_data_t* smp_data = (smp_data_t*)SMP_TRAMPOLINE_SHARED_DATA;
 
     if(!smp_data->is_for_wakeup) {
-        if(interrupt_irq_set_handler(17, &hpet_isr) != 0) {
+        if(use_fsb) {
+            hpet_interrupt_vector = interrupt_get_next_empty_interrupt();
+        }
+
+        PRINTLOG(HPET, LOG_INFO, "using %s for HPET interrupts with vector 0x%02x irq 0x%02x",
+                 use_fsb ? "FSB" : "legacy PIC", hpet_interrupt_vector, hpet_interrupt_vector - INTERRUPT_IRQ_BASE);
+
+        if(interrupt_irq_set_handler(hpet_interrupt_vector - INTERRUPT_IRQ_BASE, &hpet_isr) != 0) {
             PRINTLOG(HPET, LOG_ERROR, "cannot set pic timer irq");
 
             return -1;
         }
     }
-
-    apic_ioapic_setup_irq(17,
-                          APIC_IOAPIC_INTERRUPT_ENABLED
-                          | APIC_IOAPIC_DELIVERY_MODE_FIXED | APIC_IOAPIC_DELIVERY_STATUS_RELAX
-                          | APIC_IOAPIC_DESTINATION_MODE_PHYSICAL
-                          | APIC_IOAPIC_TRIGGER_MODE_EDGE | APIC_IOAPIC_PIN_POLARITY_ACTIVE_HIGH);
 
     uint64_t period_fs    = capabilities.fields.counter_clk_period;
     uint64_t ticks_per_ns = 1000000ULL / period_fs; // may round down
@@ -167,8 +177,6 @@ int8_t hpet_init(void) {
     PRINTLOG(HPET, LOG_INFO, "period: %llu fs, ticks: %llu for ns, %llu for us, %llu for ms.",
              period_fs, ticks_per_ns, ticks_per_us, ticks_per_ms);
 
-    hpet_timer_configuration_t tmr0_config = (hpet_timer_configuration_t) hpet->timer0_configuration;
-
     cpu_cli();
 
     hpet->configuration = 0;
@@ -177,7 +185,19 @@ int8_t hpet_init(void) {
     tmr0_config.fields.interrupt_enable = 1;
     tmr0_config.fields.timer_type       = 1;
     tmr0_config.fields.value_set        = 1;
-    tmr0_config.fields.interrupt_route  = 17;
+    tmr0_config.fields.interrupt_route  = use_fsb ? 0 : hpet_interrupt_vector;
+    tmr0_config.fields.fsb_enable       = use_fsb ? 1 : 0;
+
+    if(use_fsb) {
+        uint64_t fsb_interrupt_route = ((uint64_t)0xFEE00000 << 32) | hpet_interrupt_vector; // APIC ID 0 (CPU 0), vector = hpet_interrupt_vector
+        hpet->timer0_fsb_interrupt_route = fsb_interrupt_route;
+    } else {
+        apic_ioapic_setup_irq(hpet_interrupt_vector - INTERRUPT_IRQ_BASE,
+                              APIC_IOAPIC_INTERRUPT_ENABLED
+                              | APIC_IOAPIC_DELIVERY_MODE_FIXED | APIC_IOAPIC_DELIVERY_STATUS_RELAX
+                              | APIC_IOAPIC_DESTINATION_MODE_PHYSICAL
+                              | APIC_IOAPIC_TRIGGER_MODE_EDGE | APIC_IOAPIC_PIN_POLARITY_ACTIVE_HIGH);
+    }
 
     hpet->timer0_configuration = tmr0_config.raw;
 

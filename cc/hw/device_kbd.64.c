@@ -60,12 +60,12 @@ int8_t kbd_handle_key(char16_t key, boolean_t pressed){
     }
 
     boolean_t is_printable = false;
-    kbd_report_t report = {0};
+    kbd_report_t report    = {0};
 
-    report.key = kbd_scancode_get_value(key, &kbd_state, &is_printable);
-    report.is_pressed = pressed;
+    report.key          = kbd_scancode_get_value(key, &kbd_state, &is_printable);
+    report.is_pressed   = pressed;
     report.is_printable = is_printable;
-    report.state = kbd_state;
+    report.state        = kbd_state;
 
     if(kbd_buffer != NULL) {
         buffer_append_bytes(kbd_buffer, (uint8_t*)&report, sizeof(kbd_report_t));
@@ -126,7 +126,7 @@ int8_t kbd_init(void){
         if(!kbd_is_usb) {
             PRINTLOG(KERNEL, LOG_INFO, "PS/2 keyboard found");
             interrupt_irq_set_handler(0x1, &dev_kbd_isr);
-            apic_ioapic_setup_irq(0x1, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
+            // apic_ioapic_setup_irq(0x1, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
             apic_ioapic_enable_irq(0x1);
 
             return 0;
@@ -138,7 +138,7 @@ int8_t kbd_init(void){
         kbd_ps2_tmp = 0xFFFF;
 
         interrupt_irq_set_handler(0x1, &dev_kbd_cleanup_isr);
-        apic_ioapic_setup_irq(0x1, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
+        // apic_ioapic_setup_irq(0x1, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
         apic_ioapic_enable_irq(0x1);
 
         outb(KBD_CMD_PORT, KBD_CMD_DISABLE_KBD_PORT);

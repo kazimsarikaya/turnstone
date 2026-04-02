@@ -93,18 +93,18 @@ typedef  struct hpet_interrupt_status_t {
  */
 typedef union hpet_timer_configuration_t {
     struct {
-        uint64_t reserved0                 : 1; ///< must be 0
-        uint64_t interrupt_type            : 1; ///< 0 - edge, 1 - level
-        uint64_t interrupt_enable          : 1; ///< 0 - no, 1 - yes
-        uint64_t timer_type                : 1; ///< 0 - one shot, 1 - periodic
-        uint64_t periodic_capable          : 1; ///< 0 - no, 1 - yes
-        uint64_t size_capable              : 1; ///< 0 - 32 bit, 1 - 64 bit
-        uint64_t value_set                 : 1; ///< 0 - no, 1 - yes
-        uint64_t reserved1                 : 1; ///< must be 0
-        uint64_t force_32bit               : 1; ///< 0 - no, 1 - yes
-        uint64_t interrupt_route           : 5; ///< interrupt route
-        uint64_t fsb_enable                : 1; ///< 0 - no, 1 - yes
-        uint64_t fsb_interrupt_enable      : 1; ///< 0 - no, 1 - yes
+        uint64_t reserved0                 : 1; ///< 0: must be 0
+        uint64_t interrupt_type            : 1; ///< 1: 0 - edge, 1 - level
+        uint64_t interrupt_enable          : 1; ///< 2: 0 - no, 1 - yes
+        uint64_t timer_type                : 1; ///< 3: 0 - one shot, 1 - periodic
+        uint64_t periodic_capable          : 1; ///< 4: 0 - no, 1 - yes
+        uint64_t size_capable              : 1; ///< 5: 0 - 32 bit, 1 - 64 bit
+        uint64_t value_set                 : 1; ///< 6: 0 - no, 1 - yes
+        uint64_t reserved1                 : 1; ///< 7: must be 0
+        uint64_t force_32bit               : 1; ///< 8: 0 - no, 1 - yes
+        uint64_t interrupt_route           : 5; ///< 9-13: interrupt route
+        uint64_t fsb_enable                : 1; ///< 14: 0 - no, 1 - yes
+        uint64_t fsb_interrupt_enable      : 1; ///< 15: 0 - no, 1 - yes
         uint64_t reserved2                 : 16; ///< must be 0
         uint64_t interrup_route_capability : 32; ///< interrupt route capability, which bits are set, that interrupt route is supported
     } __attribute__((packed)) fields; ///< HPET timer configuration register fields
@@ -137,6 +137,8 @@ typedef  struct hpet_t {
     volatile uint64_t timer2_fsb_interrupt_route; ///< HPET timer 2 FSB interrupt route
     uint64_t          timer2_reserved; ///< must be 0
 } __attribute__((packed)) hpet_t; ///< HPET structure
+
+_Static_assert(offsetof_field(hpet_t, timer0_configuration) == 0x100, "hpet_t timer0_configuration offset should be 0x100");
 
 /*! variable for hpet enabled flag */
 extern boolean_t hpet_enabled;
