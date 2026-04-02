@@ -1133,6 +1133,8 @@ int8_t linker_calculate_program_size(linker_context_t* ctx) {
             }
         }
 
+        metadata_size += 32; // empty section for end of sections.
+
         if(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size) {
             relocation_table_size += 16; // module id, relocation size
             relocation_table_size += module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size;
@@ -2477,6 +2479,16 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 #endif
         }
 
+        if(got_size % FRAME_SIZE != 0) {
+            got_size += FRAME_SIZE - (got_size % FRAME_SIZE);
+        }
+
+        if(got_size != ctx->global_offset_table_size) {
+            PRINTLOG(LINKER, LOG_ERROR, "got size mismatch. expected 0x%llx, got 0x%llx", ctx->global_offset_table_size, got_size);
+
+            return -1;
+        }
+
         program_target_offset += ctx->global_offset_table_size;
     }
 
@@ -2524,6 +2536,17 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
             }
 #endif
+        }
+
+        size_t old_relocs_size = relocs_size;
+        if(relocs_size % FRAME_SIZE != 0) {
+            relocs_size += FRAME_SIZE - (relocs_size % FRAME_SIZE);
+        }
+
+        if(relocs_size != ctx->relocation_table_size) {
+            PRINTLOG(LINKER, LOG_ERROR, "relocation table size mismatch. expected 0x%llx, got 0x%llx(0x%llx)", ctx->relocation_table_size, relocs_size, old_relocs_size);
+
+            return -1;
         }
 
         program_target_offset += ctx->relocation_table_size;
@@ -2578,6 +2601,17 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 #endif
         }
 
+        size_t old_metadata_size = metadata_size;
+        if(metadata_size % FRAME_SIZE != 0) {
+            metadata_size += FRAME_SIZE - (metadata_size % FRAME_SIZE);
+        }
+
+        if(metadata_size != ctx->metadata_size) {
+            PRINTLOG(LINKER, LOG_ERROR, "metadata size mismatch. expected 0x%llx, got 0x%llx(0x%llx)", ctx->metadata_size, metadata_size, old_metadata_size);
+
+            return -1;
+        }
+
         program_target_offset += ctx->metadata_size;
     }
 
@@ -2624,6 +2658,17 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
             }
 #endif
+        }
+
+        size_t old_symbol_table_size = symbol_table_size;
+        if(symbol_table_size % FRAME_SIZE != 0) {
+            symbol_table_size += FRAME_SIZE - (symbol_table_size % FRAME_SIZE);
+        }
+
+        if(symbol_table_size != ctx->symbol_table_size) {
+            PRINTLOG(LINKER, LOG_ERROR, "symbol table size mismatch. expected 0x%llx, got 0x%llx(0x%llx)", ctx->symbol_table_size, symbol_table_size, old_symbol_table_size);
+
+            return -1;
         }
 
         program_target_offset += ctx->symbol_table_size;
