@@ -250,7 +250,7 @@ qemu-system-x86_64 \
   -device usb-hub,bus=xhci0.0,id=hub0,port=1 \
   -device usb-tablet,bus=xhci0.0,port=1.1 \
   -device usb-kbd,bus=xhci0.0,port=1.2 \
-  -device usb-audio,bus=xhci0.0,port=1.3,buffer=1048576 \
+  -device usb-audio,bus=xhci0.0,port=1.3,buffer=$((100*192)),debug=9 \
   -device usb-storage,bus=xhci0.0,id=bot0,port=2,removable=on,drive=usbbot \
   -device usb-uas,bus=xhci0.0,id=uas0,port=3 \
   -device scsi-hd,bus=uas0.0,lun=0,removable=on,drive=usbuas \
