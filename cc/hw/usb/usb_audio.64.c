@@ -96,6 +96,29 @@ typedef struct usb_audio_ac_feature_unit_desc_t {
     uint8_t extra_data[];
 }__attribute__((packed)) usb_audio_ac_feature_unit_desc_t;
 
+typedef enum usb_audio_streaming_sub_desc_type_t {
+    USB_AUDIO_STREAMING_DESCRIPTOR_UNDEFINED = 0x00,
+    USB_AUDIO_STREAMING_AS_GENERAL           = 0x01,
+    USB_AUDIO_STREAMING_FORMAT_TYPE          = 0x02,
+    USB_AUDIO_STREAMING_FORMAT_SPECIFIC      = 0x03,
+} usb_audio_streaming_sub_desc_type_t;
+
+typedef struct usb_audio_streaming_headphone_type_1_desc_t {
+    uint8_t length;
+    uint8_t type;
+    uint8_t subtype;
+    uint8_t format_type;
+    uint8_t num_channels;
+    uint8_t subframe_size;
+    uint8_t bit_resolution;
+    uint8_t sample_freq_type;
+    struct {
+        uint8_t sample_freq[3];
+    } __attribute__((packed)) sample_freqs[];
+}__attribute__((packed)) usb_audio_streaming_headphone_type_1_desc_t;
+
+_Static_assert(sizeof(usb_audio_streaming_headphone_type_1_desc_t) == 8, "usb_audio_streaming_headphone_type_1_desc_t must be 64 bytes");
+
 typedef enum usb_audio_driver_type_t {
     USB_AUDIO_DRIVER_TYPE_CONTROL   = 0,
     USB_AUDIO_DRIVER_TYPE_STREAMING = 1,
@@ -444,6 +467,34 @@ int8_t usb_audio_streaming_init(usb_device_t* device, usb_interface_t* interface
         interface->driver = NULL;
 
         return -1;
+    }
+
+    PRINTLOG(USB, LOG_TRACE, "num of cs descs: %d", interface->num_cs_interfaces);
+
+    for(uint32_t i = 0; i < interface->num_cs_interfaces; i++) {
+        usb_audio_cs_dummy_desc_t* cs_desc = (usb_audio_cs_dummy_desc_t*)interface->cs_interfaces[i];
+
+        if(!cs_desc || cs_desc->length < 3) {
+            continue;
+        }
+
+        if(cs_desc->subtype == USB_AUDIO_STREAMING_FORMAT_TYPE) {
+            usb_audio_streaming_headphone_type_1_desc_t* headphone_desc = (usb_audio_streaming_headphone_type_1_desc_t*)cs_desc;
+            PRINTLOG(USB, LOG_INFO, "found headphone type 1 desc with format type %d num channels %d subframe size %d bit resolution %d sample freq type %d sample freqs:",
+                     headphone_desc->format_type,
+                     headphone_desc->num_channels,
+                     headphone_desc->subframe_size,
+                     headphone_desc->bit_resolution,
+                     headphone_desc->sample_freq_type);
+            for(uint32_t j = 0; j < headphone_desc->sample_freq_type; j++) {
+                uint32_t sample_freq = headphone_desc->sample_freqs[j].sample_freq[0] |
+                                       (headphone_desc->sample_freqs[j].sample_freq[1] << 8) |
+                                       (headphone_desc->sample_freqs[j].sample_freq[2] << 16);
+                PRINTLOG(USB, LOG_INFO, "  sample freq %d: %d Hz", j, sample_freq);
+            }
+        } else {
+            PRINTLOG(USB, LOG_DEBUG, "found cs desc with subtype %d", cs_desc->subtype);
+        }
     }
 
     if(!usb_audio_beep) {
