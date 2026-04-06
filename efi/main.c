@@ -1197,6 +1197,20 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
 
     PRINTLOG(EFI, LOG_INFO, "spool size 0x%llx", spool_size);
 
+    boolean_t* collect_cpu_pmc_ptr = NULL;
+
+    res = efi_tosdb_read_config(tdb_ctx, "collect_cpu_pmc", (void**)&collect_cpu_pmc_ptr);
+
+    boolean_t collect_cpu_pmc = false;
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_WARNING, "cannot read collect_cpu_pmc config, defaulting to false");
+    } else {
+        collect_cpu_pmc = *collect_cpu_pmc_ptr;
+    }
+
+    memory_free(collect_cpu_pmc_ptr);
+
     tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db, "modules", 1 << 10, 512 << 10, 8);
 
     tosdb_record_t* s_mod_rec = tosdb_table_create_record(tbl_modules);
@@ -1616,6 +1630,7 @@ __attribute__((noinline)) static efi_status_t efi_main2(efi_handle_t image, efi_
     sysinfo->gs_page_size                  = 4 * cpu_count * FRAME_SIZE;
     sysinfo->cpu_count                     = cpu_count;
     sysinfo->proximity_domain_count        = max_proximity_domain + 1;
+    sysinfo->collect_cpu_pmc               = collect_cpu_pmc;
 
     memory_page_table_context_t* page_table_ctx = (memory_page_table_context_t*)program_header->page_table_context_address;
 

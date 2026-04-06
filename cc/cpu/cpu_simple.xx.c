@@ -30,7 +30,7 @@ uint16_t cpu_read_data_segment(void){
 }
 
 int8_t cpu_check_rdrand(void){
-    cpu_cpuid_regs_t query = {0x00000001, 0, 0, 0};
+    cpu_cpuid_regs_t query  = {0x00000001, 0, 0, 0};
     cpu_cpuid_regs_t answer = {0, 0, 0, 0};
 
     if(cpu_cpuid(query, &answer) != 0) {
@@ -71,7 +71,7 @@ boolean_t cpu_is_interrupt_enabled(void) {
     return (rflags & 0x200) == 0x200;
 }
 
-static cpu_type_t cpu_type = CPU_TYPE_UNKNOWN;
+static cpu_type_t cpu_type            = CPU_TYPE_UNKNOWN;
 static boolean_t cpu_type_initialized = false;
 
 cpu_type_t cpu_get_type(void) {
@@ -87,9 +87,9 @@ cpu_type_t cpu_get_type(void) {
 
     char_t vendor_id[13] = {0};
 
-    *(uint32_t*)&vendor_id[0] = result.ebx;
-    *(uint32_t*)&vendor_id[4] = result.edx;
-    *(uint32_t*)&vendor_id[8] = result.ecx;
+    *(uint32_t*)(void*)&vendor_id[0] = result.ebx;
+    *(uint32_t*)(void*)&vendor_id[4] = result.edx;
+    *(uint32_t*)(void*)&vendor_id[8] = result.ecx;
 
     PRINTLOG(KERNEL, LOG_TRACE, "Vendor ID: %s", vendor_id);
 

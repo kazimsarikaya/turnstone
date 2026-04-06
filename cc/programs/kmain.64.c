@@ -133,6 +133,10 @@ _Thread_local uint64_t test_tls = 0x123456789abcdef0ULL;
 int8_t kmain64(size_t entry_point) {
     crc_init();
 
+    if(SYSTEM_INFO->collect_cpu_pmc) {
+        cpu_pmc_start();
+    }
+
     memory_heap_t* heap = memory_create_heap_hash(0, 0);
 
     if(heap == NULL) {
@@ -530,6 +534,10 @@ int8_t kmain64(size_t entry_point) {
     PRINTLOG(KERNEL, LOG_INFO, "current time %lli", time_ns(NULL));
 
     PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)");
+
+    if(SYSTEM_INFO->collect_cpu_pmc) {
+        cpu_pmc_print_results();
+    }
 
     return 0;
 }
