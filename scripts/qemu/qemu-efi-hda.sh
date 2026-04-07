@@ -230,7 +230,7 @@ qemu-system-x86_64 \
   -numa hmat-cache,node-id=0,size=10K,level=1,associativity=direct,policy=write-back,line=8 \
   -numa hmat-cache,node-id=1,size=10K,level=1,associativity=direct,policy=write-back,line=8 \
   -name osdev-hda-efi-boot \
-  -cpu host,topoext=on,x2apic=on \
+  -cpu host,topoext=on,x2apic=on,+perfctr-core,+perfctr-nb \
   -accel $ACCEL ${TRACE_OPTS} \
   -global hpet.msi=on \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${OUTPUTDIR}/edk2-x86_64-code.fd \
