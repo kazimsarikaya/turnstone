@@ -108,7 +108,7 @@ void task_set_interrupt_received(uint64_t tid) {
                 : "eax", "edx", "memory"
                 );
 
-            if(current_task->cpu_id != task->cpu_id) {
+            if(current_task->cpu_id != task->cpu_id && task->state == TASK_STATE_MESSAGE_WAITING) {
                 apic_send_ipi(task->cpu_id, 0xFE, false);
             }
         } else {
@@ -174,7 +174,7 @@ void task_set_message_received(uint64_t tid) {
             : "eax", "edx", "memory"
             );
 
-        if(current_task->cpu_id != task->cpu_id) {
+        if(current_task->cpu_id != task->cpu_id && task->state == TASK_STATE_MESSAGE_WAITING) {
             apic_send_ipi(task->cpu_id, 0xFE, false);
         }
 

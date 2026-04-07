@@ -1284,6 +1284,7 @@ static int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
 
     cpu_state->task_switch_paramters_need_eoi = true;
+    cpu_state->current_task->need_yield       = true;
     task_switch_task();
     task_task_switch_exit();
 
