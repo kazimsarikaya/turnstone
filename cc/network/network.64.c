@@ -118,8 +118,11 @@ static int8_t network_process_rx(void){
                 continue;
             } else {
                 PRINTLOG(NETWORK, LOG_TRACE, "packet pushed to return queue");
+                task_set_message_received(packet->tx_task_id);
             }
 
+            memory_free(packet->packet_data);
+            memory_free((void*)packet);
         }
 
         PRINTLOG(NETWORK, LOG_TRACE, "rx queue size 0x%llx", list_size(network_received_packets));
