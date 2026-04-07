@@ -113,8 +113,8 @@ uint8_t pci_msix_set_isr(const pci_generic_device_t* pci_dev, const pci_capabili
     uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
     interrupt_irq_set_handler(isrnum, isr);
 
-    PRINTLOG(PCI, LOG_INFO, "msixcap %p intnum 0x%x isrnum 0x%x", msix_cap, intnum, isrnum);
-    PRINTLOG(PCI, LOG_INFO, "msix table %p offset %x vector 0x%x int 0x%02x", msix_table, msix_cap->table_offset, msix_vector,  msix_table->entries[msix_vector].message_data);
+    PRINTLOG(PCI, LOG_INFO, "msixcap 0x%p intnum 0x%x isrnum 0x%x", msix_cap, intnum, isrnum);
+    PRINTLOG(PCI, LOG_INFO, "msix table 0x%p offset %x vector 0x%x int 0x%02x", msix_table, msix_cap->table_offset, msix_vector,  msix_table->entries[msix_vector].message_data);
 
     return isrnum;
 }
@@ -139,7 +139,7 @@ uint8_t pci_msix_update_lapic(const pci_generic_device_t* pci_dev, const pci_cap
 
     msix_table->entries[msix_vector].message_address = msg_addr;
 
-    PRINTLOG(PCI, LOG_INFO, "msixcap %p update lapic msg_addr 0x%x", msix_cap, msg_addr);
+    PRINTLOG(PCI, LOG_INFO, "msixcap 0x%p update lapic msg_addr 0x%x", msix_cap, msg_addr);
 
     return 0;
 }
