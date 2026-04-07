@@ -59,8 +59,10 @@ lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_futu
         return NULL;
     }
 
-    lock->heap       = heap;
-    lock->for_future = for_future;
+    lock->heap          = heap;
+    lock->for_future    = for_future;
+    lock->owner_cpu_id  = -1ULL;
+    lock->owner_task_id = -1ULL;
 
     if(lock->for_future) {
         lock->owner_task_id = task_id;
@@ -88,14 +90,14 @@ void lock_acquire(lock_t* lock) {
     }
 
 
-    uint64_t current_cpu_id = cpu_state->local_apic_id + 1; // add one for preventing bsp cpu id 0
+    uint64_t current_cpu_id = cpu_state->local_apic_id;
 
     task_t* current_task = lock_get_current_task();
 
 
     uint64_t current_task_id = current_cpu_id;
 
-    if(current_task != NULL) {
+    if(current_task) {
         current_task_id = current_task->task_id;
     }
 
@@ -105,27 +107,11 @@ void lock_acquire(lock_t* lock) {
     }
 
     while(bit_locked_set(&lock->lock_value, 0)) {
-#if 0
-        if(!lock->for_future) {
-            // lock_task_yield();
-            cpu_sti();
-            asm volatile ("pause" ::: "memory");
-        } else {
-            if(lock->owner_task_id == 0) { // when it is gpu sets future's owner task id 0
-                lock_task_yield();
-            } else {
-                cpu_sti();
-                asm volatile ("pause" ::: "memory");
-            }
-        }
-#else
-        asm volatile ("pause" ::: "memory");
-
+        asm volatile ("" ::: "memory");
         lock_task_yield();
-#endif
     }
 
-    asm volatile ("pause" ::: "memory");
+    asm volatile ("" ::: "memory");
 
     if(!lock->for_future) {
         lock->owner_task_id = current_task_id;
@@ -140,10 +126,11 @@ void lock_release(lock_t* lock) {
             // future_task_wait_toggler(lock->owner_task_id);
         }
 
-        lock->owner_task_id = 0;
-        lock->owner_cpu_id  = 0;
-        lock->lock_value    = 0;
-        asm volatile ("pause" ::: "memory");
+        lock->owner_task_id = -1ULL;
+        lock->owner_cpu_id  = -1ULL;
+        asm volatile ("" ::: "memory");
+        lock->lock_value = 0;
+        asm volatile ("" ::: "memory");
     }
 }
 

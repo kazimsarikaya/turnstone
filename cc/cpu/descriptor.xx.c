@@ -196,7 +196,7 @@ int8_t descriptor_build_ap_descriptors_register(uint64_t* gdt_fa_location,
             : : "r" (tss_selector)
             );
 
-        asm volatile ("pause\n" : : : "memory");
+        asm volatile ("" : : : "memory");
 
         return 0;
     }
