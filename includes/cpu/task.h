@@ -162,6 +162,7 @@ typedef struct task_t {
     uint64_t                       vmcs_physical_address; ///< vmcs physical address
     void*                          vm; ///< vm
     int32_t                        exit_code; ///< task exit code
+    boolean_t                      need_yield; ///< flag to indicate if task needs to yield, this flag is set when task is preempted by scheduler or waiting for message or interrupt
     cpu_registers_t*               registers __attribute__((aligned(0x40))); ///< task registers
 } task_t; ///< short hand for struct
 

@@ -623,7 +623,6 @@ void task_task_switch_exit(void) {
 
 static char_t task_switch_task_id_buf[100] = {0};
 
-__attribute__((noinline))
 static boolean_t task_is_speacial_task(task_t* task) {
     return task == cpu_state->idle_task ||
            task == cpu_state->cleaner_task ||
@@ -633,55 +632,42 @@ static boolean_t task_is_speacial_task(task_t* task) {
 
 __attribute__((no_stack_protector))
 void task_switch_task(void) {
-    task_t* current_task = cpu_state->current_task;
+    task_t* old_task = cpu_state->current_task;
 
     uint64_t current_tick = rdtsc();
 
     if(!cpu_state->parked &&
-       current_task != cpu_state->idle_task &&
-       current_task->state == TASK_STATE_RUNNING &&
-       (current_tick - current_task->last_tick_count) < task_max_tick_count_limit &&
-       current_tick > current_task->last_tick_count) {
+       !old_task->need_yield &&
+       old_task != cpu_state->idle_task &&
+       old_task->state == TASK_STATE_RUNNING &&
+       current_tick > old_task->last_tick_count &&
+       (current_tick - old_task->last_tick_count) < task_max_tick_count_limit) {
 
         return;
     }
 
-    if(current_task->vmcs_physical_address) {
-        if(cpu_get_type() == CPU_TYPE_INTEL) {
-            if(vmx_vmclear(current_task->vmcs_physical_address) != 0) {
-                utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
-                video_text_print("vmclear failed for task 0x");
-                video_text_print(task_switch_task_id_buf);
-                video_text_print("\n");
-                return;
-            }
-        } else if(cpu_get_type() == CPU_TYPE_AMD) {
+    old_task->need_yield = false;
 
-        }
+    if(old_task->state == TASK_STATE_RUNNING) {
+        old_task->state = TASK_STATE_SUSPENDED;
     }
 
-    task_save_registers(current_task->registers);
-
-    if(current_task->state == TASK_STATE_RUNNING) {
-        current_task->state = TASK_STATE_SUSPENDED;
-    }
-
-    boolean_t special_task = task_is_speacial_task(current_task);
+    boolean_t special_task = task_is_speacial_task(old_task);
 
     if(!special_task) {
-        switch(current_task->state) {
+        switch(old_task->state) {
         case TASK_STATE_SUSPENDED:
         case TASK_STATE_STARTING:
-            list_queue_push(cpu_state->task_queue, current_task);
+            list_queue_push(cpu_state->task_queue, old_task);
             break;
         case TASK_STATE_ENDED:
-            list_queue_push(cpu_state->task_cleanup_queue, current_task);
+            list_queue_push(cpu_state->task_cleanup_queue, old_task);
             break;
         case TASK_STATE_SLEEPING:
-            list_sortedlist_insert(cpu_state->task_sleep_queue, current_task);
+            list_sortedlist_insert(cpu_state->task_sleep_queue, old_task);
             break;
         default:
-            list_queue_push(cpu_state->task_wait_queue, current_task);
+            list_queue_push(cpu_state->task_wait_queue, old_task);
             break;
         }
     }
@@ -692,25 +678,39 @@ void task_switch_task(void) {
         while(cpu_state->in_parked_state) { asm volatile ("hlt" ::: "memory");}
     }
 
-    current_task                  = task_find_next_task();
-    current_task->last_tick_count = rdtsc();
-    current_task->task_switch_count++;
+    task_t* new_task = task_find_next_task();
 
-    switch(current_task->state) {
+    switch(new_task->state) {
     case TASK_STATE_CREATED:
-        current_task->state = TASK_STATE_STARTING;
+        new_task->state = TASK_STATE_STARTING;
         break;
     default:
-        current_task->state = TASK_STATE_RUNNING;
+        new_task->state = TASK_STATE_RUNNING;
         break;
     }
 
-    cpu_state->current_task = current_task;
+    if(new_task == old_task) {
+        return;
+    }
 
-    if(current_task->vmcs_physical_address) {
+    if(old_task->vmcs_physical_address) {
         if(cpu_get_type() == CPU_TYPE_INTEL) {
-            if(vmx_vmptrld(current_task->vmcs_physical_address) != 0) {
-                utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
+            if(vmx_vmclear(old_task->vmcs_physical_address) != 0) {
+                utoh_with_buffer(task_switch_task_id_buf, old_task->task_id);
+                video_text_print("vmclear failed for task 0x");
+                video_text_print(task_switch_task_id_buf);
+                video_text_print("\n");
+                return;
+            }
+        } else if(cpu_get_type() == CPU_TYPE_AMD) {
+
+        }
+    }
+
+    if(new_task->vmcs_physical_address) {
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmptrld(new_task->vmcs_physical_address) != 0) {
+                utoh_with_buffer(task_switch_task_id_buf, new_task->task_id);
                 video_text_print("vmptrld failed for task 0x");
                 video_text_print(task_switch_task_id_buf);
                 video_text_print("\n");
@@ -724,9 +724,17 @@ void task_switch_task(void) {
         }
     }
 
-    task_load_registers(current_task->registers);
+    cpu_state->current_task = new_task;
 
-    asm volatile ("" ::: "memory"); // prevent compiler jmp directly to the task_load_registers
+    asm volatile ("" ::: "memory");
+
+    task_save_registers(old_task->registers);
+    task_load_registers(cpu_state->current_task->registers);
+
+    asm volatile ("" ::: "memory");
+
+    cpu_state->current_task->last_tick_count = rdtsc();
+    cpu_state->current_task->task_switch_count++;
 }
 
 void task_exit(int32_t exit_code) {
@@ -1270,6 +1278,7 @@ void task_yield(void) {
 
     cpu_cli();
     task_task_switch_set_parameters(false);
+    cpu_state->current_task->need_yield = true;
     task_switch_task();
     task_task_switch_exit();
     cpu_sti();
