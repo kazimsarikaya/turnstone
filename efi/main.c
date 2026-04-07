@@ -87,27 +87,27 @@ static efi_status_t efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const ch
     tosdb_record_t* rec_config = tosdb_table_create_record(tbl_config);
 
     if(rec_config == NULL) {
-        PRINTLOG(EFI, LOG_FATAL, "cannot create entry point record");
+        PRINTLOG(EFI, LOG_FATAL, "cannot create record for config key %s", config_key);
 
         goto catch_efi_error;
     }
 
     if(!rec_config->set_string(rec_config, "name", config_key)) {
-        PRINTLOG(EFI, LOG_FATAL, "cannot set program base");
+        PRINTLOG(EFI, LOG_FATAL, "cannot set config key %s", config_key);
         rec_config->destroy(rec_config);
 
         goto catch_efi_error;
     }
 
     if(!rec_config->get_record(rec_config)) {
-        PRINTLOG(EFI, LOG_FATAL, "cannot get program base record");
+        PRINTLOG(EFI, LOG_FATAL, "cannot get config record for key %s", config_key);
         rec_config->destroy(rec_config);
 
         goto catch_efi_error;
     }
 
     if(!rec_config->get_data(rec_config, "value", DATA_TYPE_INT8_ARRAY, NULL, config_value)) {
-        PRINTLOG(EFI, LOG_FATAL, "cannot get program base");
+        PRINTLOG(EFI, LOG_FATAL, "cannot get config value for key %s", config_key);
         rec_config->destroy(rec_config);
 
         goto catch_efi_error;
