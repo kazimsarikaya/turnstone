@@ -43,9 +43,9 @@ time_t time_ns(time_t* t) {
     uint64_t ns = TIME_EPOCH * 1000ULL; // base ns from HPET + RTC
 
     // estimate additional ns since last HPET tick using TSC
-    uint64_t tsc_now = rdtsc();
+    uint64_t tsc_now   = rdtsc();
     uint64_t tsc_delta = tsc_now - hpet_last_rdtsc; // TSC since last update
-    uint64_t extra_ns = (tsc_delta * 1000ULL) / time_timer_get_rdtsc_delta_us(); // convert TSC → ns
+    uint64_t extra_ns  = (tsc_delta * 1000ULL) / time_timer_get_rdtsc_delta_us(); // convert TSC → ns
 
     ns += extra_ns;
 
@@ -60,9 +60,9 @@ time_t time_us(time_t* t) {
     uint64_t us = TIME_EPOCH; // base µs from HPET + RTC
 
     // estimate additional µs since last HPET tick using TSC
-    uint64_t tsc_now = rdtsc();
+    uint64_t tsc_now   = rdtsc();
     uint64_t tsc_delta = tsc_now - hpet_last_rdtsc; // TSC since last update
-    uint64_t extra_us = tsc_delta / time_timer_get_rdtsc_delta_us(); // convert TSC → µs
+    uint64_t extra_us  = tsc_delta / time_timer_get_rdtsc_delta_us(); // convert TSC → µs
 
     us += extra_us;
 
@@ -105,7 +105,7 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
     int64_t days_till_now, extra_time, extra_days, index, flag = 0;
 
     days_till_now = t / TIME_SECONDS_OF_DAY;
-    extra_time = t % TIME_SECONDS_OF_DAY;
+    extra_time    = t % TIME_SECONDS_OF_DAY;
 
     tp->year = TIME_TIMESTAMP_START_YEAR;
 
@@ -132,13 +132,13 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
                 if (extra_days - 29 <= 0) {
                     break;
                 }
-                tp->month += 1;
+                tp->month  += 1;
                 extra_days -= 29;
             }else {
                 if (extra_days - time_days_of_month[index] <= 0) {
                     break;
                 }
-                tp->month += 1;
+                tp->month  += 1;
                 extra_days -= time_days_of_month[index];
             }
             index += 1;
@@ -149,15 +149,15 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
             if (extra_days  - time_days_of_month[index] <= 0) {
                 break;
             }
-            tp->month += 1;
+            tp->month  += 1;
             extra_days -= time_days_of_month[index];
-            index += 1;
+            index      += 1;
         }
     }
 
     if (extra_days > 0) {
         tp->month += 1;
-        tp->day = extra_days;
+        tp->day    = extra_days;
     }else {
         if (tp->month == 2 && flag == 1) {
             tp->day = 29;
@@ -166,7 +166,7 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
         }
     }
 
-    tp->hours = extra_time / TIME_SECONDS_OF_HOUR;
+    tp->hours   = extra_time / TIME_SECONDS_OF_HOUR;
     tp->minutes = (extra_time % TIME_SECONDS_OF_HOUR) / TIME_SECONDS_OF_MINUTE;
     tp->seconds = (extra_time % TIME_SECONDS_OF_HOUR) % TIME_SECONDS_OF_MINUTE;
 
@@ -176,7 +176,7 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
 time_t timeparsed_to_time(timeparsed_t* tp) {
     time_t t = 0;
 
-    t = tp->seconds;
+    t  = tp->seconds;
     t += tp->minutes * TIME_SECONDS_OF_MINUTE;
     t += tp->hours * TIME_SECONDS_OF_HOUR;
 
@@ -207,12 +207,6 @@ time_t timeparsed_to_time(timeparsed_t* tp) {
     t += days * TIME_SECONDS_OF_DAY;
 
     return t;
-}
-
-uint64_t rdtsc(void) {
-    uint32_t lo, hi;
-    __asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
-    return ((uint64_t)hi << 32) | lo;
 }
 
 void time_format_utc(time_t t, char_t* buffer, size_t buffer_size) {
@@ -252,10 +246,10 @@ time_t time_parse_utc(const char_t* time_str) {
     }
 
     timeparsed_t tp;
-    tp.year = (uint16_t)((time_str[0] - '0') * 10 + (time_str[1] - '0'));
-    tp.month = (uint8_t)((time_str[2] - '0') * 10 + (time_str[3] - '0'));
-    tp.day = (uint8_t)((time_str[4] - '0') * 10 + (time_str[5] - '0'));
-    tp.hours = (uint8_t)((time_str[6] - '0') * 10 + (time_str[7] - '0'));
+    tp.year    = (uint16_t)((time_str[0] - '0') * 10 + (time_str[1] - '0'));
+    tp.month   = (uint8_t)((time_str[2] - '0') * 10 + (time_str[3] - '0'));
+    tp.day     = (uint8_t)((time_str[4] - '0') * 10 + (time_str[5] - '0'));
+    tp.hours   = (uint8_t)((time_str[6] - '0') * 10 + (time_str[7] - '0'));
     tp.minutes = (uint8_t)((time_str[8] - '0') * 10 + (time_str[9] - '0'));
     tp.seconds = (uint8_t)((time_str[10] - '0') * 10 + (time_str[11] - '0'));
 

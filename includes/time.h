@@ -215,7 +215,11 @@ time_t time_ns_parse_utc(const char_t* time_str);
  *
  * @return The current value of the CPU's Time Stamp Counter.
  */
-uint64_t rdtsc(void);
+static inline uint64_t rdtsc(void) {
+    uint32_t lo, hi;
+    __asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
+    return ((uint64_t)hi << 32) | lo;
+}
 
 #ifdef __cplusplus
 }
