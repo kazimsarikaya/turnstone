@@ -42,9 +42,12 @@ static int8_t apic_isr(interrupt_frame_ext_t* frame) {
     }
 
     if(cpu_state->tasking_enabled && (cpu_state->tick_count % TASK_MAX_TICK_COUNT) == 0) {
-        task_task_switch_set_parameters(true);
+        cpu_state->task_switch_paramters_need_eoi = true;
         task_switch_task();
-        task_task_switch_exit();
+        if(cpu_state->task_switch_paramters_need_eoi) {
+            cpu_state->task_switch_paramters_need_eoi = false;
+            apic_eoi();
+        }
     } else {
         apic_eoi();
     }

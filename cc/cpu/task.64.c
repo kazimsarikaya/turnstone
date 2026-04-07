@@ -610,11 +610,7 @@ static task_t* task_find_next_task(void) {
     return tmp_task;
 }
 
-void task_task_switch_set_parameters(boolean_t need_eoi) {
-    cpu_state->task_switch_paramters_need_eoi = need_eoi;
-}
-
-void task_task_switch_exit(void) {
+static inline void task_task_switch_exit(void) {
     if(cpu_state->task_switch_paramters_need_eoi) {
         cpu_state->task_switch_paramters_need_eoi = false;
         apic_eoi();
@@ -1277,8 +1273,8 @@ void task_yield(void) {
     }
 
     cpu_cli();
-    task_task_switch_set_parameters(false);
-    cpu_state->current_task->need_yield = true;
+    cpu_state->task_switch_paramters_need_eoi = false;
+    cpu_state->current_task->need_yield       = true;
     task_switch_task();
     task_task_switch_exit();
     cpu_sti();
@@ -1287,7 +1283,7 @@ void task_yield(void) {
 static int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
 
-    task_task_switch_set_parameters(true);
+    cpu_state->task_switch_paramters_need_eoi = true;
     task_switch_task();
     task_task_switch_exit();
 

@@ -181,17 +181,6 @@ void task_set_attribute(uint64_t task_id, task_attribute_t attribute);
 void task_clear_attribute(uint64_t task_id, task_attribute_t attribute);
 
 /**
- * @brief sets task switch parameters
- * @param[in] need_eoi if task switching needs notify local apic this field should be true
- */
-void task_task_switch_set_parameters(boolean_t need_eoi);
-
-/**
- * @brief applies task switch exit parameters
- */
-void task_task_switch_exit(void);
-
-/**
  * @brief switches current task to a new one.
  */
 void task_switch_task(void);
