@@ -52,6 +52,8 @@
 #include <graphics/screen.h>
 #include <driver/video.h>
 #include <device/tpm.h>
+#include <cpu/pmc.h>
+#include <driver/smbios.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -521,12 +523,9 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_INFO, "BootCurrent %i", boot_order_idx);
     }
 
-    if(SYSTEM_INFO->smbios_table_v2) {
-        PRINTLOG(KERNEL, LOG_INFO, "smbios v2 table at 0x%p", SYSTEM_INFO->smbios_table_v2);
-    }
-
-    if(SYSTEM_INFO->smbios_table_v3) {
-        PRINTLOG(KERNEL, LOG_INFO, "smbios v3 table at 0x%p", SYSTEM_INFO->smbios_table_v3);
+    PRINTLOG(KERNEL, LOG_INFO, "smbios data will be printed");
+    if(smbios_print_all_structures() != 0) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot print smbios structures");
     }
 
     hello_world_cpp_test();
