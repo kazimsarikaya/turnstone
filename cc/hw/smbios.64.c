@@ -93,6 +93,9 @@ static int8_t smbios_print_type_0(smbios_structure_header_t* header, uint8_t maj
 
     // 2.0+
     if(major_version >= 2) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         printf("  Vendor: %s\n", *data?strings[*data - 1]:"Not Specified");
         data++;
 
@@ -216,6 +219,9 @@ static int8_t smbios_print_type_0(smbios_structure_header_t* header, uint8_t maj
 
     // 2.4+
     if(major_version > 2 || (major_version == 2 && minor_version >= 4)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint8_t extension_byte_1 = *data;
         printf("  - BIOS Characteristics Extension Byte 1:\n");
         if (extension_byte_1 & (1 << 0)) {
@@ -287,6 +293,9 @@ static int8_t smbios_print_type_0(smbios_structure_header_t* header, uint8_t maj
 
     // 3.1+
     if(major_version == 3 && minor_version >= 1) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint16_t extended_bios_rom_size       = *((uint16_t*)(void*)data);
         uint8_t extended_bios_rom_size_unit   = extended_bios_rom_size >> 14; // Get the unit (bits 15-14)
         uint32_t extended_bios_rom_size_value = extended_bios_rom_size & 0x3FFF; // Get the size value (bits 13-0)
@@ -316,6 +325,9 @@ static int8_t smbios_print_type_1(smbios_structure_header_t* header, uint8_t maj
 
     printf("System Information (type %i) handle: 0x%04x\n", header->type, header->handle);
 
+    if(data - (uint8_t*)header >= header->length) {
+        return 0;
+    }
     printf("  Manufacturer: %s\n", *data ? strings[*data - 1] : "Not Specified");
     data++;
 
@@ -330,6 +342,9 @@ static int8_t smbios_print_type_1(smbios_structure_header_t* header, uint8_t maj
 
     // 2.1+
     if (major_version > 2 || (major_version == 2 && minor_version >= 1)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint8_t* uuid_data = data;
         printf("  UUID: %02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x\n",
                uuid_data[3], uuid_data[2], uuid_data[1], uuid_data[0],
@@ -358,6 +373,9 @@ static int8_t smbios_print_type_1(smbios_structure_header_t* header, uint8_t maj
 
     // 2.4+
     if (major_version > 2 || (major_version == 2 && minor_version >= 4)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         printf("  SKU Number: %s\n", *data ? strings[*data - 1] : "Not Specified");
         data++;
 
@@ -385,6 +403,9 @@ static int8_t smbios_print_type_2(smbios_structure_header_t* header, uint8_t maj
 
     printf("Baseboard Information (type %i) handle: 0x%04x\n", header->type, header->handle);
 
+    if(data - (uint8_t*)header >= header->length) {
+        return 0;
+    }
     printf("  Manufacturer: %s\n", *data ? strings[*data - 1] : "Not Specified");
     data++;
 
@@ -475,6 +496,9 @@ static int8_t smbios_print_type_3(smbios_structure_header_t* header, uint8_t maj
 
     printf("System Enclosure or Chassis (type %i) handle: 0x%04x\n", header->type, header->handle);
 
+    if(data - (uint8_t*)header >= header->length) {
+        return 0;
+    }
     printf("  Manufacturer: %s\n", *data ? strings[*data - 1] : "Not Specified");
     data++;
 
@@ -588,6 +612,9 @@ static int8_t smbios_print_type_3(smbios_structure_header_t* header, uint8_t maj
 
     // 2.3+
     if (major_version > 2 || (major_version == 2 && minor_version >= 3)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint32_t oem_defined = *((uint32_t*)(void*)data);
         printf("  OEM Defined: 0x%08x\n", oem_defined);
         data += 4;
@@ -620,6 +647,9 @@ static int8_t smbios_print_type_3(smbios_structure_header_t* header, uint8_t maj
 
     // 2.7+
     if (major_version > 2 || (major_version == 2 && minor_version >= 7)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint8_t sku_number_string_number = *data;
         printf("  SKU Number: %s\n", sku_number_string_number ? strings[sku_number_string_number - 1] : "Not Specified");
         data++;
@@ -882,6 +912,9 @@ static int8_t smbios_print_type_4(smbios_structure_header_t* header, uint8_t maj
 
     printf("Processor Information (type %i) handle: 0x%04x\n", header->type, header->handle);
 
+    if(data - (uint8_t*)header >= header->length) {
+        return 0;
+    }
     printf("  Socket Designation: %s\n", *data ? strings[*data - 1] : "Not Specified");
     data++;
 
@@ -1057,6 +1090,9 @@ static int8_t smbios_print_type_4(smbios_structure_header_t* header, uint8_t maj
 
     // 2.1+
     if (major_version > 2 || (major_version == 2 && minor_version >= 1)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint16_t l1_cache_handle = *((uint16_t*)(void*)data);
         printf("  L1 Cache Handle: 0x%04x\n", l1_cache_handle == 0xFFFF ? 0 : l1_cache_handle);
         data += 2;
@@ -1072,6 +1108,9 @@ static int8_t smbios_print_type_4(smbios_structure_header_t* header, uint8_t maj
 
     // 2.3+
     if (major_version > 2 || (major_version == 2 && minor_version >= 3)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint8_t serial_number_string_number = *data;
         printf("  Serial Number: %s\n", serial_number_string_number ? strings[serial_number_string_number - 1] : "Not Specified");
         data++;
@@ -1087,6 +1126,9 @@ static int8_t smbios_print_type_4(smbios_structure_header_t* header, uint8_t maj
 
     // 2.5+
     if (major_version > 2 || (major_version == 2 && minor_version >= 5)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint8_t core_count = *data;
         if(core_count != 0xFF) {
             printf("  Core Count: %u\n", core_count);
@@ -1142,6 +1184,9 @@ static int8_t smbios_print_type_4(smbios_structure_header_t* header, uint8_t maj
 
     // 2.6+
     if (major_version > 2 || (major_version == 2 && minor_version >= 6)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint16_t processor_family2 = *((uint16_t*)(void*)data);
         if(processor_family2 > 0xFF) {
             printf("  Processor Family 2: ");
@@ -1152,6 +1197,9 @@ static int8_t smbios_print_type_4(smbios_structure_header_t* header, uint8_t maj
 
     // 3.0+
     if (major_version >= 3) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint16_t core_count = *(uint16_t*)(void*)data;
         if(core_count > 0xFF) {
             printf("  Core Count: %u\n", core_count);
@@ -1200,6 +1248,9 @@ static int8_t smbios_print_type_7(smbios_structure_header_t* header, uint8_t maj
 
     printf("Cache Information (type %i), handle: 0x%04x\n", header->type, header->handle);
 
+    if(data - (uint8_t*)header >= header->length) {
+        return 0;
+    }
     printf("  Socket Designation: %s\n", *data ? strings[*data - 1] : "Not Specified");
     data++;
 
@@ -1294,6 +1345,9 @@ static int8_t smbios_print_type_7(smbios_structure_header_t* header, uint8_t maj
 
     // 2.1+
     if (major_version > 2 || (major_version == 2 && minor_version >= 1)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint8_t cache_speed = *data;
         printf("  Cache Speed: %u ns\n", cache_speed);
         data++;
@@ -1438,6 +1492,9 @@ static int8_t smbios_print_type_8(smbios_structure_header_t* header, uint8_t maj
 
     printf("Port Connector Information (type %i), handle: 0x%04x\n", header->type, header->handle);
 
+    if(data - (uint8_t*)header >= header->length) {
+        return 0;
+    }
     printf("  Internal Reference Designator: %s\n", *data ? strings[*data - 1] : "Not Specified");
     data++;
 
@@ -1516,6 +1573,9 @@ static int8_t smbios_print_type_9(smbios_structure_header_t* header, uint8_t maj
 
     printf("System Slots (type %i), handle: 0x%04x\n", header->type, header->handle);
 
+    if(data - (uint8_t*)header >= header->length) {
+        return 0;
+    }
     printf("  Slot Designation: %s\n", *data ? strings[*data - 1] : "Not Specified");
     data++;
 
@@ -1713,6 +1773,9 @@ static int8_t smbios_print_type_9(smbios_structure_header_t* header, uint8_t maj
 
     // 2.6+
     if (major_version > 2 || (major_version == 2 && minor_version >= 6)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint16_t segment_group_number = *((uint16_t*)(void*)data);
         data += 2;
 
@@ -2032,6 +2095,9 @@ static int8_t smbios_print_type_17(smbios_structure_header_t* header, uint8_t ma
 
     printf("Memory Device (type %i) handle: 0x%04x\n", header->type, header->handle);
 
+    if(data - (uint8_t*)header >= header->length) {
+        return 0;
+    }
     uint16_t array_handle = *((uint16_t*)(void*)data);
     printf("  Physical Memory Array Handle: 0x%04x\n", array_handle);
     data += 2;
@@ -2217,6 +2283,9 @@ static int8_t smbios_print_type_17(smbios_structure_header_t* header, uint8_t ma
 
     // 2.3+
     if (major_version > 2 || (major_version == 2 && minor_version >= 3)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint16_t speed = *((uint16_t*)(void*)data);
         if (speed == 0) {
             printf("  Speed: Unknown\n");
@@ -2240,6 +2309,9 @@ static int8_t smbios_print_type_17(smbios_structure_header_t* header, uint8_t ma
 
     // 2.6+
     if (major_version > 2 || (major_version == 2 && minor_version >= 6)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint8_t attributes = *data;
         printf("  Attributes: 0x%02x\n", attributes);
         if (attributes & 0x0F) {
@@ -2250,6 +2322,9 @@ static int8_t smbios_print_type_17(smbios_structure_header_t* header, uint8_t ma
 
     // 2.7+
     if (major_version > 2 || (major_version == 2 && minor_version >= 7)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint32_t extended_size = *((uint32_t*)(void*)data);
         if (extended_size != 0) {
             printf("  Extended Size: %u MB\n", extended_size & 0x7FFFFFFF);
@@ -2267,6 +2342,9 @@ static int8_t smbios_print_type_17(smbios_structure_header_t* header, uint8_t ma
 
     // 2.8+
     if (major_version > 2 || (major_version == 2 && minor_version >= 8)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint16_t min_voltage = *((uint16_t*)(void*)data);
         if (min_voltage == 0) {
             printf("  Minimum Voltage: Unknown\n");
@@ -2294,6 +2372,9 @@ static int8_t smbios_print_type_17(smbios_structure_header_t* header, uint8_t ma
 
     // 3.2+
     if (major_version > 3 || (major_version == 3 && minor_version >= 2)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint8_t memory_technology = *data;
         printf("  Memory Technology: ");
         switch (memory_technology) {
@@ -2373,6 +2454,9 @@ static int8_t smbios_print_type_17(smbios_structure_header_t* header, uint8_t ma
 
     // 3.3+
     if (major_version > 3 || (major_version == 3 && minor_version >= 3)) {
+        if(data - (uint8_t*)header >= header->length) {
+            return 0;
+        }
         uint32_t extended_speed = *((uint32_t*)(void*)data);
         if (extended_speed != 0) {
             printf("  Extended Speed: %u MT/s\n", extended_speed);
