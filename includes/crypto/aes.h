@@ -53,15 +53,15 @@ extern "C" {
 /** @} */
 
 /**
- * @brief Initializes the internal lookup tables for AES key generation.
+ * @brief Initializes aes related data
  *
- * This function must be called before any other AES functions to populate
- * the static S-boxes and multiplication tables used during key expansion.
- * It is idempotent; subsequent calls will return immediately.
+ * This method detects harware support, if available,
+ * enables aes support if all prerequisites are met. If harware support is detected it will enable hardware acceleration.
  *
- * @note This function is not thread-safe during the first initialization.
+ * @note This function should be called during the initialization phase of your program to ensure that AES operations are available.
+ * If the tables are not initialized, subsequent key setting and encryption/decryption operations will fail.
  */
-void aes_init_keygen_tables(void);
+void aes_init(void);
 
 /**
  * @brief AES context structure.
@@ -103,12 +103,11 @@ int aes_setkey(aes_context_t* ctx, int32_t mode, const uint8_t* key, uint32_t ke
  * @param input  Pointer to the 16-byte input block (plaintext or ciphertext).
  * @param output Pointer to the 16-byte buffer where the result will be stored.
  *
- * @return 0 on success.
- * @return Non-zero error code on failure.
+ * @return return 0 on success. -1 if aes_init not called, -2 if one of parameters are NULL.
  *
  * @warning The input and output buffers must be at least 16 bytes long.
  */
-int aes_cipher(aes_context_t* ctx, const uint8_t input[16], uint8_t output[16]);
+int32_t aes_cipher(aes_context_t* ctx, const uint8_t input[16], uint8_t output[16]);
 
 #ifdef __cplusplus
 }

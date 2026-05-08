@@ -8,6 +8,7 @@
 #include <crypto/gcm.h>
 #include <crypto/aes.h>
 #include <memory.h>
+#include <logging.h>
 
 MODULE("turnstone.lib.crypto");
 
@@ -31,7 +32,7 @@ static const uint64_t gcm_last4[16] = {
 
 
 int32_t gcm_initialize(void) {
-    aes_init_keygen_tables();
+    aes_init();
     return 0;
 }
 
@@ -51,16 +52,16 @@ static void gcm_mult(gcm_context_t * ctx, const uint8_t x[16], uint8_t output[16
 
         if(i != 15) {
             rem = (uint8_t) ( zl & 0x0f );
-            zl = ( zh << 60 ) | ( zl >> 4 );
-            zh = ( zh >> 4 );
+            zl  = ( zh << 60 ) | ( zl >> 4 );
+            zh  = ( zh >> 4 );
             zh ^= (uint64_t) gcm_last4[rem] << 48;
             zh ^= ctx->HH[lo];
             zl ^= ctx->HL[lo];
         }
 
         rem = (uint8_t) ( zl & 0x0f );
-        zl = ( zh << 60 ) | ( zl >> 4 );
-        zh = ( zh >> 4 );
+        zl  = ( zh << 60 ) | ( zl >> 4 );
+        zh  = ( zh >> 4 );
         zh ^= (uint64_t) gcm_last4[rem] << 48;
         zh ^= ctx->HH[hi];
         zl ^= ctx->HL[hi];
@@ -85,12 +86,14 @@ int32_t gcm_setkey(gcm_context_t * ctx, const uint8_t * key, const uint32_t keys
     ret = aes_setkey( &ctx->aes_ctx, AES_ENCRYPT, key, keysize );
 
     if(ret != 0 ) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "gcm key set failed: %i", ret);
         return ret;
     }
 
     ret = aes_cipher( &ctx->aes_ctx, h, h );
 
     if(ret != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "gcm key set failed: %i", ret);
         return ret;
     }
 
@@ -109,8 +112,8 @@ int32_t gcm_setkey(gcm_context_t * ctx, const uint8_t * key, const uint32_t keys
 
     for(i = 4; i > 0; i >>= 1) {
         uint32_t T = (uint32_t) ( vl & 1 ) * 0xe1000000U;
-        vl  = ( vh << 63 ) | ( vl >> 1 );
-        vh  = ( vh >> 1 ) ^ ( (uint64_t) T << 32);
+        vl         = ( vh << 63 ) | ( vl >> 1 );
+        vh         = ( vh >> 1 ) ^ ( (uint64_t) T << 32);
         ctx->HL[i] = vl;
         ctx->HH[i] = vh;
     }
@@ -140,10 +143,10 @@ int32_t gcm_start(gcm_context_t * ctx, int32_t mode, const uint8_t * iv, size_t 
 
     memory_memset( ctx->y,   0x00, sizeof(ctx->y  ) );
     memory_memset( ctx->buf, 0x00, sizeof(ctx->buf) );
-    ctx->len = 0;
+    ctx->len     = 0;
     ctx->add_len = 0;
 
-    ctx->mode = mode;
+    ctx->mode         = mode;
     ctx->aes_ctx.mode = AES_ENCRYPT;
 
     if( iv_len == 12 ) {
@@ -160,7 +163,7 @@ int32_t gcm_start(gcm_context_t * ctx, int32_t mode, const uint8_t * iv, size_t 
             for( i = 0; i < use_len; i++ ) {ctx->y[i] ^= p[i];}
             gcm_mult( ctx, ctx->y, ctx->y );
             iv_len -= use_len;
-            p += use_len;
+            p      += use_len;
         }
 
         for( i = 0; i < 16; i++ ) {
@@ -177,7 +180,7 @@ int32_t gcm_start(gcm_context_t * ctx, int32_t mode, const uint8_t * iv, size_t 
     }
 
     ctx->add_len = add_len;
-    p = add;
+    p            = add;
 
     while( add_len > 0 ) {
         use_len = ( add_len < 16 ) ? add_len : 16;
@@ -188,7 +191,7 @@ int32_t gcm_start(gcm_context_t * ctx, int32_t mode, const uint8_t * iv, size_t 
 
         gcm_mult( ctx, ctx->buf, ctx->buf );
         add_len -= use_len;
-        p += use_len;
+        p       += use_len;
     }
 
     return 0;
@@ -219,13 +222,13 @@ int32_t gcm_update(gcm_context_t * ctx, size_t length, const uint8_t * input, ui
 
         if( ctx->mode == AES_ENCRYPT ) {
             for( i = 0; i < use_len; i++ ) {
-                output[i] = (uint8_t) ( ectr[i] ^ input[i] );
+                output[i]    = (uint8_t) ( ectr[i] ^ input[i] );
                 ctx->buf[i] ^= output[i];
             }
         } else {
             for( i = 0; i < use_len; i++ ) {
                 ctx->buf[i] ^= input[i];
-                output[i] = (uint8_t) ( ectr[i] ^ input[i] );
+                output[i]    = (uint8_t) ( ectr[i] ^ input[i] );
             }
         }
 

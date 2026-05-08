@@ -7,19 +7,21 @@
  */
 #include <crypto/aes.h>
 #include <memory.h>
+#include <cpu.h>
+#include <logging.h>
 
 MODULE("turnstone.lib.crypto");
 
 static int32_t aes_tables_inited = 0;
 
 
-static uint8_t AES_FSb[256] = {0};
+static uint8_t AES_FSb[256]  = {0};
 static uint32_t AES_FT0[256] = {0};
 static uint32_t AES_FT1[256] = {0};
 static uint32_t AES_FT2[256] = {0};
 static uint32_t AES_FT3[256] = {0};
 
-static uint8_t AES_RSb[256] = {0};
+static uint8_t AES_RSb[256]  = {0};
 static uint32_t AES_RT0[256] = {0};
 static uint32_t AES_RT1[256] = {0};
 static uint32_t AES_RT2[256] = {0};
@@ -96,7 +98,7 @@ int32_t aes_set_decryption_key(aes_context_t * ctx, const uint8_t * key, uint32_
 #define CPY128   { *RK++ = *SK++; *RK++ = *SK++; \
                    *RK++ = *SK++; *RK++ = *SK++; }
 
-void aes_init_keygen_tables(void) {
+static void aes_init_keygen_tables(void) {
     int32_t i, x, y, z;
     int32_t pow[256];
     int32_t log[256];
@@ -108,12 +110,12 @@ void aes_init_keygen_tables(void) {
     for( i = 0, x = 1; i < 256; i++ )   {
         pow[i] = x;
         log[x] = i;
-        x = ( x ^ XTIME( x ) ) & 0xFF;
+        x      = ( x ^ XTIME( x ) ) & 0xFF;
     }
 
     for( i = 0, x = 1; i < 10; i++ )    {
         AES_RCON[i] = (uint32_t) x;
-        x = XTIME( x ) & 0xFF;
+        x           = XTIME( x ) & 0xFF;
     }
 
     AES_FSb[0x00] = 0x63;
@@ -167,25 +169,25 @@ int32_t aes_set_encryption_key(aes_context_t * ctx, const uint8_t * key, uint32_
     switch( ctx->rounds ) {
     case 10:
         for( i = 0; i < 10; i++, RK += 4 ) {
-            RK[4]  = RK[0] ^ AES_RCON[i] ^
-                     ( (uint32_t) AES_FSb[ ( RK[3] >>  8 ) & 0xFF ]       ) ^
-                     ( (uint32_t) AES_FSb[ ( RK[3] >> 16 ) & 0xFF ] <<  8 ) ^
-                     ( (uint32_t) AES_FSb[ ( RK[3] >> 24 ) & 0xFF ] << 16 ) ^
-                     ( (uint32_t) AES_FSb[ ( RK[3]       ) & 0xFF ] << 24 );
+            RK[4] = RK[0] ^ AES_RCON[i] ^
+                    ( (uint32_t) AES_FSb[ ( RK[3] >>  8 ) & 0xFF ]       ) ^
+                    ( (uint32_t) AES_FSb[ ( RK[3] >> 16 ) & 0xFF ] <<  8 ) ^
+                    ( (uint32_t) AES_FSb[ ( RK[3] >> 24 ) & 0xFF ] << 16 ) ^
+                    ( (uint32_t) AES_FSb[ ( RK[3]       ) & 0xFF ] << 24 );
 
-            RK[5]  = RK[1] ^ RK[4];
-            RK[6]  = RK[2] ^ RK[5];
-            RK[7]  = RK[3] ^ RK[6];
+            RK[5] = RK[1] ^ RK[4];
+            RK[6] = RK[2] ^ RK[5];
+            RK[7] = RK[3] ^ RK[6];
         }
         break;
 
     case 12:
         for( i = 0; i < 8; i++, RK += 6 ) {
-            RK[6]  = RK[0] ^ AES_RCON[i] ^
-                     ( (uint32_t) AES_FSb[ ( RK[5] >>  8 ) & 0xFF ]       ) ^
-                     ( (uint32_t) AES_FSb[ ( RK[5] >> 16 ) & 0xFF ] <<  8 ) ^
-                     ( (uint32_t) AES_FSb[ ( RK[5] >> 24 ) & 0xFF ] << 16 ) ^
-                     ( (uint32_t) AES_FSb[ ( RK[5]       ) & 0xFF ] << 24 );
+            RK[6] = RK[0] ^ AES_RCON[i] ^
+                    ( (uint32_t) AES_FSb[ ( RK[5] >>  8 ) & 0xFF ]       ) ^
+                    ( (uint32_t) AES_FSb[ ( RK[5] >> 16 ) & 0xFF ] <<  8 ) ^
+                    ( (uint32_t) AES_FSb[ ( RK[5] >> 24 ) & 0xFF ] << 16 ) ^
+                    ( (uint32_t) AES_FSb[ ( RK[5]       ) & 0xFF ] << 24 );
 
             RK[7]  = RK[1] ^ RK[6];
             RK[8]  = RK[2] ^ RK[7];
@@ -197,11 +199,11 @@ int32_t aes_set_encryption_key(aes_context_t * ctx, const uint8_t * key, uint32_
 
     case 14:
         for( i = 0; i < 7; i++, RK += 8 ) {
-            RK[8]  = RK[0] ^ AES_RCON[i] ^
-                     ( (uint32_t) AES_FSb[ ( RK[7] >>  8 ) & 0xFF ]       ) ^
-                     ( (uint32_t) AES_FSb[ ( RK[7] >> 16 ) & 0xFF ] <<  8 ) ^
-                     ( (uint32_t) AES_FSb[ ( RK[7] >> 24 ) & 0xFF ] << 16 ) ^
-                     ( (uint32_t) AES_FSb[ ( RK[7]       ) & 0xFF ] << 24 );
+            RK[8] = RK[0] ^ AES_RCON[i] ^
+                    ( (uint32_t) AES_FSb[ ( RK[7] >>  8 ) & 0xFF ]       ) ^
+                    ( (uint32_t) AES_FSb[ ( RK[7] >> 16 ) & 0xFF ] <<  8 ) ^
+                    ( (uint32_t) AES_FSb[ ( RK[7] >> 24 ) & 0xFF ] << 16 ) ^
+                    ( (uint32_t) AES_FSb[ ( RK[7]       ) & 0xFF ] << 24 );
 
             RK[9]  = RK[1] ^ RK[8];
             RK[10] = RK[2] ^ RK[9];
@@ -234,7 +236,7 @@ int32_t aes_set_decryption_key(aes_context_t * ctx, const uint8_t * key, uint32_
     int32_t ret;
 
     cty.rounds = ctx->rounds;
-    cty.rk = cty.buf;
+    cty.rk     = cty.buf;
 
     ret = aes_set_encryption_key( &cty, key, keysize );
 
@@ -267,7 +269,7 @@ int32_t aes_setkey(aes_context_t * ctx, int32_t mode, const uint8_t * key, uint3
     }
 
     ctx->mode = mode;
-    ctx->rk = ctx->buf;
+    ctx->rk   = ctx->buf;
 
     switch( keysize )
     {
@@ -284,9 +286,103 @@ int32_t aes_setkey(aes_context_t * ctx, int32_t mode, const uint8_t * key, uint3
     return aes_set_encryption_key( ctx, key, keysize);
 }
 
-int32_t aes_cipher( aes_context_t * ctx,
-                    const uint8_t   input[16],
-                    uint8_t         output[16] )
+static void aes_cipher_hw_aesni(aes_context_t * ctx, const uint8_t input[16], uint8_t output[16]) {
+    uint32_t * rk = ctx->rk;
+    int rounds    = ctx->rounds;
+
+    __asm__ volatile (
+        "movdqu (%1), %%xmm0 \n\t" // Load input block into xmm0
+        "movdqu (%2), %%xmm1 \n\t" // Load Round Key 0
+        "pxor %%xmm1, %%xmm0 \n\t" // Initial XOR (Round 0)
+        "add $16, %2         \n\t" // Move to next Round Key
+
+        "cmpl $1, %3         \n\t" // Check mode: AES_ENCRYPT is 1
+        "jne 2f              \n\t" // Jump to Decryption if not 1
+
+        // --- Encryption Path ---
+        "1:                  \n\t"
+        "movdqu (%2), %%xmm1 \n\t"
+        "add $16, %2         \n\t"
+        "decl %0             \n\t" // Decrement round counter
+        "jz 3f               \n\t" // If last round, jump to final
+        "aesenc %%xmm1, %%xmm0 \n\t"
+        "jmp 1b              \n\t"
+        "3:                  \n\t"
+        "aesenclast %%xmm1, %%xmm0 \n\t"
+        "jmp 5f              \n\t"
+
+        // --- Decryption Path ---
+        "2:                  \n\t"
+        "movdqu (%2), %%xmm1 \n\t"
+        "add $16, %2         \n\t"
+        "decl %0             \n\t"
+        "jz 4f               \n\t"
+        "aesdec %%xmm1, %%xmm0 \n\t"
+        "jmp 2b              \n\t"
+        "4:                  \n\t"
+        "aesdeclast %%xmm1, %%xmm0 \n\t"
+
+        // --- Store Result ---
+        "5:                  \n\t"
+        "movdqu %%xmm0, (%4) \n\t" // Store xmm0 to output buffer
+
+        : "+r" (rounds) // %0
+        : "r" (input), // %1
+        "r" (rk), // %2
+        "r" (ctx->mode), // %3
+        "r" (output) // %4
+        : "xmm0", "xmm1", "cc", "memory"
+        );
+}
+
+static void aes_cipher_hw_vaes(aes_context_t * ctx, const uint8_t input[16], uint8_t output[16]) {
+    uint32_t * rk = ctx->rk;
+    int rounds    = ctx->rounds;
+
+    __asm__ volatile (
+        "vmovdqu (%1), %%xmm0 \n\t" // Load block
+        "vmovdqu (%2), %%xmm1 \n\t" // Load RK[0]
+        "vpxor %%xmm1, %%xmm0, %%xmm0 \n\t" // Initial XOR
+        "add $16, %2         \n\t"
+
+        "cmpl $1, %3         \n\t" // mode == AES_ENCRYPT?
+        "jne 2f              \n\t"
+
+        // --- VAES Encryption ---
+        "1:                  \n\t"
+        "vmovdqu (%2), %%xmm1 \n\t"
+        "add $16, %2         \n\t"
+        "decl %0             \n\t"
+        "jz 3f               \n\t"
+        "vaesenc %%xmm1, %%xmm0, %%xmm0 \n\t"
+        "jmp 1b              \n\t"
+        "3:                  \n\t"
+        "vaesenclast %%xmm1, %%xmm0, %%xmm0 \n\t"
+        "jmp 5f              \n\t"
+
+        // --- VAES Decryption ---
+        "2:                  \n\t"
+        "vmovdqu (%2), %%xmm1 \n\t"
+        "add $16, %2         \n\t"
+        "decl %0             \n\t"
+        "jz 4f               \n\t"
+        "vaesdec %%xmm1, %%xmm0, %%xmm0 \n\t"
+        "jmp 2b              \n\t"
+        "4:                  \n\t"
+        "vaesdeclast %%xmm1, %%xmm0, %%xmm0 \n\t"
+
+        "5:                  \n\t"
+        "vmovdqu %%xmm0, (%4) \n\t"
+
+        : "+r" (rounds)
+        : "r" (input), "r" (rk), "r" (ctx->mode), "r" (output)
+        : "xmm0", "xmm1", "cc", "memory"
+        );
+}
+
+static void aes_cipher_hw_cpu( aes_context_t * ctx,
+                               const uint8_t   input[16],
+                               uint8_t         output[16] )
 {
     int32_t i;
     uint32_t * RK, X0, X1, X2, X3, Y0, Y1, Y2, Y3;
@@ -368,7 +464,60 @@ int32_t aes_cipher( aes_context_t * ctx,
     PUT_UINT32_LE( X1, output,  4 );
     PUT_UINT32_LE( X2, output,  8 );
     PUT_UINT32_LE( X3, output, 12 );
+}
+
+typedef void (*aes_cipher_f)(aes_context_t* ctx, const uint8_t input[16], uint8_t output[16]);
+
+aes_cipher_f aes_cipher_internal = NULL;
+
+int32_t aes_cipher(aes_context_t* ctx, const uint8_t input[16], uint8_t output[16]) {
+    if(!aes_cipher_internal) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "aes_init not called");
+        return -1;
+    }
+
+    if(!ctx || !input || !output) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "one of parameters NULL");
+        return -2;
+    }
+
+    aes_cipher_internal(ctx, input, output);
 
     return 0;
 }
+
+void aes_init(void) {
+    aes_init_keygen_tables();
+
+    cpu_cpuid_regs_t query  = {.eax = 7};
+    cpu_cpuid_regs_t answer = {0};
+
+    cpu_cpuid(query, &answer);
+
+    if((answer.ecx >> 9) & 1) {
+        PRINTLOG(CRYPTOLIB, LOG_INFO, "VAES-256 support detected.");
+        aes_cipher_internal = aes_cipher_hw_vaes;
+        return;
+    }
+
+    query.eax = 1;
+
+    cpu_cpuid(query, &answer);
+
+    if((answer.ecx >> 28) & 1) {
+        PRINTLOG(CRYPTOLIB, LOG_INFO, "VAES-128 support detected.");
+        aes_cipher_internal = aes_cipher_hw_vaes;
+        return;
+    }
+
+    if((answer.ecx >> 25) & 1) {
+        PRINTLOG(CRYPTOLIB, LOG_INFO, "AES-NI support detected.");
+        aes_cipher_internal = aes_cipher_hw_aesni;
+        return;
+    }
+
+    PRINTLOG(CRYPTOLIB, LOG_INFO, "no hardware aes supported found. failback to cpu implementation.");
+    aes_cipher_internal = aes_cipher_hw_cpu;
+}
+
 /* end of aes.c */
