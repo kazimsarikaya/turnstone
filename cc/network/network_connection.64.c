@@ -612,6 +612,8 @@ static network_connection_t* network_connection_connect_internal(network_listene
         // For UDP, we can consider the connection established immediately after creating it, as there is no handshake process.
         connection->state = NETWORK_CONNECTION_STATE_ESTABLISHED;
 
+        connection->last_remote_activity_timestamp = time_ns(NULL);
+
         return connection;
     }
 
@@ -1107,7 +1109,7 @@ int32_t network_connection_receive(network_connection_t* connection,
             // For simplicity, let's use a fixed timeout of 60 seconds for now.
             uint64_t now = time_ns(NULL);
             if (now - connection->last_remote_activity_timestamp > 60 * 1'000'000'000ULL) {
-                PRINTLOG(NETWORK, LOG_WARNING, "TCP connection to %i.%i.%i.%i:%u timed out in state %d. Returning 0.",
+                PRINTLOG(NETWORK, LOG_WARNING, "Connection to %i.%i.%i.%i:%u timed out in state %d. Returning 0.",
                          connection->remote_ip.as_bytes[0],
                          connection->remote_ip.as_bytes[1],
                          connection->remote_ip.as_bytes[2],
@@ -1132,6 +1134,21 @@ int32_t network_connection_receive(network_connection_t* connection,
         }
 
         if(read_len == 0) {
+            // If there is no data to read, we should check if the connection is still alive
+            // or if it has been idle for too long, which might indicate a broken connection.
+            uint64_t now = time_ns(NULL);
+            if (now - connection->last_remote_activity_timestamp > 60 * 1'000'000'000ULL) {
+                PRINTLOG(NETWORK, LOG_WARNING, "Connection to %i.%i.%i.%i:%u timed out in state %d. Returning 0.",
+                         connection->remote_ip.as_bytes[0],
+                         connection->remote_ip.as_bytes[1],
+                         connection->remote_ip.as_bytes[2],
+                         connection->remote_ip.as_bytes[3],
+                         connection->remote_port,
+                         connection->state);
+                connection->state = NETWORK_CONNECTION_STATE_CLOSED; // Mark the connection as closed
+                return 0; // Indicate that the connection is effectively closed due to timeout
+            }
+
             task_msleep(50); // sleep for a while before trying again
         }
     }

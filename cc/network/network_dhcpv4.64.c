@@ -388,6 +388,11 @@ static int8_t network_dhcpv4_send_dhcpv4_discover_or_request_packet(network_info
 
     int32_t recv_len = network_connection_receive(connection, (uint8_t*)&dhcp_packet, sizeof(network_dhcpv4_t));
 
+    if(recv_len == 0) {
+        PRINTLOG(NETWORK, LOG_WARNING, "dhcpv4 packet receive timeout");
+        goto cleanup;
+    }
+
     if(recv_len < 0) {
         PRINTLOG(NETWORK, LOG_ERROR, "failed to receive dhcp offer/ack packet: %i", recv_len);
         goto cleanup;
